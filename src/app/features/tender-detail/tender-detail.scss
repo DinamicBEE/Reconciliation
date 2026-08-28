@@ -1,0 +1,111 @@
+@use '../../shared/styles/toolbar';
+@use '../../shared/styles/data-table';
+
+.tender-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+.tender-detail__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tender-detail__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tender-detail__date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--color-foreground);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.tender-detail__title {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+// --- Resumen global del día: 1 card, 5 métricas en fila ---------------------
+// Reemplaza al patrón de 3 kpi-card — aquí no aplica (no son indicadores
+// independientes, son una sola fila de sumas). No usa el partial kpi-card.
+.summary-card {
+  border-radius: 8px;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.summary-strip__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-left: 16px;
+  border-left: 1px solid var(--color-border);
+
+  &:first-child {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  @media (max-width: 900px) {
+    border-left: none;
+    padding-left: 0;
+  }
+}
+
+.summary-strip__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+.summary-strip__value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+

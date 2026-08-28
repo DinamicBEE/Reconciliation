@@ -1,0 +1,166 @@
+<div class="dashboard">
+  <!-- Los 3 KPI principales. La sección completa está topada a 33vh (ver .scss). -->
+  <section class="kpi-grid">
+    <!-- KPI 1: visión inmediata de qué medio de pago está al día / atrasado -->
+    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px' }">
+      <span class="kpi-card__title">Medios de pago</span>
+      <ul class="tender-status-list">
+        @for (t of service.tenderMediaStatuses(); track t.tenderMedia) {
+          <li>
+            <a
+              class="tender-status-list__item"
+              [routerLink]="['/detalle', t.tenderMedia]"
+              [attr.aria-label]="'Ver detalle de ' + tenderMediaLabel[t.tenderMedia]"
+            >
+              <span
+                class="status-dot"
+                [class.status-dot--ok]="t.health === 'up_to_date'"
+                [class.status-dot--late]="t.health === 'delayed'"
+              ></span>
+              <span class="tender-status-list__label">{{ tenderMediaLabel[t.tenderMedia] }}</span>
+              <span
+                class="tender-status-list__state"
+                [class.text-success]="t.health === 'up_to_date'"
+                [class.text-destructive]="t.health === 'delayed'"
+              >
+                {{ t.health === 'up_to_date' ? 'Al día' : 'Atrasado ' + t.daysBehind + 'd' }}
+              </span>
+            </a>
+          </li>
+        }
+      </ul>
+    </nz-card>
+
+    <!-- KPI 2: % conciliado — la dona domina el ancho/alto del card, a la derecha -->
+    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '8px', height: '100%', display: 'flex', flexDirection: 'column' }">
+      <span class="kpi-card__title">Conciliado hoy</span>
+      <div class="kpi-card__body kpi-card__body--donut">
+        <div class="kpi-card__stat">
+          <span class="kpi-card__value">{{ reconciledPct().today }}%</span>
+          <span class="kpi-card__delta" [class.text-success]="reconciledPct().delta >= 0" [class.text-destructive]="reconciledPct().delta < 0">
+            <svg
+              class="trend-arrow"
+              [class.trend-arrow--down]="reconciledPct().delta < 0"
+              viewBox="0 0 10 10"
+              width="9"
+              height="9"
+            >
+              <polygon points="5,0 10,10 0,10" fill="currentColor" />
+            </svg>
+            {{ (reconciledPct().delta >= 0 ? '+' : '') + reconciledPct().delta }} pts vs. ayer
+          </span>
+        </div>
+        <div class="kpi-card__donut">
+          <app-radial-progress [percent]="reconciledPct().today" color="var(--color-chart-donut)" />
+        </div>
+      </div>
+    </nz-card>
+
+    <!-- KPI 3: monto en discrepancia — info arriba, gráfica abajo -->
+    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
+      <span class="kpi-card__title">Discrepancias</span>
+      <div class="kpi-card__body kpi-card__body--stacked">
+        <div class="kpi-card__stat">
+          <span class="kpi-card__value">
+            {{ discrepancyTrendSummary().today | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+          </span>
+          <span
+            class="kpi-card__delta"
+            [class.text-destructive]="discrepancyTrendSummary().delta > 0"
+            [class.text-success]="discrepancyTrendSummary().delta <= 0"
+          >
+            <svg
+              class="trend-arrow"
+              [class.trend-arrow--down]="discrepancyTrendSummary().delta <= 0"
+              viewBox="0 0 10 10"
+              width="9"
+              height="9"
+            >
+              <polygon points="5,0 10,10 0,10" fill="currentColor" />
+            </svg>
+            {{ discrepancyTrendSummary().delta | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }} vs. ayer
+          </span>
+        </div>
+        <app-sparkline class="kpi-card__sparkline" [values]="discrepancyTrendSummary().values" color="var(--color-destructive)" />
+      </div>
+    </nz-card>
+  </section>
+
+  <section class="toolbar">
+    <nz-select
+      class="toolbar__filter"
+      [ngModel]="service.statusFilter()"
+      (ngModelChange)="onStatusFilterChange($event)"
+    >
+      @for (opt of statusOptions; track opt.value) {
+        <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+      }
+    </nz-select>
+
+    <nz-select
+      class="toolbar__filter"
+      [ngModel]="service.tenderMediaFilter()"
+      (ngModelChange)="onTenderMediaFilterChange($event)"
+    >
+      @for (opt of tenderMediaOptions; track opt.value) {
+        <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+      }
+    </nz-select>
+
+    <nz-range-picker
+      class="toolbar__filter"
+      [ngModel]="service.dateRange()"
+      (ngModelChange)="onDateRangeChange($event)"
+      nzFormat="dd/MM/yyyy"
+    />
+  </section>
+
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
+    <nz-table #tbl [nzData]="service.filteredItems()" [nzPageSize]="10" nzSize="middle">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th class="col-truncate" style="--col-max-width: 220px">Descripción</th>
+          <th class="col-truncate" style="--col-max-width: 130px">Medio de pago</th>
+          <th class="col-truncate" style="--col-max-width: 130px">Referencia</th>
+          <th class="text-right">Monto banco</th>
+          <th class="text-right">Monto libro</th>
+          <th class="text-right">Diferencia</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of tbl.data; track item.id) {
+          <tr
+            class="clickable-row"
+            [routerLink]="['/detalle', item.tenderMedia]"
+            [queryParams]="{ date: item.date }"
+          >
+            <td>{{ item.date | date: 'dd/MM/yyyy' }}</td>
+            <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="item.description">
+              {{ item.description }}
+            </td>
+            <td class="col-truncate" style="--col-max-width: 130px">{{ tenderLabel(item.tenderMedia) }}</td>
+            <td
+              class="col-truncate font-mono"
+              style="--col-max-width: 130px"
+              [attr.title]="item.reference"
+            >
+              {{ item.reference }}
+            </td>
+            <td class="text-right font-mono">
+              {{ item.bankAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            </td>
+            <td class="text-right font-mono">
+              {{ item.bookAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            </td>
+            <td class="text-right font-mono" [class.text-destructive]="difference(item) !== 0">
+              {{ difference(item) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            </td>
+            <td><app-status-tag [status]="item.status" /></td>
+          </tr>
+        }
+      </tbody>
+    </nz-table>
+  </nz-card>
+</div>

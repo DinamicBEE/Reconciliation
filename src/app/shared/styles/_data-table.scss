@@ -1,0 +1,55 @@
+// Helpers de tabla reutilizables — ver MASTER.md ("Densidad y layout").
+// Regla dura: las tablas del proyecto no llevan border-radius (bordes
+// rectos), y ninguna columna de texto libre debe crecer según su contenido
+// más largo.
+
+.table-card {
+  overflow: auto;
+  border-radius: 0;
+
+  // ng-zorro trae su propio border-radius sutil (2px) en .ant-table — se
+  // anula aquí, con ::ng-deep quedando scoped a este componente.
+  ::ng-deep .ant-table {
+    border-radius: 0;
+  }
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background-color: var(--color-muted);
+  }
+}
+
+// Columna de texto libre topada + truncada con ellipsis. Ancho vía variable
+// CSS por celda: <th class="col-truncate" style="--col-max-width: 220px">
+// (el <td> conserva el texto completo en [attr.title] para verlo al hover).
+.col-truncate {
+  max-width: var(--col-max-width, 160px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-success {
+  color: var(--color-success);
+}
+
+.text-warning {
+  color: var(--color-warning);
+}
+
+.text-destructive {
+  color: var(--color-destructive);
+  font-weight: 600;
+}
+
+.text-muted {
+  color: var(--color-muted-foreground);
+}

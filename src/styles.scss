@@ -1,0 +1,178 @@
+/* You can add global styles to this file, and also import other style files */
+
+// ---------------------------------------------------------------------------
+// Design tokens — fuente: skill ui-ux-pro-max
+//   Paleta:     Banking/Traditional Finance (dominio "color")
+//   Tipografía: Dashboard Data — Fira Sans + Fira Code (dominio "typography")
+//   Estilo:     Data-Dense Dashboard (dominio "style", light+dark soportado)
+// La variante oscura no viene en la base de datos para este combo; se deriva
+// a mano manteniendo la identidad navy+gold e invirtiendo superficies, con
+// verde/ámbar para estados positivo/pendiente (patrón fintech dark de la skill).
+// ---------------------------------------------------------------------------
+
+:root {
+  // Marca
+  --color-primary: #0f172a;
+  --color-on-primary: #ffffff;
+  --color-secondary: #1e3a8a;
+  --color-on-secondary: #ffffff;
+  --color-accent: #a16207;
+  --color-on-accent: #ffffff;
+
+  // Superficies
+  --color-background: #f8fafc;
+  --color-foreground: #020617;
+  --color-card: #ffffff;
+  --color-card-foreground: #020617;
+  --color-muted: #e8ecf1;
+  --color-muted-foreground: #475569;
+  --color-border: #e2e8f0;
+
+  // Estados (semántica de conciliación)
+  --color-success: #16a34a;
+  --color-on-success: #ffffff;
+  --color-warning: #d97706;
+  --color-on-warning: #ffffff;
+  --color-destructive: #dc2626;
+  --color-on-destructive: #ffffff;
+  --color-ring: #0f172a;
+
+  // Acentos de gráficas — independientes de --color-primary para poder
+  // ajustar el look de charts sin tocar botones/links.
+  --color-chart-donut: #2563eb;
+
+  // Tipografía
+  --font-heading: 'Fira Sans', sans-serif;
+  --font-body: 'Fira Sans', sans-serif;
+  --font-mono: 'Fira Code', monospace;
+
+  // Densidad (patrón Data-Dense Dashboard)
+  --grid-gap: 16px;
+  --card-padding: 16px;
+  --header-height: 56px;
+}
+
+html.dark {
+  --color-primary: #eab308;
+  --color-on-primary: #0f172a;
+  --color-secondary: #93c5fd;
+  --color-on-secondary: #0f172a;
+  --color-accent: #eab308;
+  --color-on-accent: #0f172a;
+
+  --color-background: #020617;
+  --color-foreground: #f8fafc;
+  --color-card: #0e1223;
+  --color-card-foreground: #f8fafc;
+  --color-muted: #1a1e2f;
+  --color-muted-foreground: #94a3b8;
+  --color-border: #334155;
+
+  --color-success: #22c55e;
+  --color-on-success: #0f172a;
+  --color-warning: #f59e0b;
+  --color-on-warning: #0f172a;
+  --color-destructive: #ef4444;
+  --color-on-destructive: #0f172a;
+  --color-ring: #f8fafc;
+
+  --color-chart-donut: #eab308;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+
+// ng-zorro-antd trae su propio reset `body { background-color; color }`
+// con la misma especificidad que el nuestro. Para no depender del orden
+// de carga de los <link> (frágil, y distinto entre dev/build), forzamos
+// aquí con un selector de mayor especificidad en vez de asumir el orden.
+html.dark body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+// Cifras/tablas numéricas en monospace para alinear dígitos (guía "Dashboard Data")
+.font-mono,
+.nz-table-numeric-cell {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+// ---------------------------------------------------------------------------
+// Puente ng-zorro-antd ↔ nuestros tokens
+// Las hojas de ng-zorro traen colores fijos de Ant Design (p. ej.
+// .ant-card{background:#fff}), completamente ajenos a --color-*. Sin este
+// bloque, ni el modo oscuro "real" ni el selector de paleta se ven
+// reflejados en cards/tabla/date-picker — solo en lo que nosotros mismos
+// construimos. Se usa !important porque algunos selectores de ant (p. ej.
+// .ant-table-thead>tr>th) son más específicos que un simple .clase nuestra,
+// y esto son reglas de integración deliberadas, no un parche puntual.
+// ---------------------------------------------------------------------------
+.ant-card,
+.ant-table,
+.ant-picker,
+.ant-picker-panel-container,
+.ant-select-dropdown {
+  background: var(--color-card) !important;
+  color: var(--color-foreground) !important;
+}
+
+.ant-card,
+.ant-picker {
+  border-color: var(--color-border) !important;
+}
+
+// Reforzado con "html body" (mayor especificidad) — estos dos, al estar
+// dentro de nz-table/nz-date-picker, compitieron con reglas internas más
+// difíciles de rastrear en el CSS minificado de ng-zorro.
+html body .ant-picker,
+html body .ant-picker.ant-picker-range,
+html body .ant-picker.ant-picker-outlined {
+  border: 1px solid var(--color-border) !important;
+}
+
+.ant-table-thead > tr > th,
+html body .ant-table-thead > tr > th {
+  background: var(--color-muted) !important;
+  color: var(--color-foreground) !important;
+  border-bottom-color: var(--color-border) !important;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom-color: var(--color-border) !important;
+  color: var(--color-foreground) !important;
+}
+
+.ant-select-selector,
+.ant-select-selection-item,
+.ant-picker-input > input {
+  color: var(--color-foreground) !important;
+}
+
+.ant-select-item {
+  color: var(--color-foreground) !important;
+
+  &-option-selected {
+    background: var(--color-muted) !important;
+  }
+
+  &-option-active {
+    background: var(--color-muted) !important;
+  }
+}

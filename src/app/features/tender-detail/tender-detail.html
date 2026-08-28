@@ -1,0 +1,116 @@
+@if (!isValidTenderMedia()) {
+  <p>
+    Medio de pago no encontrado. <a routerLink="/dashboard">Volver al dashboard</a>
+  </p>
+} @else {
+  <div class="tender-detail">
+    <div class="tender-detail__header">
+      <a routerLink="/dashboard" class="back-link" aria-label="Volver al dashboard">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+        </svg>
+        Volver
+      </a>
+      <div class="tender-detail__title-row">
+        <h1 class="tender-detail__title">
+          {{ tenderMediaLabel[validTenderMedia()!] }} — cruce venta vs. liquidación
+        </h1>
+        <span class="tender-detail__date">
+          {{ isToday() ? 'Hoy' : (service.dateFilter() | date: "d 'de' MMMM") }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Resumen global del día: 1 sola card, suma de todas las órdenes en
+         scope (no 3 KPIs separados — ver design-system MASTER.md). -->
+    <nz-card class="summary-card" [nzBodyStyle]="{ padding: '14px 16px' }">
+      <div class="summary-strip">
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Monto vendido</span>
+          <span class="summary-strip__value">
+            {{ service.summary().totalSold | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+          </span>
+        </div>
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Monto liquidado</span>
+          <span class="summary-strip__value">
+            {{ service.summary().totalSettled | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+          </span>
+        </div>
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Diferencia</span>
+          <span class="summary-strip__value" [class.text-destructive]="service.summary().difference !== 0">
+            {{ service.summary().difference | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+          </span>
+        </div>
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Por liquidar</span>
+          <span class="summary-strip__value text-warning">
+            {{ service.summary().pendingAmount | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+          </span>
+        </div>
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Requieren atención</span>
+          <span class="summary-strip__value text-destructive">
+            {{ service.summary().attentionAmount | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+          </span>
+        </div>
+      </div>
+    </nz-card>
+
+    <section class="toolbar">
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.statusFilter()"
+        (ngModelChange)="onStatusFilterChange($event)"
+      >
+        @for (opt of statusOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
+    </section>
+
+    <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
+      <nz-table #tbl [nzData]="service.filteredMatches()" [nzPageSize]="10" nzSize="middle">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th class="col-truncate" style="--col-max-width: 140px">Orden</th>
+            <th class="text-right">Monto vendido</th>
+            <th class="text-right">Monto liquidado</th>
+            <th class="text-right">Diferencia</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of tbl.data; track m.orderId) {
+            <tr>
+              <td>{{ m.date | date: 'dd/MM/yyyy' }}</td>
+              <td class="col-truncate font-mono" style="--col-max-width: 140px" [attr.title]="m.orderId">
+                {{ m.orderId }}
+              </td>
+              <td class="text-right font-mono">
+                @if (m.sale) {
+                  {{ m.sale.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                } @else {
+                  <span class="text-muted">—</span>
+                }
+              </td>
+              <td class="text-right font-mono">
+                @if (m.settlement) {
+                  {{ m.settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                } @else {
+                  <span class="text-muted">—</span>
+                }
+              </td>
+              <td class="text-right font-mono" [class.text-destructive]="difference(m) !== 0">
+                {{ difference(m) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </td>
+              <td><app-match-status-tag [status]="m.status" /></td>
+            </tr>
+          }
+        </tbody>
+      </nz-table>
+    </nz-card>
+  </div>
+}

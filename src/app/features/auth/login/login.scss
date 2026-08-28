@@ -1,0 +1,160 @@
+// Pantalla fuera de Shell (ver design-system/conciliation/pages/login.md):
+// login es la desviación deliberada de MASTER.md — no lleva header/nav, es
+// una pantalla propia de dos paneles (marca + formulario).
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 480px);
+  background: var(--color-background);
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// --- Panel de marca (izquierda, solo desktop) ------------------------------
+.login-page__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: var(--color-on-primary);
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+}
+
+.login-page__brand-content {
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-page__brand-icon {
+  opacity: 0.9;
+}
+
+.login-page__brand-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 28px;
+  margin: 0;
+}
+
+.login-page__brand-tagline {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-on-primary);
+  opacity: 0.85;
+  margin: 0;
+}
+
+// --- Panel de formulario (derecha) ------------------------------------------
+.login-page__form-panel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+// Mismo patrón visual que .icon-button de shell.scss — no se puede reutilizar
+// la clase entre componentes (ViewEncapsulation), así que se replica aquí.
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-foreground);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+
+  &:hover {
+    background: var(--color-muted);
+    border-color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.login-page__theme-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+// Marca compacta — reemplaza al panel izquierdo cuando este se oculta (mobile)
+.login-card__mobile-brand {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  color: var(--color-foreground);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+
+  @media (max-width: 900px) {
+    display: flex;
+  }
+}
+
+.login-card__title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--color-foreground);
+  margin: 0 0 4px;
+}
+
+.login-card__subtitle {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  margin: 0 0 20px;
+}
+
+.login-card__alert {
+  margin-bottom: 16px;
+}
+
+.login-form__affix-icon {
+  display: inline-flex;
+  color: var(--color-muted-foreground);
+}
+
+.login-form__submit {
+  margin-top: 4px;
+}
+
+.login-card__hint {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+
+  code {
+    font-family: var(--font-mono);
+    background: var(--color-muted);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+}

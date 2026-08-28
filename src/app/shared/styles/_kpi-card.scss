@@ -1,0 +1,121 @@
+// Patrón "KPI card" — ver design-system/conciliation/MASTER.md
+// ("Patrón de layout: card de KPI con gráfica"). Cualquier feature con una
+// fila de indicadores arriba de una tabla debería @use-ar este partial en
+// vez de redefinir estas clases.
+//
+// Regla dura heredada del dashboard: la fila completa de KPIs nunca debe
+// superar ~1/3 del alto de la ventana (`.kpi-grid` ya lo topa a 22vh).
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 1fr; // las cards comparten el mismo alto
+  gap: 10px;
+  max-height: 22vh;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+    max-height: none;
+  }
+}
+
+.kpi-card {
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.kpi-card__title {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+  margin-bottom: 6px;
+}
+
+.kpi-card__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+// Dona a un costado: stat pegado a la izquierda, la dona se centra en el
+// espacio libre que queda después del texto vía margin:auto en
+// .kpi-card__donut. Sin gap aquí a propósito — un gap fijo se sumaría solo
+// al lado izquierdo del margin:auto y rompería la simetría del centrado.
+.kpi-card__body--donut {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+// Gráfica abajo: info resaltada arriba, sparkline abajo.
+.kpi-card__body--stacked {
+  flex-direction: column;
+  gap: 8px;
+}
+
+// Solo stat, sin visual de apoyo — centrado verticalmente en el card.
+.kpi-card__body--stat {
+  align-items: center;
+}
+
+.kpi-card__stat {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kpi-card__value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.kpi-card__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+// Dona: crece al alto completo disponible del card, con un tope de ancho
+// para no desbordar en cards muy altos (el SVG interno preserva su propia
+// proporción circular vía preserveAspectRatio="meet", así que un box más
+// alto que ancho no lo distorsiona). El padding uniforme de 8px del card
+// (definido en el nzBodyStyle del html) es lo que le deja el espacio contra
+// los bordes — este bloque no añade padding propio.
+.kpi-card__donut {
+  flex: 0 0 auto;
+  height: 100%;
+  max-width: 96px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+}
+
+// Sparkline: flex-1 para tomar el alto restante bajo la info resaltada.
+.kpi-card__sparkline {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.trend-arrow {
+  flex-shrink: 0;
+}
+
+.trend-arrow--down {
+  transform: rotate(180deg);
+}

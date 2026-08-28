@@ -1,0 +1,98 @@
+.shell {
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+.shell__header {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: var(--color-card);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.shell__title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--color-foreground);
+}
+
+.shell__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shell__user {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-foreground);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+
+  &:hover {
+    background: var(--color-muted);
+    border-color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.shell__content {
+  padding: var(--grid-gap);
+}
+
+// --- Selector de paleta (contenido del nz-popover) -------------------------
+.palette-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 2px;
+}
+
+.palette-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--color-card);
+  outline: 1px solid var(--color-border);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 120ms ease;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.palette-swatch--selected {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: 1px;
+}

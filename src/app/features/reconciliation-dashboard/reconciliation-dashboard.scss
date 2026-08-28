@@ -1,0 +1,68 @@
+@use '../../shared/styles/kpi-card';
+@use '../../shared/styles/toolbar';
+@use '../../shared/styles/data-table';
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+// Medios de pago: lista compacta con indicador de estado (específico de
+// este dashboard — no es parte del patrón genérico de KPI card).
+.tender-status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tender-status-list__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background-color: var(--color-muted);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.tender-status-list__label {
+  flex: 1;
+  color: var(--color-foreground);
+}
+
+.tender-status-list__state {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot--ok {
+  background: var(--color-success);
+}
+
+.status-dot--late {
+  background: var(--color-destructive);
+}

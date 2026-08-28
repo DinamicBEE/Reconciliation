@@ -1,0 +1,161 @@
+<div class="login-page">
+  <!-- Panel de marca — solo desktop (ver .scss). En mobile se reemplaza por
+       .login-card__mobile-brand, más compacto. -->
+  <section class="login-page__brand">
+    <div class="login-page__brand-content">
+      <svg class="login-page__brand-icon" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path stroke-linejoin="round" d="M12 3l8 3v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6l8-3Z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8.5 12.5l2.5 2.5 4.5-5" />
+      </svg>
+      <h1 class="login-page__brand-title">Conciliación Bancaria</h1>
+      <p class="login-page__brand-tagline">
+        Concilia movimientos de BBVA, Rappi, DiDi Food y Efectivo en un solo lugar, con visibilidad diaria del
+        estado de cada medio de pago.
+      </p>
+    </div>
+  </section>
+
+  <section class="login-page__form-panel">
+    <button
+      type="button"
+      class="icon-button login-page__theme-toggle"
+      (click)="theme.toggle()"
+      [attr.aria-label]="theme.mode() === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+    >
+      @if (theme.mode() === 'dark') {
+        <!-- sol -->
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="4" />
+          <path
+            stroke-linecap="round"
+            d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+          />
+        </svg>
+      } @else {
+        <!-- luna -->
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"
+          />
+        </svg>
+      }
+    </button>
+
+    <div class="login-card">
+      <div class="login-card__mobile-brand">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path stroke-linejoin="round" d="M12 3l8 3v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6l8-3Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.5 12.5l2.5 2.5 4.5-5" />
+        </svg>
+        <span>Conciliación Bancaria</span>
+      </div>
+
+      <h2 class="login-card__title">Iniciar sesión</h2>
+      <p class="login-card__subtitle">Ingresa tus credenciales para continuar.</p>
+
+      @if (loginError()) {
+        <nz-alert class="login-card__alert" nzType="error" [nzMessage]="loginError()" nzShowIcon />
+      }
+
+      <form nz-form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
+        <nz-form-item>
+          <nz-form-label nzFor="username" nzRequired>Usuario</nz-form-label>
+          <nz-form-control [nzErrorTip]="usernameErrorTpl">
+            <nz-input-wrapper>
+              <span nzInputPrefix class="login-form__affix-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="8" r="4" />
+                  <path stroke-linecap="round" d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6" />
+                </svg>
+              </span>
+              <input
+                nz-input
+                id="username"
+                type="text"
+                formControlName="username"
+                placeholder="Tu usuario"
+                autocomplete="username"
+              />
+            </nz-input-wrapper>
+          </nz-form-control>
+        </nz-form-item>
+        <ng-template #usernameErrorTpl let-control>
+          @if (control.hasError('required')) {
+            Ingresa tu usuario.
+          } @else if (control.hasError('minlength')) {
+            Debe tener al menos 3 caracteres.
+          }
+        </ng-template>
+
+        <nz-form-item>
+          <nz-form-label nzFor="password" nzRequired>Contraseña</nz-form-label>
+          <nz-form-control [nzErrorTip]="passwordErrorTpl">
+            <nz-input-password>
+              <span nzInputPrefix class="login-form__affix-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="5" y="11" width="14" height="9" rx="2" />
+                  <path stroke-linecap="round" d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+              </span>
+              <input
+                nz-input
+                id="password"
+                formControlName="password"
+                placeholder="Tu contraseña"
+                autocomplete="current-password"
+              />
+              <ng-template nzInputPasswordIcon let-visible>
+                @if (visible) {
+                  <!-- ojo abierto -->
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M2 12c1.3-3.6 5-7 10-7s8.7 3.4 10 7c-1.3 3.6-5 7-10 7s-8.7-3.4-10-7Z"
+                    />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                } @else {
+                  <!-- ojo tachado -->
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M9.3 5.3A10.5 10.5 0 0 1 12 5c5 0 8.7 3.4 10 7-.5 1.4-1.3 2.7-2.4 3.8M6.5 6.5C4.4 7.9 2.9 9.8 2 12c1.3 3.6 5 7 10 7 1.4 0 2.7-.2 3.9-.7"
+                    />
+                  </svg>
+                }
+              </ng-template>
+            </nz-input-password>
+          </nz-form-control>
+        </nz-form-item>
+        <ng-template #passwordErrorTpl let-control>
+          @if (control.hasError('required')) {
+            Ingresa tu contraseña.
+          } @else if (control.hasError('minlength')) {
+            Debe tener al menos 6 caracteres.
+          }
+        </ng-template>
+
+        <button
+          nz-button
+          nzType="primary"
+          nzSize="large"
+          nzBlock
+          type="submit"
+          class="login-form__submit"
+          [nzLoading]="submitting()"
+          [disabled]="form.invalid"
+        >
+          Iniciar sesión
+        </button>
+      </form>
+
+      <p class="login-card__hint">Demo: <code>admin</code> / <code>Conciliacion2026</code></p>
+    </div>
+  </section>
+</div>
