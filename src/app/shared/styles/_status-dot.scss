@@ -1,0 +1,17 @@
+// Punto de estado (salud de conciliación por medio de pago). Promovido desde
+// reconciliation-dashboard.scss al aparecer un segundo consumidor
+// (tender-media-picker) — ver MASTER.md.
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot--ok {
+  background: var(--color-success);
+}
+
+.status-dot--late {
+  background: var(--color-destructive);
+}

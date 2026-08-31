@@ -1,0 +1,179 @@
+<div class="sales-dashboard">
+  <div class="sales-dashboard__header">
+    <h1 class="sales-dashboard__title">Resumen de venta</h1>
+
+    <nz-radio-group
+      class="period-toggle"
+      [ngModel]="service.period()"
+      (ngModelChange)="onPeriodChange($event)"
+      nzButtonStyle="solid"
+      nzSize="small"
+    >
+      @for (opt of periodOptions; track opt.value) {
+        <label nz-radio-button [nzValue]="opt.value">{{ opt.label }}</label>
+      }
+    </nz-radio-group>
+  </div>
+
+  <!-- 3 KPIs, ≤22vh (ver kpi-card partial / design-system MASTER.md) -->
+  <section class="kpi-grid">
+    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
+      <span class="kpi-card__title">Total vendido</span>
+      <div class="kpi-card__body kpi-card__body--stacked">
+        <div class="kpi-card__stat">
+          <span class="kpi-card__value">
+            {{ service.summary().totalAmount | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+          </span>
+          <span class="kpi-card__delta text-muted">{{ service.summary().count }} transacciones</span>
+        </div>
+        <app-sparkline class="kpi-card__sparkline" [values]="service.dailyTrend()" color="var(--color-chart-donut)" />
+      </div>
+    </nz-card>
+
+    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
+      <span class="kpi-card__title">Ticket promedio</span>
+      <div class="kpi-card__body kpi-card__body--stat">
+        <div class="kpi-card__stat">
+          <span class="kpi-card__value">
+            {{ service.summary().avgTicket | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+          </span>
+        </div>
+      </div>
+    </nz-card>
+
+    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
+      <span class="kpi-card__title">Transacciones</span>
+      <div class="kpi-card__body kpi-card__body--stat">
+        <div class="kpi-card__stat">
+          <span class="kpi-card__value">{{ service.summary().count }}</span>
+        </div>
+      </div>
+    </nz-card>
+  </section>
+
+  <h2 class="sales-dashboard__subtitle">Ventas de hoy</h2>
+
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
+    <nz-table #tbl [nzData]="service.todaySales()" [nzPageSize]="10" nzSize="middle">
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th class="col-truncate" style="--col-max-width: 130px">Folio</th>
+          <th class="col-truncate" style="--col-max-width: 180px">Cliente</th>
+          <th>Medio de pago</th>
+          <th class="text-right">Artículos</th>
+          <th class="text-right">Total</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (sale of tbl.data; track sale.id) {
+          <tr class="clickable-row" (click)="onRowClick(sale)">
+            <td class="font-mono">{{ sale.time }}</td>
+            <td class="col-truncate font-mono" style="--col-max-width: 130px" [attr.title]="sale.folio">
+              {{ sale.folio }}
+            </td>
+            <td class="col-truncate" style="--col-max-width: 180px" [attr.title]="sale.customer.name">
+              {{ sale.customer.name }}
+            </td>
+            <td>{{ tenderMediaLabel[sale.tenderMedia] }}</td>
+            <td class="text-right font-mono">{{ sale.items.length }}</td>
+            <td class="text-right font-mono">
+              {{ saleTotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            </td>
+            <td><app-sale-status-tag [status]="sale.status" /></td>
+          </tr>
+        }
+      </tbody>
+    </nz-table>
+  </nz-card>
+</div>
+
+<nz-drawer
+  [nzVisible]="service.selectedSale() !== null"
+  [nzTitle]="service.selectedSale() ? 'Venta ' + service.selectedSale()!.folio : ''"
+  nzWidth="420"
+  (nzOnClose)="service.closeSale()"
+>
+  <ng-container *nzDrawerContent>
+    @if (service.selectedSale(); as sale) {
+      <div class="sale-drawer">
+        <section class="sale-drawer__section">
+          <h3 class="sale-drawer__heading">Información general</h3>
+          <dl class="sale-drawer__facts">
+            <dt>Fecha</dt>
+            <dd>{{ sale.date | date: 'dd/MM/yyyy' }} · {{ sale.time }}</dd>
+            <dt>Medio de pago</dt>
+            <dd>{{ tenderMediaLabel[sale.tenderMedia] }}</dd>
+            <dt>Estado</dt>
+            <dd><app-sale-status-tag [status]="sale.status" /></dd>
+          </dl>
+        </section>
+
+        <section class="sale-drawer__section">
+          <h3 class="sale-drawer__heading">Cliente</h3>
+          <dl class="sale-drawer__facts">
+            <dt>Nombre</dt>
+            <dd>{{ sale.customer.name }}</dd>
+            @if (sale.customer.email) {
+              <dt>Email</dt>
+              <dd>{{ sale.customer.email }}</dd>
+            }
+            @if (sale.customer.phone) {
+              <dt>Teléfono</dt>
+              <dd>{{ sale.customer.phone }}</dd>
+            }
+          </dl>
+        </section>
+
+        <section class="sale-drawer__section">
+          <h3 class="sale-drawer__heading">Artículos</h3>
+          <table class="sale-drawer__items">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th class="text-right">Cant.</th>
+                <th class="text-right">P. unitario</th>
+                <th class="text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of sale.items; track item.id) {
+                <tr>
+                  <td>{{ item.productName }}</td>
+                  <td class="text-right font-mono">{{ item.quantity }}</td>
+                  <td class="text-right font-mono">
+                    {{ item.unitPrice | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                  </td>
+                  <td class="text-right font-mono">
+                    {{ itemSubtotal(item.quantity, item.unitPrice) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </section>
+
+        <section class="sale-drawer__section">
+          <h3 class="sale-drawer__heading">Totales</h3>
+          <dl class="sale-drawer__facts">
+            <dt>Subtotal</dt>
+            <dd class="font-mono">
+              {{ selectedSaleTotals()!.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            </dd>
+            @if (sale.discountAmount > 0) {
+              <dt>Descuento{{ sale.discountReason ? ' — ' + sale.discountReason : '' }}</dt>
+              <dd class="font-mono text-destructive">
+                -{{ sale.discountAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </dd>
+            }
+            <dt class="sale-drawer__total-label">Total</dt>
+            <dd class="font-mono sale-drawer__total-value">
+              {{ selectedSaleTotals()!.total | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            </dd>
+          </dl>
+        </section>
+      </div>
+    }
+  </ng-container>
+</nz-drawer>

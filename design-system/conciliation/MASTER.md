@@ -20,7 +20,7 @@
 | UI kit | ng-zorro-antd v22 (MIT, sin license key) |
 | Animaciones | API nativa de Angular (`animate.enter`/`animate.leave`) — **no** `@angular/animations` (deprecado en v22) |
 | Locale | `es-MX` (`LOCALE_ID`), ng-zorro en `es_ES` (no hay `es_MX` en ng-zorro todavía) |
-| Ruteo | `provideRouter(routes, withComponentInputBinding())` — un param de ruta (`:tenderMedia`) o de **query** (`?date=`) se recibe como `input<string>()` en el componente, sin `ActivatedRoute`/`paramMap` manual. Un query param ausente en la URL simplemente llega como `undefined` al input — el componente decide el default (ver `tender-detail.ts`, `date` + `APP_TODAY_ISO`). |
+| Ruteo | `provideRouter(routes, withComponentInputBinding())` — un param de ruta (p. ej. `:tenderMedia`/`:orderId`) se recibe como `input<string>()` en el componente, sin `ActivatedRoute`/`paramMap` manual (ver `difference-management.ts`). Un param ausente llega como `undefined` al input — el componente decide qué hacer (validar, redirigir, default). |
 
 ## Estructura de carpetas (por feature)
 
@@ -30,23 +30,33 @@ src/app/
 │   ├── layout/shell/    # header + <router-outlet>, toggle de tema, selector de paleta
 │   └── services/        # ThemeService, PaletteService, color-utils
 ├── shared/            # reutilizable entre features — NUNCA depende de features/
-│   ├── components/      # status-tag, match-status-tag, sparkline, radial-progress
-│   ├── models/           # tipos de dominio compartidos (ReconciliationItem, etc.)
+│   ├── components/      # match-status-tag, sale-status-tag, sparkline, radial-progress
+│   ├── models/           # tipos de dominio compartidos (TransactionMatch, Sale, etc.)
+│   ├── mock-data/        # datasets mock usados por 2+ features (ver abajo)
+│   ├── utils/            # funciones puras usadas por 2+ features (cross-match.util.ts)
 │   └── styles/           # partials SCSS (@use) — ver "Patrón de layout" abajo
 └── features/
     └── <feature>/
-        ├── data/           # <Feature>Service (signals) + mock data + utils puros
+        ├── data/           # <Feature>Service (signals) + mock/utils propios del feature
         └── <feature>.{ts,html,scss}
 ```
 
-Regla dura: `shared` no importa de `features`. Si un modelo/componente empieza
-siendo específico de un feature pero podría reutilizarse en otro, sube a
-`shared/models` o `shared/components` (así se hizo con `ReconciliationItem`).
+Regla dura: `shared` no importa de `features`. Si un modelo/componente/mock/util
+empieza siendo específico de un feature pero un SEGUNDO feature lo necesita,
+sube a `shared/` (mismo criterio en todo el proyecto — modelos, componentes,
+mocks, utils puros o partials SCSS: así se hizo con `_summary-strip.scss`/
+`_back-link.scss`/`_status-dot.scss`, y con `cross-match.util.ts` +
+`sales-settlements.mock-data.ts` + `tender-media-status.mock-data.ts` al
+aparecer segundos consumidores de lo que antes vivía en el `data/` de un solo
+feature — hoy esos dos últimos los consumen `reconciliation-dashboard` y
+`difference-management` juntos, ver "Patrón: cruce transacción a transacción"
+más abajo).
 
 Una función de derivación pura y testeable (sin estado, sin DI) que un
-`<Feature>Service` consume va en su propio archivo dentro de `data/`, junto al
-service — no inline en el service ni en el componente (así se hizo con
-`cross-match.util.ts` en `tender-detail`).
+`<Feature>Service` consume va en su propio archivo — junto al service si es
+específica de ESE feature (`data/<algo>.util.ts`), o en `shared/utils/` si un
+segundo feature la necesita (así terminó `cross-match.util.ts`). Nunca inline
+en el service ni en el componente.
 
 ## Tokens de color
 
@@ -152,8 +162,7 @@ numérica — activa `font-variant-numeric: tabular-nums` para alinear dígitos.
 
 | Componente | Selector | Para qué |
 |---|---|---|
-| `StatusTag` | `<app-status-tag [status]="...">` | Traduce un estado de dominio (`ReconciliationStatus`) a `nz-tag` con color+label. Patrón: cualquier enum de estado nuevo debería tener su propio "X-tag" así, no un `[ngSwitch]` inline repetido. |
-| `MatchStatusTag` | `<app-match-status-tag [status]="...">` | Igual que `StatusTag` pero para `MatchStatus` (cruce venta/liquidación). Ejemplo del patrón "un enum de estado nuevo = un tag nuevo", no una condición extra en `StatusTag`. |
+| `MatchStatusTag` | `<app-match-status-tag [status]="...">` | Traduce `MatchStatus` (cruce venta/liquidación) a `nz-tag` con color+label. Patrón: cualquier enum de estado nuevo debería tener su propio "X-tag" así, no un `[ngSwitch]` inline repetido — así nació también `SaleStatusTag` para `SaleStatus` en `sales-dashboard`. |
 | `Sparkline` | `<app-sparkline [values]="number[]" [color]="...">` | Gráfica de área estilizada (línea delgada + degradado bajo la curva), SVG puro, sin librería de charting. |
 | `RadialProgress` | `<app-radial-progress [percent]="..." [color]="...">` | Anillo de progreso, llena el 100% de su contenedor (el tamaño lo decide el padre vía CSS). `preserveAspectRatio="meet"` — nunca se distorsiona aunque su caja no sea cuadrada. |
 
@@ -190,10 +199,9 @@ Tres variantes de `.kpi-card__body`:
 - `--stat` (solo número, sin visual): centra `.kpi-card__stat` verticalmente
   en el card. Úsalo cuando el KPI no tiene (o no necesita) una gráfica de
   apoyo — no fuerces un donut/sparkline decorativo solo por consistencia
-  visual. (Disponible pero sin consumidor actual — `tender-detail` usó esta
-  variante en una iteración anterior y luego se reemplazó por completo con
-  el patrón de "resumen global" de abajo, que es un caso distinto: una sola
-  card con varias métricas, no varias cards independientes.)
+  visual. (Disponible pero sin consumidor actual — el patrón de "resumen
+  global" de abajo es un caso distinto: una sola card con varias métricas,
+  no varias cards independientes.)
 
 Deltas ("+5 pts vs. ayer", o simplemente una segunda línea con `.text-muted`):
 triángulo SVG inline (no icon font, no emoji) + color success/destructive
@@ -203,12 +211,14 @@ cuando es solo contexto (p. ej. "3 de 6 transacciones").
 ## Patrón de layout: resumen global (tira de métricas en una sola card)
 
 Distinto del patrón de KPI cards de arriba — aquí NO son indicadores
-independientes, es **una sola card** con varias sumas relacionadas en fila
-(usado en `tender-detail.html` para "Monto vendido / Monto liquidado /
-Diferencia / Por liquidar / Requieren atención" del día). Página-específico
-por ahora (`tender-detail.scss`, clases `.summary-card`/`.summary-strip*`) —
-promover a `shared/styles/` si un segundo módulo lo necesita, mismo criterio
-que ya se aplicó con `_kpi-card.scss`.
+independientes, es **una sola card** con varios campos/sumas relacionados en
+fila. Usado en `difference-management.html` para la identidad de una orden
+puntual: Orden / Medio de pago / Fecha / Estado / Monto vendido / Monto
+liquidado / Diferencia. Vive en **`shared/styles/_summary-strip.scss`**
+(promovido en su momento desde `tender-detail`, que también lo usó para un
+resumen del día — ese feature se retiró por completo, ver "Patrón: cruce
+transacción a transacción" más abajo; el partial se quedó porque
+`difference-management` lo sigue necesitando).
 
 ```html
 <nz-card class="summary-card" [nzBodyStyle]="{ padding: '14px 16px' }">
@@ -222,11 +232,16 @@ que ya se aplicó con `_kpi-card.scss`.
 </nz-card>
 ```
 
-Reglas: `grid-template-columns: repeat(N, 1fr)` (colapsa a 2 columnas en
-`max-width: 900px`), separador `border-left` entre items (no gap solo), y el
-valor NUNCA lleva color por defecto — solo se colorea (`.text-warning`,
-`.text-destructive`) cuando el número representa algo que requiere atención,
-igual que en las tablas.
+Reglas: `grid-template-columns: repeat(N, 1fr)`, `N` configurable con la
+variable CSS `--summary-strip-cols` en el `nz-card` contenedor (default `5`;
+`difference-management` usa `4` para sus 7 campos) — colapsa a 2 columnas en
+`max-width: 900px` sin importar `N`.
+Separador `border-left` entre items (no gap solo). El valor NUNCA lleva color
+por defecto — solo se colorea (`.text-warning`, `.text-destructive`) cuando
+el número representa algo que requiere atención, igual que en las tablas. Un
+campo que no es numérico (p. ej. un `*StatusTag`) no usa la clase
+`.summary-strip__value` — se coloca el componente directo dentro de
+`.summary-strip__item`, sin forzar la tipografía mono/bold pensada para cifras.
 
 ## Convención: "hoy" sin backend
 
@@ -234,25 +249,89 @@ No hay reloj real que usar — el `new Date()` del navegador correría
 desalineado de los datos mock (fijos en agosto de 2026) y "hoy" mostraría
 siempre una tabla vacía. Cada feature que necesite "hoy" define su propia
 constante `APP_TODAY_ISO` en su `data/*.service.ts` (ver
-`tender-detail.service.ts`) — **no** una global compartida todavía (son solo
-2 usos: dashboard y tender-detail, cada uno con su propia fecha "actual" del
-relato). Si aparece un tercer consumidor, ese es el momento de subirla a
-`shared`.
+`sales-dashboard.service.ts`) — **no** una global compartida todavía (hoy es
+1 solo uso; `tender-detail` tenía la suya propia, se fue con el feature al
+retirarse, ver nota histórica abajo). Si aparece un segundo consumidor, ese
+es el momento de subirla a `shared`.
 
-## Patrón: doble entrada a una misma pantalla de detalle con distinto alcance
+## Patrón: navegación entre módulos (menú de Shell)
 
-`tender-detail` se abre desde dos lugares con semántica distinta:
+Los módulos de nivel superior se acceden únicamente desde `.shell__nav` en
+`shell.html` — dos links: `Dashboard` (`/dashboard`, `sales-dashboard`,
+resumen de venta — la pantalla de aterrizaje tras login) y `Conciliación`
+(`/conciliacion`, `reconciliation-dashboard` — vivió en `/dashboard` hasta
+que ese path pasó a ser el resumen de venta). `routerLinkActive` con su
+default (`exact: false`) alcanza para marcar "Conciliación" activo también
+en `/conciliacion/:tenderMedia/diferencias/:orderId` (la ruta de
+`difference-management`, que cuelga de `conciliacion` pero no tiene entrada
+propia en el menú — se llega solo desde una fila accionable de la tabla).
 
-1. Lista "Medios de pago" (KPI 1 del dashboard) → sin `?date=` en la URL →
-   default a `APP_TODAY_ISO` ("hoy").
-2. Una fila de la tabla inferior del dashboard → `[queryParams]="{ date: item.date }"`
-   → esa fecha específica, no "hoy".
+**Si mueves qué vive en qué ruta** (como pasó con `/dashboard`: pasó de
+`reconciliation-dashboard` a `sales-dashboard`), revisa TODOS los
+`routerLink`/`navigateByUrl` que apuntan al path viejo antes de asumir que el
+rename es seguro. `login.ts` apunta a `/dashboard` post-login, y eso sigue
+siendo correcto porque el resumen de venta es la pantalla de aterrizaje
+deseada, no un accidente.
 
-El componente no distingue el origen explícitamente — solo lee `date` como
-input opcional y decide el default. Esto es deliberado: más simple que
-propagar de dónde vino el click, y el resultado es el mismo (la pantalla
-siempre sabe qué fecha mostrar). El título muestra "Hoy" o la fecha formateada
-según corresponda (`isToday()` comparando contra `APP_TODAY_ISO`).
+No hay sidebar ni menú colapsable — 2 links de texto bastan. Si aparece un
+tercer módulo de nivel superior (o el header empieza a apretarse en desktop,
+no solo en el breakpoint móvil pendiente de la sección de deuda), ese es el
+momento de evaluar `nz-menu`/una barra lateral en vez de seguir agregando
+`<a class="shell__nav-link">` sueltos (no antes: introducir `nz-menu` implica
+puentear `.ant-menu` a nuestros tokens en `styles.scss`, igual que se hizo
+con `.ant-card`/`.ant-table`/`.ant-drawer-*` — no vale la pena el costo
+todavía con 2 entradas).
+
+### Historial: "Detalle por tender media" (retirado)
+
+Existió durante dos iteraciones como módulo aislado (`/detalle`, con su
+propio selector `tender-media-picker` y una pantalla `tender-detail` que
+mostraba el cruce venta/liquidación **por medio de pago**, uno a la vez) con
+entrada propia en el menú de `Shell`. Se retiró por completo al unificar esa
+tabla con la de `reconciliation-dashboard` — mostrar el mismo cruce en dos
+tablas separadas (una por tender media individual, otra consolidada con
+todos) no aportaba nada, así que `reconciliation-dashboard` absorbió el
+cruce completo de los 4 medios de pago a la vez (ver "Patrón: cruce
+transacción a transacción" abajo) y `tender-detail`/`tender-media-picker` se
+borraron junto con su ruta y su link de menú. `difference-management` (la
+única pantalla que dependía de `tender-detail`) se reapuntó a colgar de
+`/conciliacion/:tenderMedia/diferencias/:orderId` en vez de
+`/detalle/:tenderMedia/diferencias/:orderId` — su lógica interna no cambió,
+solo su padre de ruta y sus links "Volver".
+
+## Patrón de layout: toggle de periodo para KPIs (día/mes)
+
+Usado en `features/sales-dashboard` — un `nz-radio-group` con
+`nzButtonStyle="solid"` y `nzSize="small"` arriba del `.kpi-grid`, dos
+opciones (`día`/`mes` como tipo unión, no boolean — un tercer periodo futuro
+como "año" no debería requerir invertir la lógica). El toggle recalcula
+SOLO las cards de KPI (`summary` en el service, `computed` que lee
+`period()`); la tabla debajo tiene su propio alcance fijo e independiente
+("hoy", sin importar el periodo elegido en los KPI) — dos conceptos
+distintos que no deben compartir una sola señal de filtro aunque ambos
+"filtran por fecha". Ver `sales-dashboard.service.ts`: `todaySales` (tabla,
+fijo) vs `scopedSales`/`summary` (KPIs, sigue a `period`).
+
+## Patrón: Drawer de detalle al hacer click en una fila (sin navegar)
+
+Usado en `sales-dashboard` para ver el detalle completo de una venta
+(cliente, artículos, descuentos) sin abandonar la tabla — a diferencia de
+`reconciliation-dashboard`/`difference-management`, que sí navegan a otra
+ruta al hacer click en una fila accionable. Usar Drawer (no ruta) cuando el
+detalle es
+puramente informativo/de solo lectura y no tiene su propio flujo de acciones
+que amerite una URL propia; usar ruta cuando el detalle es "gestionable"
+(como resolver una diferencia).
+
+- Estado en el service, no en el componente: `selectedSale = signal<Sale | null>(null)`,
+  `openSale(sale)`/`closeSale()`. El template solo hace
+  `[nzVisible]="service.selectedSale() !== null"` y `(nzOnClose)="service.closeSale()"`.
+- Contenido con `<ng-container *nzDrawerContent>` + `@if (service.selectedSale(); as sale)`.
+- Primer uso de `nz-drawer` en el proyecto → necesitó su propia entrada en el
+  puente ng-zorro↔tokens (`.ant-drawer-content`, `.ant-drawer-header`,
+  `.ant-drawer-title`) — mismo patrón de siempre: cualquier componente nuevo
+  de ng-zorro, revisar si trae colores fijos antes de darlo por "ya
+  temeado".
 
 ## Iconografía
 
@@ -273,30 +352,85 @@ clase, no la reinventa.
 
 ## Patrón: cruce transacción a transacción entre dos fuentes
 
-Usado en `features/tender-detail` ("Detalle por tender media", ruta
-`/detalle/:tenderMedia`) para cruzar ventas vs. liquidaciones por
-orden/referencia. Reutilizar si un módulo futuro necesita comparar dos listas
-independientes por un ID común (p. ej. facturas vs. pagos, inventario vs.
-conteo físico):
+En **`shared/mock-data/sales-settlements.mock-data.ts`** y
+**`shared/utils/cross-match.util.ts`**. `reconciliation-dashboard` (tabla de
+"Conciliación", TODOS los tender media a la vez — `ALL_TENDER_MEDIA.flatMap`
+en `reconciliation.service.ts`) y `difference-management` (una orden
+puntual) son los dos consumidores del mismo dataset y la misma función de
+cruce — no tiene sentido duplicar el mock, ambas pantallas cruzan
+EXACTAMENTE las mismas ventas/liquidaciones. (Hasta la iteración anterior
+había un tercer consumidor, `tender-detail`, que mostraba este mismo cruce
+pero acotado a un solo tender media a la vez — se retiró al unificarse con
+`reconciliation-dashboard`, ver "Historial: 'Detalle por tender media'"
+arriba). Reutilizar este patrón si un módulo futuro necesita comparar dos
+listas independientes por un ID común (p. ej. facturas vs. pagos, inventario
+vs. conteo físico):
 
 1. Modelo en `shared/models`: dos entidades "lado A"/"lado B" con un campo de
    cruce común (`orderId`), + un tipo unión de resultado (`MatchStatus`) que
    cubre los 4 casos posibles: coincide, existe en ambos pero difiere, solo en
    A, solo en B. + un tipo `*Match` que trae ambos lados (nullable) y el
    resultado.
-2. Función pura de cruce en `data/cross-match.util.ts` (no en el service):
-   `Map` por ID del lado B, recorre A marcando coincidencias, luego agrega lo
-   de B que quedó sin marcar. Sin estado — se puede probar aislada.
-3. El `<Feature>Service` solo orquesta: guarda las dos listas fuente, expone
-   `computed` con el resultado del cruce, un `computed` intermedio acotado por
-   fecha/alcance si aplica (p. ej. `dateScopedMatches`), y un `computed` de
-   resumen que parte de ESE intermedio — no de la lista de filtro de la
-   tabla (`statusFilter`), que solo debe afectar qué filas se ven, nunca lo
-   que se suma en el resumen.
-4. Cada uno de los 4 estados tiene su propio color en el `*StatusTag`, pero
-   ninguno reutiliza literalmente los 3 estados de `ReconciliationStatus` —
-   son conceptos relacionados pero no iguales ("por liquidar" ≠ "pendiente"
-   aunque visualmente ambos son ámbar).
+2. Función pura de cruce en `shared/utils/cross-match.util.ts` (no en ningún
+   service): `Map` por ID del lado B, recorre A marcando coincidencias, luego
+   agrega lo de B que quedó sin marcar. Sin estado — se puede probar aislada.
+3. Cada `<Feature>Service` que la consume solo orquesta: guarda las listas
+   fuente (o las importa del mock compartido), expone `computed` con el
+   resultado del cruce (`reconciliation.service.ts` lo corre una vez por
+   tender media y concatena; `difference-management` busca una orden puntual
+   dentro del resultado), y deriva lo demás de ESE intermedio — nunca del
+   filtro de UI (`statusFilter`), que solo debe afectar qué se VE, no qué se
+   suma/procesa.
+4. Cada uno de los 4 estados tiene su propio color en `MatchStatusTag` — no
+   reutilizar los estados de otro dominio de estado aunque coincidan
+   visualmente (p. ej. `SaleStatus` de `sales-dashboard` es un concepto
+   totalmente distinto, aunque ambos usan verde/rojo).
+
+## Patrón: resolución manual de un cruce (candidatos seleccionables + CSV)
+
+Usado en `features/difference-management` ("Gestión de diferencias", ruta
+`/conciliacion/:tenderMedia/diferencias/:orderId`) — a dónde se llega SOLO
+desde una fila `sale_only`/`amount_mismatch` de la tabla de
+`reconciliation-dashboard` (las otras dos, `matched`/`settlement_only`, no
+tienen nada que resolver o no tienen una orden propia que gestionar; ver
+`ACTIONABLE_STATUSES` en `reconciliation-dashboard.ts`). Reutilizar si un
+módulo futuro necesita que un humano elija manualmente entre varias opciones
+candidatas para completar un cruce automático incompleto:
+
+1. **Candidatos, no una lista fija**: una función pura
+   (`data/candidate-match.util.ts`) ordena el pool disponible por cercanía
+   (monto primero, fecha después) a partir del registro que se está
+   resolviendo — nunca una lista estática. Si el motor de cálculo ya traía un
+   candidato vinculado (mismo `orderId`, cruce `amount_mismatch`), ese va
+   siempre primero, marcado `suggestedByBackend`.
+2. **Selección con origen, no un simple booleano**: el estado de selección es
+   un `Map<id, 'backend' | 'manual'>` en el service (no un `Set<id>` ni un
+   array) — la ausencia de una entrada significa "no seleccionada". Cualquier
+   toggle del usuario (incluso sobre algo que el backend ya traía marcado)
+   pasa a `'manual'`: el humano acaba de intervenir sobre esa fila, deja de
+   ser una decisión automática. El tag de origen (`nz-tag` azul "Backend" /
+   morado "Match manual") solo se pinta si la fila está seleccionada — no
+   hay tag para candidatos disponibles pero no elegidos.
+3. **Cards horizontales, no tabla**: cuando cada fila necesita ser un
+   objetivo de click grande (seleccionar/deseleccionar) en vez de solo
+   mostrar datos, usar `nz-card` con `role="checkbox"` +
+   `[attr.aria-checked]` + `tabindex="0"` + `(keydown.enter/space)` en el
+   propio `<nz-card>` (no solo `(click)`) — la card completa es el control,
+   el `<input type="checkbox">` interno es puramente visual (sin su propio
+   listener, para no duplicar el toggle).
+4. **Import CSV sin backend**: `<input type="file" hidden>` disparado por un
+   botón (`fileInput.click()`), `FileReader.readAsText`, y un parser puro en
+   `data/csv-import.util.ts` que devuelve `{ rows, errors }` — nunca lanza ni
+   aborta el import completo por una fila inválida, junta los errores para
+   mostrarlos todos juntos y sigue importando el resto. Las filas importadas
+   entran al mismo pool de candidatos que las del motor de cálculo, sin
+   distinción visual salvo que no traen `suggestedByBackend`.
+5. **Nota obligatoria, sin `ReactiveFormsModule`**: a diferencia de `login`
+   (formulario con varias reglas de validación reales), aquí es un solo
+   campo con una sola regla ("no vacío") — se resuelve con `FormsModule` +
+   `[ngModel]`/`(ngModelChange)` contra un signal del service, más un signal
+   local `touched` que se activa en `(blur)` para mostrar el error. Usar
+   Reactive Forms para un solo campo hubiera sido sobre-ingeniería.
 
 ## Pendientes / deuda conocida al cerrar este módulo
 
@@ -305,3 +439,9 @@ conteo físico):
    login vive fuera de `Shell` (dos paneles, sin header), documentada ahí.
    Sigue el mismo patrón si un módulo futuro necesita desviarse de este
    MASTER.
+3. El header de `Shell` (`shell.html`/`.scss`) no tiene breakpoint móvil — en
+   `max-width: ~480px` el título "Conciliación Bancaria" se envuelve y queda
+   detrás de los botones de acción del header. Preexistente (se reproduce
+   también en `reconciliation-dashboard`, no es algo que haya introducido
+   `difference-management`) — pendiente de una pasada de responsive en
+   `shell.scss`, fuera del alcance de los módulos hechos hasta ahora.

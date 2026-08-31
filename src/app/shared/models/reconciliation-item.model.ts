@@ -1,5 +1,3 @@
-export type ReconciliationStatus = 'matched' | 'pending' | 'discrepancy';
-
 export type TenderMedia = 'rappi' | 'didi_food' | 'efectivo' | 'bbva';
 
 export const TENDER_MEDIA_LABEL: Record<TenderMedia, string> = {
@@ -8,27 +6,6 @@ export const TENDER_MEDIA_LABEL: Record<TenderMedia, string> = {
   efectivo: 'Efectivo',
   bbva: 'BBVA',
 };
-
-export interface ReconciliationItem {
-  id: string;
-  date: string; // ISO date
-  description: string;
-  account: string;
-  reference: string;
-  tenderMedia: TenderMedia;
-  bankAmount: number;
-  bookAmount: number;
-  status: ReconciliationStatus;
-}
-
-export interface ReconciliationSummary {
-  totalMovements: number;
-  matchedCount: number;
-  pendingCount: number;
-  discrepancyCount: number;
-  totalDiscrepancyAmount: number;
-  lastSyncedAt: string; // ISO datetime
-}
 
 export type TenderMediaHealth = 'up_to_date' | 'delayed';
 
@@ -44,10 +21,10 @@ export interface TrendPoint {
   value: number;
 }
 
-// --- Cruce transacción a transacción (módulo "Detalle por tender media") ---
+// --- Cruce transacción a transacción (módulo "Conciliación") ---
 // Dos fuentes independientes que se emparejan por número de orden/referencia:
-// lo VENDIDO (registrado en el sistema interno) vs lo LIQUIDADO (lo que
-// efectivamente pagó/liquidó el medio de pago).
+// lo VENDIDO en el POS vs lo LIQUIDADO (lo que efectivamente reportó/pagó el
+// banco o medio de pago).
 
 export interface SaleTransaction {
   id: string;
@@ -64,6 +41,7 @@ export interface SettlementTransaction {
   tenderMedia: TenderMedia;
   amount: number;
   batchId: string; // lote de liquidación del proveedor
+  description: string; // texto libre del banco/proveedor — usado en "Gestión de diferencias"
 }
 
 // matched: existe en ambos lados y el monto coincide.

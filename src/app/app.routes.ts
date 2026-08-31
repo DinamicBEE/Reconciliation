@@ -15,14 +15,19 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       {
         path: 'dashboard',
+        loadComponent: () => import('./features/sales-dashboard/sales-dashboard').then((m) => m.SalesDashboard),
+      },
+      {
+        path: 'conciliacion',
         loadComponent: () =>
           import('./features/reconciliation-dashboard/reconciliation-dashboard').then(
             (m) => m.ReconciliationDashboard,
           ),
       },
       {
-        path: 'detalle/:tenderMedia',
-        loadComponent: () => import('./features/tender-detail/tender-detail').then((m) => m.TenderDetail),
+        path: 'conciliacion/:tenderMedia/diferencias/:orderId',
+        loadComponent: () =>
+          import('./features/difference-management/difference-management').then((m) => m.DifferenceManagement),
       },
     ],
   },

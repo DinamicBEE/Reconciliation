@@ -1,0 +1,220 @@
+@use '../../shared/styles/summary-strip';
+@use '../../shared/styles/back-link';
+
+// Solo 2 utilidades de shared/styles/_data-table.scss hacen falta aquí — se
+// duplican en vez de @use-ar el partial completo (que trae .table-card,
+// .clickable-row, .col-truncate, etc., innecesario para esta pantalla y
+// pesado para el budget de esta hoja de estilos). Mismo criterio que
+// .icon-button en login.scss.
+.text-muted {
+  color: var(--color-muted-foreground);
+}
+
+.text-destructive {
+  color: var(--color-destructive);
+  font-weight: 600;
+}
+
+.difference-management {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+.difference-management__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.difference-management__title {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+// Info de identidad de la orden (no sumas) — mismo grid que .summary-strip,
+// pero 4 columnas (7 campos = 4+3) en vez de las 5 del resumen del día.
+.order-summary-card {
+  border-radius: 8px;
+  --summary-strip-cols: 4;
+}
+
+// --- Candidatos ---------------------------------------------------------
+.candidates-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.candidates-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.candidates-section__title {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0 0 4px;
+}
+
+.candidates-section__subtitle {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  margin: 0;
+  max-width: 60ch;
+}
+
+.candidates-section__import {
+  flex-shrink: 0;
+}
+
+.csv-errors {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+  color: var(--color-destructive);
+  font-size: 12px;
+  list-style: disc;
+  padding-left: 28px;
+}
+
+.candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.candidate-card {
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-muted);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+}
+
+.candidate-card--selected {
+  border-color: var(--color-primary);
+  background-color: color-mix(in srgb, var(--color-primary) 6%, var(--color-card));
+}
+
+.candidate-card__body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  @media (max-width: 720px) {
+    flex-wrap: wrap;
+  }
+}
+
+.candidate-card__checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+}
+
+.candidate-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.candidate-card__field--ref,
+.candidate-card__field--amount {
+  flex: 0 0 140px;
+}
+
+.candidate-card__field--desc {
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+
+.candidate-card__field--amount {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.candidate-card__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+}
+
+.candidate-card__value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-card__meta {
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-card__origin {
+  flex: 0 0 auto;
+  min-width: 90px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+// --- Nota obligatoria -----------------------------------------------------
+.note-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 640px;
+}
+
+.note-section__label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.required-mark {
+  color: var(--color-destructive);
+}
+
+.note-section__error {
+  font-size: 12px;
+  color: var(--color-destructive);
+}
+
+// --- Barra de guardado ------------------------------------------------
+.save-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.save-bar__hint {
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+}

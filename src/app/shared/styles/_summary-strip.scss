@@ -1,0 +1,55 @@
+// Resumen global en una sola card: varias sumas relacionadas en fila (no son
+// KPIs independientes — ver MASTER.md, "Patrón de layout: resumen global").
+// Promovido desde tender-detail.scss al aparecer un segundo consumidor
+// (difference-management), mismo criterio ya aplicado con _kpi-card.scss.
+
+.summary-card {
+  border-radius: 8px;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(var(--summary-strip-cols, 5), 1fr);
+  gap: 16px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.summary-strip__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-left: 16px;
+  border-left: 1px solid var(--color-border);
+
+  &:first-child {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  @media (max-width: 900px) {
+    border-left: none;
+    padding-left: 0;
+  }
+}
+
+.summary-strip__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+.summary-strip__value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  line-height: 1.1;
+  white-space: nowrap;
+}

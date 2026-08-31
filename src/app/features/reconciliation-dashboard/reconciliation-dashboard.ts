@@ -5,17 +5,18 @@ import { RouterLink } from '@angular/router';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
-import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
-import { StatusTag } from '../../shared/components/status-tag/status-tag';
+import { MatchStatusTag } from '../../shared/components/match-status-tag/match-status-tag';
 import { Sparkline } from '../../shared/components/sparkline/sparkline';
 import { RadialProgress } from '../../shared/components/radial-progress/radial-progress';
-import {
-  ReconciliationItem,
-  TENDER_MEDIA_LABEL,
-  TenderMedia,
-} from '../../shared/models/reconciliation-item.model';
+import { MatchStatus, TENDER_MEDIA_LABEL, TenderMedia, TransactionMatch } from '../../shared/models/reconciliation-item.model';
 import { DateRangeFilter, ReconciliationService, StatusFilter, TenderMediaFilter } from './data/reconciliation.service';
+
+// Solo estas dos requieren intervención manual (existe un lado, pero no hay
+// certeza de cruce) — "Sin venta" es una anomalía del lado del banco sin una
+// orden propia que gestionar, y "Cruzado" ya está resuelto. Mismo criterio
+// que usaba tender-detail (retirado, ver MASTER.md).
+const ACTIONABLE_STATUSES = new Set<MatchStatus>(['sale_only', 'amount_mismatch']);
 
 @Component({
   selector: 'app-reconciliation-dashboard',
@@ -26,9 +27,8 @@ import { DateRangeFilter, ReconciliationService, StatusFilter, TenderMediaFilter
     NzCardModule,
     NzTableModule,
     NzSelectModule,
-    NzTagModule,
     NzDatePickerModule,
-    StatusTag,
+    MatchStatusTag,
     Sparkline,
     RadialProgress,
   ],
@@ -43,9 +43,10 @@ export class ReconciliationDashboard {
 
   protected readonly statusOptions: { value: StatusFilter; label: string }[] = [
     { value: 'all', label: 'Todos los estados' },
-    { value: 'matched', label: 'Conciliado' },
-    { value: 'pending', label: 'Pendiente' },
-    { value: 'discrepancy', label: 'Discrepancia' },
+    { value: 'matched', label: 'Cruzado' },
+    { value: 'sale_only', label: 'Por liquidar' },
+    { value: 'amount_mismatch', label: 'Monto distinto' },
+    { value: 'settlement_only', label: 'Sin venta' },
   ];
 
   protected readonly tenderMediaOptions: { value: TenderMediaFilter; label: string }[] = [
@@ -72,8 +73,8 @@ export class ReconciliationDashboard {
     return { today, delta: today - yesterday, values: trend.map((p) => p.value) };
   });
 
-  protected difference(item: ReconciliationItem): number {
-    return item.bankAmount - item.bookAmount;
+  protected difference(item: TransactionMatch): number {
+    return item.difference;
   }
 
   protected onStatusFilterChange(value: StatusFilter): void {
@@ -90,5 +91,15 @@ export class ReconciliationDashboard {
 
   protected tenderLabel(tenderMedia: TenderMedia): string {
     return TENDER_MEDIA_LABEL[tenderMedia];
+  }
+
+  // Solo "Por liquidar"/"Monto distinto" abren "Gestión de diferencias" — ahí
+  // se resuelve manualmente contra candidatos bancarios.
+  protected isActionable(item: TransactionMatch): boolean {
+    return ACTIONABLE_STATUSES.has(item.status);
+  }
+
+  protected resolveLink(item: TransactionMatch): unknown[] {
+    return ['/conciliacion', item.tenderMedia, 'diferencias', item.orderId];
   }
 }

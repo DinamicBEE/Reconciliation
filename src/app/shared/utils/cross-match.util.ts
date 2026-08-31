@@ -1,12 +1,10 @@
-import {
-  SaleTransaction,
-  SettlementTransaction,
-  TransactionMatch,
-} from '../../../shared/models/reconciliation-item.model';
+import { SaleTransaction, SettlementTransaction, TransactionMatch } from '../models/reconciliation-item.model';
 
 /**
  * Cruza ventas y liquidaciones por número de orden/referencia. Función pura
- * (sin estado) para poder probarla aislada del servicio.
+ * (sin estado) para poder probarla aislada del servicio. Promovida desde
+ * tender-detail/data al aparecer un segundo consumidor
+ * (features/difference-management) — ver MASTER.md.
  */
 export function crossMatchTransactions(
   sales: SaleTransaction[],

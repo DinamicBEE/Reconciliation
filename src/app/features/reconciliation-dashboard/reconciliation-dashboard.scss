@@ -1,6 +1,7 @@
 @use '../../shared/styles/kpi-card';
 @use '../../shared/styles/toolbar';
 @use '../../shared/styles/data-table';
+@use '../../shared/styles/status-dot';
 
 .dashboard {
   display: flex;
@@ -24,22 +25,6 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: inherit;
-  text-decoration: none;
-  cursor: pointer;
-  border-radius: 6px;
-  padding: 2px 4px;
-  margin: -2px -4px;
-  transition: background-color 120ms ease;
-
-  &:hover {
-    background-color: var(--color-muted);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-ring);
-    outline-offset: 2px;
-  }
 }
 
 .tender-status-list__label {
@@ -50,19 +35,4 @@
 .tender-status-list__state {
   font-size: 12px;
   font-weight: 600;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.status-dot--ok {
-  background: var(--color-success);
-}
-
-.status-dot--late {
-  background: var(--color-destructive);
 }

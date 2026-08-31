@@ -176,3 +176,17 @@ html body .ant-table-thead > tr > th {
     background: var(--color-muted) !important;
   }
 }
+
+.ant-drawer-content {
+  background: var(--color-card) !important;
+  color: var(--color-foreground) !important;
+}
+
+.ant-drawer-header {
+  background: var(--color-card) !important;
+  border-bottom-color: var(--color-border) !important;
+}
+
+.ant-drawer-title {
+  color: var(--color-foreground) !important;
+}

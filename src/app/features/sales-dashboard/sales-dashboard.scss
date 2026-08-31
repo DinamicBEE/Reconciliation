@@ -1,0 +1,110 @@
+@use '../../shared/styles/kpi-card';
+@use '../../shared/styles/data-table';
+
+.sales-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+.sales-dashboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sales-dashboard__title {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+.sales-dashboard__subtitle {
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+// --- Drawer de detalle de venta --------------------------------------------
+.sale-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sale-drawer__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sale-drawer__heading {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+  margin: 0;
+}
+
+.sale-drawer__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 12px;
+  row-gap: 6px;
+  margin: 0;
+  font-size: 13px;
+
+  dt {
+    color: var(--color-muted-foreground);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--color-foreground);
+    text-align: right;
+  }
+}
+
+.sale-drawer__total-label {
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.sale-drawer__total-value {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.sale-drawer__items {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--color-muted-foreground);
+    padding: 0 0 6px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  td {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-foreground);
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+}

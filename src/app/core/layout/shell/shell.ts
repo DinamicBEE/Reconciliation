@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { Router, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NzLayoutModule } from 'ng-zorro-antd/layout';
 import { NzPopoverModule } from 'ng-zorro-antd/popover';
 import { ThemeService } from '../../services/theme.service';
@@ -8,7 +8,7 @@ import { AuthService } from '../../../features/auth/data/auth.service';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, NzLayoutModule, NzPopoverModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NzLayoutModule, NzPopoverModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell.html',
   styleUrl: './shell.scss',

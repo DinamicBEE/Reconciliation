@@ -1,19 +1,15 @@
 import { Injectable, computed, signal } from '@angular/core';
-import {
-  ReconciliationItem,
-  ReconciliationStatus,
-  TenderMedia,
-} from '../../../shared/models/reconciliation-item.model';
-import {
-  MOCK_DISCREPANCY_AMOUNT_TREND,
-  MOCK_RECONCILED_PCT_TREND,
-  MOCK_RECONCILIATION_ITEMS,
-  MOCK_TENDER_MEDIA_STATUS,
-} from './reconciliation-mock.data';
+import { MatchStatus, TENDER_MEDIA_LABEL, TenderMedia } from '../../../shared/models/reconciliation-item.model';
+import { MOCK_SALES, MOCK_SETTLEMENTS } from '../../../shared/mock-data/sales-settlements.mock-data';
+import { MOCK_TENDER_MEDIA_STATUS } from '../../../shared/mock-data/tender-media-status.mock-data';
+import { crossMatchTransactions } from '../../../shared/utils/cross-match.util';
+import { MOCK_DISCREPANCY_AMOUNT_TREND, MOCK_RECONCILED_PCT_TREND } from './reconciliation-mock.data';
 
-export type StatusFilter = ReconciliationStatus | 'all';
+export type StatusFilter = MatchStatus | 'all';
 export type TenderMediaFilter = TenderMedia | 'all';
 export type DateRangeFilter = [Date, Date] | null;
+
+const ALL_TENDER_MEDIA = Object.keys(TENDER_MEDIA_LABEL) as TenderMedia[];
 
 function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -24,13 +20,20 @@ function endOfDay(date: Date): number {
 }
 
 /**
- * Estado del feature de conciliación. Hoy sirve datos mock; el día que exista
- * backend, solo cambia cómo se llena `items` (p. ej. vía httpResource / un
- * effect que llame a un endpoint) — el resto de la app no se entera.
+ * Estado del feature de conciliación. La tabla es el cruce venta (POS) vs.
+ * liquidación (banco) de TODOS los tender media juntos — antes vivía
+ * separada por medio de pago en "Detalle por tender media" (retirado, ver
+ * MASTER.md); aquí se corre `crossMatchTransactions` una vez por medio de
+ * pago y se concatena, mismo motor de cruce que ya usaba ese feature y que
+ * sigue usando `difference-management`.
  */
 @Injectable()
 export class ReconciliationService {
-  private readonly items = signal<ReconciliationItem[]>(MOCK_RECONCILIATION_ITEMS);
+  private readonly matches = computed(() =>
+    ALL_TENDER_MEDIA.flatMap((tenderMedia) =>
+      crossMatchTransactions(MOCK_SALES[tenderMedia], MOCK_SETTLEMENTS[tenderMedia]),
+    ).sort((a, b) => a.date.localeCompare(b.date)),
+  );
 
   readonly statusFilter = signal<StatusFilter>('all');
   readonly tenderMediaFilter = signal<TenderMediaFilter>('all');
@@ -41,7 +44,7 @@ export class ReconciliationService {
     const tenderMedia = this.tenderMediaFilter();
     const range = this.dateRange();
 
-    return this.items().filter((item) => {
+    return this.matches().filter((item) => {
       if (status !== 'all' && item.status !== status) return false;
       if (tenderMedia !== 'all' && item.tenderMedia !== tenderMedia) return false;
       if (range) {
@@ -52,26 +55,11 @@ export class ReconciliationService {
     });
   });
 
-  // Los KPI reflejan el total global (no el filtro de la tabla) — son el
-  // "pulso" general del proceso de conciliación.
-  readonly summary = computed(() => {
-    const all = this.items();
-    return {
-      totalMovements: all.length,
-      matchedCount: all.filter((i) => i.status === 'matched').length,
-      pendingCount: all.filter((i) => i.status === 'pending').length,
-      discrepancyCount: all.filter((i) => i.status === 'discrepancy').length,
-      totalDiscrepancyAmount: all
-        .filter((i) => i.status === 'discrepancy')
-        .reduce((sum, i) => sum + Math.abs(i.bankAmount - i.bookAmount), 0),
-      lastSyncedAt: '2026-08-26T08:15:00',
-    };
-  });
-
   // Visión inmediata: qué medio de pago está al día vs atrasado.
   readonly tenderMediaStatuses = signal(MOCK_TENDER_MEDIA_STATUS);
 
-  // Series de 7 días para las gráficas comparativas de los KPI.
+  // Series de 7 días para las gráficas comparativas de los KPI — mock
+  // independiente de `matches` (ilustrativo, no derivado en vivo).
   readonly reconciledPctTrend = signal(MOCK_RECONCILED_PCT_TREND);
   readonly discrepancyAmountTrend = signal(MOCK_DISCREPANCY_AMOUNT_TREND);
 
