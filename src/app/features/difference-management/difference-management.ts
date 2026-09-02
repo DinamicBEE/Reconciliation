@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzInputModule } from 'ng-zorro-antd/input';
@@ -21,6 +22,7 @@ const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
     CommonModule,
     FormsModule,
     RouterLink,
+    NzAlertModule,
     NzButtonModule,
     NzCardModule,
     NzInputModule,
@@ -45,6 +47,16 @@ export class DifferenceManagement {
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
   protected readonly noteTouched = signal(false);
   protected readonly csvErrors = signal<string[]>([]);
+  protected readonly referenceFilter = signal('');
+
+  // Filtro por referencia sobre la lista de candidatos — la lista puede
+  // crecer bastante tras importar un CSV, de ahí el filtro + scroll del Card.
+  protected readonly filteredCandidates = computed(() => {
+    const term = this.referenceFilter().trim().toLowerCase();
+    const candidates = this.service.candidates();
+    if (!term) return candidates;
+    return candidates.filter((c) => c.settlement.orderId.toLowerCase().includes(term));
+  });
 
   protected readonly validTenderMedia = computed<TenderMedia | null>(() => {
     const value = this.tenderMedia();
@@ -74,6 +86,10 @@ export class DifferenceManagement {
 
   protected toggleCandidate(candidate: MatchCandidate): void {
     this.service.toggleCandidate(candidate.settlement.id);
+  }
+
+  protected onReferenceFilterChange(value: string): void {
+    this.referenceFilter.set(value);
   }
 
   protected onNoteChange(value: string): void {

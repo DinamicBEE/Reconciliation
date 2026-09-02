@@ -40,6 +40,20 @@
 .order-summary-card {
   border-radius: 8px;
   --summary-strip-cols: 4;
+
+  // 7 campos en una grilla de 4 columnas envuelven a una 2da fila en el 5to
+  // item (Monto vendido) — :first-child de _summary-strip.scss no lo cubre,
+  // así que se quita el separador izquierdo también en cada inicio de fila.
+  .summary-strip__item:nth-child(4n + 1) {
+    padding-left: 0;
+    border-left: none;
+  }
+}
+
+// --- Alerta del motor de cálculo ---------------------------------------
+.engine-alert {
+  width: 100%;
+  border-radius: 8px;
 }
 
 // --- Candidatos ---------------------------------------------------------
@@ -49,12 +63,22 @@
   gap: 10px;
 }
 
-.candidates-section__header {
+.candidates-card {
+  border-radius: 8px;
+}
+
+.candidates-card__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.candidates-card__filter {
+  width: 220px;
+  flex-shrink: 0;
 }
 
 .candidates-section__title {
@@ -62,18 +86,7 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--color-foreground);
-  margin: 0 0 4px;
-}
-
-.candidates-section__subtitle {
-  font-size: 13px;
-  color: var(--color-muted-foreground);
   margin: 0;
-  max-width: 60ch;
-}
-
-.candidates-section__import {
-  flex-shrink: 0;
 }
 
 .csv-errors {
@@ -91,6 +104,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  // La lista puede crecer bastante tras importar un CSV — se topa la altura
+  // y se deja scrollear en vez de alargar la pantalla indefinidamente.
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .candidate-card {
@@ -182,12 +200,62 @@
   justify-content: flex-end;
 }
 
+// Fila del botón de importación, debajo del Card de transacciones — ocupa
+// el mismo ancho que el Card (igual que cualquier otra sección de esta
+// pantalla), y dentro de ella la dropzone punteada solo toma la mitad de
+// ese ancho, centrada.
+.import-dropzone-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.import-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 150px;
+  padding: 14px;
+  border: 2.5px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-card) !important;
+  color: var(--color-muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
 // --- Nota obligatoria -----------------------------------------------------
 .note-section {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  //height: 250px;
   gap: 4px;
-  max-width: 640px;
+  max-width: 100%;
+
+  grid-template-columns: repeat(3, 1fr);
+
+  .note-item--wide {
+    grid-column: span 2;
+  }
+
+  .note-item--normal {
+    grid-column: span 1;
+    height: 100%;
+  }
 }
 
 .note-section__label {
