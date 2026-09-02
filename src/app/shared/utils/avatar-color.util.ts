@@ -3,6 +3,11 @@
 // Rota entre las 3 parejas marca/on-marca disponibles según un hash estable
 // del id, así cada usuario mantiene el mismo color entre renders sin
 // necesidad de guardarlo en el modelo.
+//
+// Vivió en `features/user-management/data/` (primer consumidor: user-list)
+// hasta que el card de usuario del Header lo necesitó también — promovido
+// aquí siguiendo la misma regla de "segundo consumidor" del resto de
+// shared/ (ver MASTER.md "Estructura de carpetas").
 const AVATAR_TOKENS: { background: string; color: string }[] = [
   { background: 'var(--color-primary)', color: 'var(--color-on-primary)' },
   { background: 'var(--color-secondary)', color: 'var(--color-on-secondary)' },

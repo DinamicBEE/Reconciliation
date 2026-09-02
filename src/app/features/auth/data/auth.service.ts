@@ -6,6 +6,8 @@ const STORAGE_KEY = 'conciliation-auth';
 export interface AuthUser {
   username: string;
   displayName: string;
+  fullName: string;
+  role: string;
 }
 
 /**
@@ -31,7 +33,12 @@ export class AuthService {
       return false;
     }
 
-    const authUser: AuthUser = { username: match.username, displayName: match.displayName };
+    const authUser: AuthUser = {
+      username: match.username,
+      displayName: match.displayName,
+      fullName: match.fullName,
+      role: match.role,
+    };
     this.user.set(authUser);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
     return true;

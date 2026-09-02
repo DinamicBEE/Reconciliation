@@ -1,0 +1,130 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+// El menú es una superficie "flotante" más del layout — comparte fondo y
+// borde con `.user-card` del Header (var(--color-on-primary) /
+// var(--color-border)) para que ambas luzcan consistentes.
+// Detached de los bordes izquierdo/superior/inferior de la pantalla por
+// 4px vía margin (el `Shell` reserva la columna vía CSS Grid, ver
+// shell.scss); el ancho colapsado/expandido se anima con `transition`.
+.app-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  // 100% menos los 4px de margin arriba y abajo — si no se descuentan, la
+  // caja excede el alto de `.shell` y el margen inferior queda recortado
+  // por su `overflow: hidden` en vez de verse como espacio real.
+  height: calc(100% - 16px);
+  width: 64px;
+  margin: 8px 0 8px 8px;
+  padding: 8px 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-on-primary);
+  overflow: hidden;
+  transition: width 200ms ease;
+  box-sizing: border-box;
+}
+
+.app-menu--expanded {
+  width: 220px;
+}
+
+.app-menu__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-foreground);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+
+  &:hover {
+    background: var(--color-muted);
+    border-color: var(--color-border);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.app-menu__items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px;
+  overflow: hidden;
+}
+
+// Mismos efectos de hover/seleccionado que ya existían en el nav de texto
+// del Header (`app-header__nav-link`) — solo se agrega el icono a color
+// primary cuando el link está activo.
+.app-menu__link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--color-muted-foreground);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+
+  &:hover {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.app-menu:not(.app-menu--expanded) .app-menu__link {
+  justify-content: center;
+  padding: 0;
+}
+
+.app-menu__link--active {
+  background: var(--color-muted);
+  color: var(--color-foreground);
+
+  .app-menu__icon {
+    color: var(--color-primary);
+  }
+}
+
+.app-menu__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: inherit;
+}
+
+.app-menu__label {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-menu:not(.app-menu--expanded) .app-menu__label {
+  display: none;
+}
