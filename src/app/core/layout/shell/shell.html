@@ -1,9 +1,13 @@
-<nz-layout class="shell">
-  <nz-header class="shell__header">
-    <app-header />
-  </nz-header>
+<div class="shell">
+  <div class="shell__menu">
+    <app-menu />
+  </div>
 
-  <nz-content class="shell__content">
+  <div class="shell__header">
+    <app-header />
+  </div>
+
+  <main class="shell__content">
     <router-outlet />
-  </nz-content>
-</nz-layout>
+  </main>
+</div>

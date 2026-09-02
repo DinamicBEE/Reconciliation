@@ -1,0 +1,77 @@
+<nav class="app-menu" [class.app-menu--expanded]="menu.expanded()">
+  <button
+    type="button"
+    class="app-menu__toggle"
+    (click)="menu.toggle()"
+    [attr.aria-label]="menu.expanded() ? 'Contraer menú' : 'Expandir menú'"
+  >
+    @if (menu.expanded()) {
+      <!-- flecha izquierda: contraer -->
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6" />
+      </svg>
+    } @else {
+      <!-- flecha derecha: expandir -->
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 18l6-6-6-6" />
+      </svg>
+    }
+  </button>
+
+  <div class="app-menu__items">
+    <a
+      class="app-menu__link"
+      routerLink="/dashboard"
+      routerLinkActive="app-menu__link--active"
+      [attr.title]="!menu.expanded() ? 'Dashboard' : null"
+    >
+      <span class="app-menu__icon">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="9" rx="1" />
+          <rect x="14" y="3" width="7" height="5" rx="1" />
+          <rect x="14" y="12" width="7" height="9" rx="1" />
+          <rect x="3" y="16" width="7" height="5" rx="1" />
+        </svg>
+      </span>
+      <span class="app-menu__label">Dashboard</span>
+    </a>
+
+    <a
+      class="app-menu__link"
+      routerLink="/conciliacion"
+      routerLinkActive="app-menu__link--active"
+      [attr.title]="!menu.expanded() ? 'Conciliación' : null"
+    >
+      <span class="app-menu__icon">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M17 2l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"
+          />
+        </svg>
+      </span>
+      <span class="app-menu__label">Conciliación</span>
+    </a>
+
+    <a
+      class="app-menu__link"
+      routerLink="/usuarios"
+      routerLinkActive="app-menu__link--active"
+      [attr.title]="!menu.expanded() ? 'Usuarios' : null"
+    >
+      <span class="app-menu__icon">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
+          />
+        </svg>
+      </span>
+      <span class="app-menu__label">Usuarios</span>
+    </a>
+  </div>
+</nav>

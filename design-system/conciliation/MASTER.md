@@ -27,9 +27,10 @@
 ```
 src/app/
 ├── core/              # singletons, se instancian una sola vez
-│   ├── layout/shell/    # <app-header> + <router-outlet>
-│   ├── layout/header/   # nav, toggle de tema, selector de paleta, card de usuario logeado
-│   └── services/        # ThemeService, PaletteService, color-utils
+│   ├── layout/shell/    # Grid de <app-menu> + <app-header> + <router-outlet>
+│   ├── layout/menu/     # nav lateral colapsable (iconos + etiquetas)
+│   ├── layout/header/   # toggle de tema, selector de paleta, card de usuario logeado
+│   └── services/        # ThemeService, PaletteService, MenuService, color-utils
 ├── shared/            # reutilizable entre features — NUNCA depende de features/
 │   ├── components/      # match-status-tag, sale-status-tag, sparkline, radial-progress
 │   ├── models/           # tipos de dominio compartidos (TransactionMatch, Sale, etc.)
@@ -309,15 +310,16 @@ su propio componente; `Shell` solo orquesta `<app-header>` +
   Mantenerlos separados evita forzar un campo a cumplir dos propósitos
   distintos.
 
-## Patrón: navegación entre módulos (menú de Shell)
+## Patrón: navegación entre módulos (Menu lateral)
 
-Los módulos de nivel superior se acceden únicamente desde `.shell__nav` en
-`shell.html` — dos links: `Dashboard` (`/dashboard`, `sales-dashboard`,
-resumen de venta — la pantalla de aterrizaje tras login) y `Conciliación`
-(`/conciliacion`, `reconciliation-dashboard` — vivió en `/dashboard` hasta
-que ese path pasó a ser el resumen de venta). `routerLinkActive` con su
-default (`exact: false`) alcanza para marcar "Conciliación" activo también
-en `/conciliacion/:tenderMedia/diferencias/:orderId` (la ruta de
+Los módulos de nivel superior se acceden desde `core/layout/menu/` (`Menu`,
+selector `app-menu`) — tres links con icono: `Dashboard` (`/dashboard`,
+`sales-dashboard`, resumen de venta — la pantalla de aterrizaje tras login),
+`Conciliación` (`/conciliacion`, `reconciliation-dashboard` — vivió en
+`/dashboard` hasta que ese path pasó a ser el resumen de venta) y `Usuarios`
+(`/usuarios`). `routerLinkActive` con su default (`exact: false`) alcanza
+para marcar "Conciliación" activo también en
+`/conciliacion/:tenderMedia/diferencias/:orderId` (la ruta de
 `difference-management`, que cuelga de `conciliacion` pero no tiene entrada
 propia en el menú — se llega solo desde una fila accionable de la tabla).
 
@@ -328,17 +330,69 @@ rename es seguro. `login.ts` apunta a `/dashboard` post-login, y eso sigue
 siendo correcto porque el resumen de venta es la pantalla de aterrizaje
 deseada, no un accidente.
 
-No hay sidebar ni menú colapsable. Al agregar "Administración de usuarios" se
-llegó al tercer link (`/usuarios`) — el disparador que este documento ya
-anticipaba para evaluar `nz-menu`/una barra lateral. Se decidió NO migrar
-todavía: con 3 links de texto el header sigue sin apretarse en desktop
-(el breakpoint móvil sigue siendo la deuda pendiente de siempre, sin cambios
-por este módulo), y el costo de puentear `.ant-menu` a nuestros tokens
-(mismo trabajo que ya se hizo con `.ant-card`/`.ant-table`/`.ant-drawer-*`)
-no se justifica todavía por un solo link más. Si aparece un CUARTO módulo de
-nivel superior, o el header empieza a apretarse en desktop, ese sí es el
-momento de migrar — no seguir sumando `<a class="shell__nav-link">` sueltos
-indefinidamente.
+### Historial: del nav de texto en el Header al Menu lateral
+
+Hasta el tercer link (`/usuarios`, al agregar "Administración de usuarios")
+la navegación vivió como texto plano en `.shell__nav`/`app-header__nav`
+dentro del Header — este documento ya anticipaba ese punto como el
+disparador para evaluar una barra lateral, pero en ese momento se decidió NO
+migrar todavía (3 links de texto no apretaban el header en desktop, y
+puentear `.ant-menu` a los tokens no se justificaba por un link más). La
+migración ocurrió después, no por un cuarto módulo sino porque se pidió
+explícitamente un menú lateral colapsable — y se resolvió con links propios
+(`<a class="app-menu__link">`) en vez de `nz-menu`/`.ant-menu`: los mismos
+efectos de hover/seleccionado que ya existían en `app-header__nav-link` se
+reutilizaron tal cual, evitando el trabajo de puentear un componente de
+Ant Design nuevo solo para terminar sobrescribiendo su tema por completo.
+
+### Menu lateral: layout, expandido/contraído y tokens
+
+`core/layout/menu/` (`Menu`, selector `app-menu`) + `core/services/menu.service.ts`
+(`MenuService` — signal `expanded: boolean`, persistida en `localStorage`,
+mismo patrón que `ThemeService`).
+
+- **Layout**: `Shell` (`shell.html`/`.scss`) es un CSS Grid de 2 columnas ×
+  2 filas (`grid-template-columns: auto 1fr`, `grid-template-rows:
+  var(--header-height) 1fr`), alto fijo `100vh` (no `min-height`) con
+  `overflow: hidden`. `.shell__menu` ocupa la columna izquierda y abarca
+  **ambas filas** (`grid-row: 1 / 3`) — por eso mide el largo total de la
+  pantalla y "se ve por arriba" del header, que solo ocupa la fila 1 de la
+  columna derecha junto con `.shell__content` en la fila 2. El ancho de la
+  columna del menú es `auto`: lo determina el propio ancho de `.app-menu`
+  (64px contraído / 220px expandido), así que expandir/contraer empuja el
+  contenido (push layout) en vez de superponerse — sin variables CSS
+  compartidas entre `Menu` y `Shell` para el ancho.
+- **Scroll**: al ser `.shell` de alto fijo, el scroll de una tabla larga
+  queda contenido en `.shell__content` (`overflow-y: auto`), no en la
+  página completa — así el menú (y el header) nunca se desplazan fuera de
+  vista. Cambio de comportamiento respecto al layout anterior (que sí
+  scrolleaba la página completa), necesario para que el menú mida siempre
+  el alto real de la pantalla.
+- **Despegado de los bordes**: `.app-menu` lleva `margin: 4px 0 4px 4px` y
+  `height: calc(100% - 8px)` — **restar los 8px es obligatorio**, si el
+  alto se deja en `100%` la caja excede el alto de `.shell` y el margen
+  inferior queda recortado por su `overflow: hidden` en vez de verse como
+  espacio real (bug real encontrado al implementar esto).
+- **Colores compartidos con `.user-card`**: `.app-menu` usa exactamente los
+  mismos dos tokens que la card de usuario del Header —
+  `background: var(--color-on-primary)` y
+  `border: 1px solid var(--color-border)` — para que ambas superficies
+  "flotantes" del layout luzcan consistentes. `border-radius: 8px`, igual
+  que el resto de cards flotantes del sistema.
+- **Contraído/expandido**: `MenuService.expanded` controla la clase
+  `.app-menu--expanded` (`width: 220px`; contraído son `64px`). Contraído
+  solo se ven los iconos (`.app-menu__label` en `display: none`) — cada
+  link lleva `[attr.title]` con el nombre de la pantalla como tooltip
+  nativo cuando está contraído. Un botón `.app-menu__toggle` (chevron que
+  cambia de dirección según el estado) alterna `MenuService.toggle()`.
+- **Efectos de hover/seleccionado**: son los mismos que ya existían en
+  `app-header__nav-link` antes de la migración (`background:
+  var(--color-muted)` + `color: var(--color-foreground)`, en hover y en
+  `.app-menu__link--active`) — no se inventó un estilo nuevo. Lo único
+  agregado es que el **icono** (`.app-menu__icon`, `color: inherit` por
+  defecto) pasa a `color: var(--color-primary)` específicamente cuando el
+  link está activo, para que se note cuál pantalla está seleccionada
+  incluso contraído (sin la etiqueta de texto visible).
 
 ### Historial: "Detalle por tender media" (retirado)
 
@@ -394,11 +448,14 @@ que amerite una URL propia; usar ruta cuando el detalle es "gestionable"
 ## Iconografía
 
 **Nunca emoji.** SVG inline, `stroke="currentColor"`, `viewBox="0 0 24 24"`,
-tamaño `18px` para botones de header. Patrón `.icon-button` en
-`core/layout/header/header.scss` — cualquier botón de icono nuevo en el
-header reutiliza esa clase, no la reinventa. Sin fondo ni borde en reposo
-(solo el icono es visible) y `border-radius: 50%` — el borde y el fondo
-tenue solo aparecen en `:hover`, nunca en reposo.
+tamaño `18px` para botones de header (`.icon-button`, `.app-menu__toggle`,
+ambos en sus respectivos `.scss`) y `20px` para los links de navegación del
+`Menu` (`.app-menu__icon` — un poco más grande porque ahí el icono es el
+único elemento visible en estado contraído, no un botón secundario). Patrón
+`.icon-button` en `core/layout/header/header.scss` — cualquier botón de
+icono nuevo (header o menú) lo reutiliza, no lo reinventa. Sin fondo ni
+borde en reposo (solo el icono es visible) y `border-radius: 50%` — el
+borde y el fondo tenue solo aparecen en `:hover`, nunca en reposo.
 
 ## Servicios de tema (`core/services`)
 
@@ -598,3 +655,9 @@ activar-desactivar + acción sensible con confirmación + auditoría.
    también en `reconciliation-dashboard`, no es algo que haya introducido
    `difference-management`) — pendiente de una pasada de responsive en
    `shell.scss`, fuera del alcance de los módulos hechos hasta ahora.
+4. El `Menu` lateral (`core/layout/menu/`) tampoco tiene breakpoint móvil —
+   en pantallas angostas el ancho fijo (64px contraído / 220px expandido)
+   sigue empujando el contenido igual que en desktop, sin volverse un
+   drawer/overlay como sería lo esperado en móvil. Mismo criterio que el
+   punto anterior: pendiente de la misma pasada de responsive general,
+   fuera del alcance de agregar el Menu en sí.

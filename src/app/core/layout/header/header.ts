@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { NgStyle } from '@angular/common';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { Router } from '@angular/router';
 import { NzPopoverModule } from 'ng-zorro-antd/popover';
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { ThemeService } from '../../services/theme.service';
@@ -10,12 +10,13 @@ import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color
 
 /**
  * Header del layout principal (`Shell`). Extraído de `shell.html`/`.ts` para
- * aislar navegación + acciones + card de usuario en su propio componente —
- * `Shell` solo orquesta `<app-header>` + `<router-outlet>`.
+ * aislar acciones + card de usuario en su propio componente — la
+ * navegación entre módulos vive en `core/layout/menu` (Menu), no aquí.
+ * `Shell` orquesta `<app-menu>` + `<app-header>` + `<router-outlet>`.
  */
 @Component({
   selector: 'app-header',
-  imports: [RouterLink, RouterLinkActive, NzPopoverModule, NzAvatarModule, NgStyle],
+  imports: [NzPopoverModule, NzAvatarModule, NgStyle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './header.html',
   styleUrl: './header.scss',
