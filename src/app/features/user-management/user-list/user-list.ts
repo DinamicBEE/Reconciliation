@@ -15,7 +15,7 @@ import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import { AppUser, ROLE_LABEL, ROLE_OPTIONS } from '../data/user-management.model';
 import { RoleFilter, StatusFilter, UserManagementService } from '../data/user-management.service';
-import { avatarTokensFor, initialsFor } from '../data/avatar-color.util';
+import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 
 @Component({
   selector: 'app-user-list',

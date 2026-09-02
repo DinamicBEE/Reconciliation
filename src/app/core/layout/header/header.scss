@@ -1,0 +1,174 @@
+// Sin fondo ni línea divisora a propósito — el Header flota sobre
+// `--color-background` (el body/shell ya tiene su propio fondo), a
+// diferencia del resto de "cards" del design system.
+.app-header {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 0 24px;
+}
+
+.app-header__title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--color-foreground);
+  white-space: nowrap;
+}
+
+// --- Navegación entre módulos ------------------------------------------
+.app-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.app-header__nav-link {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+
+  &:hover {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.app-header__nav-link--active {
+  background: var(--color-muted);
+  color: var(--color-foreground);
+}
+
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+// Botones de icono: sin fondo ni borde en reposo — solo el icono es
+// visible. El borde totalmente redondo solo aparece con hover (nunca en
+// reposo), y el fondo tenue acompaña como affordance de que es clickeable.
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-foreground);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+
+  &:hover {
+    background: var(--color-muted);
+    border-color: var(--color-border);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+// --- Card de usuario logeado --------------------------------------------
+// Rectángulo con el largo (ancho) al doble del alto, fondo blanco
+// (--color-card, blanco en modo claro) y esquinas a 8px — la única
+// superficie con fondo propio dentro del Header.
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  width: 96px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--color-card);
+  overflow: hidden;
+}
+
+.user-card__avatar {
+  flex: 0 0 auto;
+  width: 28px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  font-size: 12px !important;
+}
+
+.user-card__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.user-card__name {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--color-card-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-card__role {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// --- Selector de paleta (contenido del nz-popover) -------------------------
+.palette-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 2px;
+}
+
+.palette-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--color-card);
+  outline: 1px solid var(--color-border);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 120ms ease;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.palette-swatch--selected {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: 1px;
+}

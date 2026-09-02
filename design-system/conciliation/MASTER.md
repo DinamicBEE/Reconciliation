@@ -27,7 +27,8 @@
 ```
 src/app/
 ├── core/              # singletons, se instancian una sola vez
-│   ├── layout/shell/    # header + <router-outlet>, toggle de tema, selector de paleta
+│   ├── layout/shell/    # <app-header> + <router-outlet>
+│   ├── layout/header/   # nav, toggle de tema, selector de paleta, card de usuario logeado
 │   └── services/        # ThemeService, PaletteService, color-utils
 ├── shared/            # reutilizable entre features — NUNCA depende de features/
 │   ├── components/      # match-status-tag, sale-status-tag, sparkline, radial-progress
@@ -131,10 +132,13 @@ Ant por defecto no rompe la lectura en ningún modo, mismo criterio ya
 aceptado para botones primarios y `nz-radio-group` (azul de Ant sin
 bridgear desde `sales-dashboard`, nunca corregido a navy/dorado). El color
 del avatar de iniciales tampoco se resolvió bridgeando `.ant-avatar` —
-`user-list`/`user-detail` le pasan `[ngStyle]` con `--color-primary`/
-`--color-secondary`/`--color-accent` por instancia (rotación por hash del id,
-ver `avatar-color.util.ts`), que ya son tokens — un bridge global de
-`.ant-avatar` habría sido redundante.
+`user-list`/`user-detail` y el card de usuario del `Header` le pasan
+`[ngStyle]` con `--color-primary`/`--color-secondary`/`--color-accent` por
+instancia (rotación por hash de un id estable, ver
+`shared/utils/avatar-color.util.ts` — promovido ahí desde
+`features/user-management/data/` al aparecer el Header como segundo
+consumidor), que ya son tokens — un bridge global de `.ant-avatar` habría
+sido redundante.
 
 Pendiente conocido: el borde de `nz-range-picker` no toma `--color-border`
 pese a varios overrides reforzados — cosmético, no bloqueante, sin causa raíz
@@ -271,6 +275,40 @@ constante `APP_TODAY_ISO` en su `data/*.service.ts` (ver
 retirarse, ver nota histórica abajo). Si aparece un segundo consumidor, ese
 es el momento de subirla a `shared`.
 
+## Patrón de layout: Header (extraído de Shell) y card de usuario logeado
+
+`core/layout/header/` (`Header`, selector `app-header`) — extraído de
+`Shell` para aislar navegación + acciones + identidad del usuario logeado en
+su propio componente; `Shell` solo orquesta `<app-header>` +
+`<router-outlet>` (`shell.html`/`.ts`).
+
+- El Header **no lleva fondo ni línea divisora** — flota sobre
+  `--color-background`, a diferencia de cualquier otra "card" del sistema.
+  `.shell__header` (wrapper `nz-header`) solo neutraliza el fondo navy y el
+  alto/line-height por defecto de `.ant-layout-header`; el layout real
+  (flex, gap, padding) vive en `.app-header` dentro de `header.scss`.
+- Card de usuario logeado (`.user-card`, extremo derecho del Header,
+  después de los `.icon-button`): rectángulo con el **ancho al doble del
+  alto** (`96px × 48px`), `border-radius: 8px`, fondo `--color-card`
+  (blanco en modo claro — el único elemento con fondo propio dentro del
+  Header). Contenido: `nz-avatar` de iniciales (mismo patrón de
+  `avatarTokensFor`/`initialsFor` que `user-list`, ver abajo) + una columna
+  con el nombre en negritas arriba y el rol debajo, ambos con
+  `text-overflow: ellipsis` + `[attr.title]` con el nombre completo y el rol
+  (el card es angosto a propósito, no se agranda por texto largo).
+- **"Primer nombre + primer apellido"**, no el nombre completo: se deriva
+  con un `computed()` en `Header` que toma los dos primeros tokens de
+  `AuthUser.fullName` (`"Ana Martínez López"` → `"Ana Martínez"`) — función
+  trivial de un solo consumidor, vive inline en el componente, no en su
+  propio archivo (no amerita `shared/utils/` todavía).
+- `AuthUser`/`MockUser` (`features/auth/data/`) tienen `fullName` y `role`
+  además de `displayName` — `displayName` es histórico y sigue usándose tal
+  cual como `actorName` en la auditoría de `user-management`
+  (`UserManagementService`); no se reutilizó para el card del Header porque
+  no es un nombre real de persona en los datos mock, es un texto tipo-rol.
+  Mantenerlos separados evita forzar un campo a cumplir dos propósitos
+  distintos.
+
 ## Patrón: navegación entre módulos (menú de Shell)
 
 Los módulos de nivel superior se acceden únicamente desde `.shell__nav` en
@@ -357,8 +395,10 @@ que amerite una URL propia; usar ruta cuando el detalle es "gestionable"
 
 **Nunca emoji.** SVG inline, `stroke="currentColor"`, `viewBox="0 0 24 24"`,
 tamaño `18px` para botones de header. Patrón `.icon-button` en
-`shell.scss` — cualquier botón de icono nuevo en el header reutiliza esa
-clase, no la reinventa.
+`core/layout/header/header.scss` — cualquier botón de icono nuevo en el
+header reutiliza esa clase, no la reinventa. Sin fondo ni borde en reposo
+(solo el icono es visible) y `border-radius: 50%` — el borde y el fondo
+tenue solo aparecen en `:hover`, nunca en reposo.
 
 ## Servicios de tema (`core/services`)
 
