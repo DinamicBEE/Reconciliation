@@ -116,10 +116,25 @@ movimiento, no al gusto visual — mezclarlos rompe la semántica (ver
 ng-zorro trae colores fijos de Ant Design (`.ant-card{background:#fff}`) que
 **no leen nuestras variables**. Hay un bloque de overrides con `!important`
 que conecta `nz-card`, `nz-table`, encabezado de tabla, `nz-select`,
-`nz-picker` a `--color-*`. **Cualquier componente nuevo de ng-zorro que uses
-por primera vez, revisa si necesita su propia entrada aquí** (patrón: buscar
-el selector real en `node_modules/ng-zorro-antd/ng-zorro-antd.min.css`,
-confirmar que trae un color hardcodeado, y puentearlo).
+`nz-picker`, `nz-drawer`, `nz-dropdown-menu`, `nz-tabs` y `nz-modal`
+(confirm/`nzOnOk` incluido) a `--color-*`. **Cualquier componente nuevo de
+ng-zorro que uses por primera vez, revisa si necesita su propia entrada
+aquí** (patrón: buscar el selector real en
+`node_modules/ng-zorro-antd/ng-zorro-antd.min.css`, confirmar que trae un
+color hardcodeado, y puentearlo).
+
+El criterio real para bridgear no es "es la primera vez que lo uso" sino "su
+fondo/texto fijo queda ilegible o descuadrado en modo oscuro" — `nz-switch`,
+`nz-checkbox` y `nz-avatar` (primer uso de los tres en "Administración de
+usuarios", ver más abajo) se dejaron SIN bridge a propósito: su gris/azul de
+Ant por defecto no rompe la lectura en ningún modo, mismo criterio ya
+aceptado para botones primarios y `nz-radio-group` (azul de Ant sin
+bridgear desde `sales-dashboard`, nunca corregido a navy/dorado). El color
+del avatar de iniciales tampoco se resolvió bridgeando `.ant-avatar` —
+`user-list`/`user-detail` le pasan `[ngStyle]` con `--color-primary`/
+`--color-secondary`/`--color-accent` por instancia (rotación por hash del id,
+ver `avatar-color.util.ts`), que ya son tokens — un bridge global de
+`.ant-avatar` habría sido redundante.
 
 Pendiente conocido: el borde de `nz-range-picker` no toma `--color-border`
 pese a varios overrides reforzados — cosmético, no bloqueante, sin causa raíz
@@ -199,9 +214,11 @@ Tres variantes de `.kpi-card__body`:
 - `--stat` (solo número, sin visual): centra `.kpi-card__stat` verticalmente
   en el card. Úsalo cuando el KPI no tiene (o no necesita) una gráfica de
   apoyo — no fuerces un donut/sparkline decorativo solo por consistencia
-  visual. (Disponible pero sin consumidor actual — el patrón de "resumen
-  global" de abajo es un caso distinto: una sola card con varias métricas,
-  no varias cards independientes.)
+  visual. Primer consumidor: los 3 KPI de `user-list` (Usuarios totales /
+  Cuentas activas / Cuentas inactivas) — ninguno tiene gráfica de apoyo, solo
+  una cifra. (El patrón de "resumen global" de abajo sigue siendo un caso
+  distinto: una sola card con varias métricas, no varias cards
+  independientes.)
 
 Deltas ("+5 pts vs. ayer", o simplemente una segunda línea con `.text-muted`):
 triángulo SVG inline (no icon font, no emoji) + color success/destructive
@@ -273,14 +290,17 @@ rename es seguro. `login.ts` apunta a `/dashboard` post-login, y eso sigue
 siendo correcto porque el resumen de venta es la pantalla de aterrizaje
 deseada, no un accidente.
 
-No hay sidebar ni menú colapsable — 2 links de texto bastan. Si aparece un
-tercer módulo de nivel superior (o el header empieza a apretarse en desktop,
-no solo en el breakpoint móvil pendiente de la sección de deuda), ese es el
-momento de evaluar `nz-menu`/una barra lateral en vez de seguir agregando
-`<a class="shell__nav-link">` sueltos (no antes: introducir `nz-menu` implica
-puentear `.ant-menu` a nuestros tokens en `styles.scss`, igual que se hizo
-con `.ant-card`/`.ant-table`/`.ant-drawer-*` — no vale la pena el costo
-todavía con 2 entradas).
+No hay sidebar ni menú colapsable. Al agregar "Administración de usuarios" se
+llegó al tercer link (`/usuarios`) — el disparador que este documento ya
+anticipaba para evaluar `nz-menu`/una barra lateral. Se decidió NO migrar
+todavía: con 3 links de texto el header sigue sin apretarse en desktop
+(el breakpoint móvil sigue siendo la deuda pendiente de siempre, sin cambios
+por este módulo), y el costo de puentear `.ant-menu` a nuestros tokens
+(mismo trabajo que ya se hizo con `.ant-card`/`.ant-table`/`.ant-drawer-*`)
+no se justifica todavía por un solo link más. Si aparece un CUARTO módulo de
+nivel superior, o el header empieza a apretarse en desktop, ese sí es el
+momento de migrar — no seguir sumando `<a class="shell__nav-link">` sueltos
+indefinidamente.
 
 ### Historial: "Detalle por tender media" (retirado)
 
@@ -431,6 +451,99 @@ candidatas para completar un cruce automático incompleto:
    `[ngModel]`/`(ngModelChange)` contra un signal del service, más un signal
    local `touched` que se activa en `(blur)` para mostrar el error. Usar
    Reactive Forms para un solo campo hubiera sido sobre-ingeniería.
+
+## Patrón: módulo de administración (CRUD + estado + auditoría)
+
+`features/user-management` ("Administración de usuarios", rutas `/usuarios`,
+`/usuarios/nuevo`, `/usuarios/:userId`, `/usuarios/auditoria`). Primer módulo
+del proyecto que no gira en torno al cruce venta/liquidación — sirve de
+referencia para cualquier futuro módulo de administración (roles, catálogos,
+configuración) con el mismo shape: lista con filtros + alta/edición +
+activar-desactivar + acción sensible con confirmación + auditoría.
+
+1. **Service `providedIn: 'root'`, no `providers` de componente**: a
+   diferencia de `SalesDashboardService`/`ReconciliationService`
+   (recreados por ruta, un solo componente consumidor), `UserManagementService`
+   sirve a 3 rutas de nivel superior (lista, detalle, auditoría) que deben
+   ver el MISMO estado — mismo criterio que `AuthService`. Cualquier módulo
+   futuro con más de una pantalla operando sobre la misma colección mutable
+   necesita este mismo alcance, no `providers` por componente.
+2. **Un componente, dos modos (crear/editar) por presencia de `:userId`**:
+   `/usuarios/nuevo` y `/usuarios/:userId` apuntan al mismo componente
+   (`UserDetail`); `isCreate()` es `computed(() => !this.userId())`. Rutas
+   estáticas (`nuevo`, `auditoria`) DEBEN declararse antes que `:userId` en
+   `app.routes.ts` — si no, el segmento param las captura primero y nunca se
+   llega a ellas.
+3. **Carga/reset de estado por `effect()` sobre el input de ruta**: mismo
+   patrón que `DifferenceManagement` con `tenderMedia()`/`orderId()` — un
+   `effect()` en el constructor (no un `computed`, porque tiene
+   side-effects: `infoForm.reset(...)`, borradores de rol/permisos) reacciona
+   a `userId()` y carga el registro. Lee el service con `untracked()` para
+   que el efecto solo dispare al NAVEGAR a otro usuario, no cada vez que
+   cualquier usuario cambia en la colección (si no, guardar en otra pestaña
+   pisaría un formulario a medio llenar).
+4. **Reactive Forms + `ngModel` mezclados a propósito**: nombre/correo tienen
+   reglas reales (`required`, `email`, `minlength`) → `ReactiveFormsModule`
+   (mismo criterio que `login`). Rol/estado/permisos son selección simple sin
+   reglas propias → `[ngModel]`/`(ngModelChange)` contra signals locales
+   (mismo criterio que los filtros de `reconciliation-dashboard`). Un control
+   `ngModel` DENTRO de un `<form [formGroup]>` que no pertenece a ese
+   `FormGroup` necesita `[ngModelOptions]="{ standalone: true }"` o Angular
+   lanza un error en runtime — solo aplica cuando el control vive dentro del
+   `<form>`; fuera de él (como los checkboxes de permisos, en un `<div>`
+   normal) no hace falta.
+5. **Nunca factorizar campos de formulario compartidos con
+   `<ng-template>` + `*ngTemplateOutlet` cuando hay `formControlName` de por
+   medio**: se intentó compartir los campos nombre/correo entre el formulario
+   de creación y el de edición así, y falla en runtime
+   (`NG01050: formControlName must be used with a parent formGroup
+   directive`) — el `ControlContainer` no viaja con la vista incrustada de
+   `ngTemplateOutlet` de la forma que uno esperaría. La solución fue duplicar
+   el bloque de campos (con sus `<ng-template>` de error, renombrados para no
+   chocar) en cada `<form>`. Una duplicación pequeña y explícita es preferible
+   a una abstracción que rompe en runtime sin error de compilación.
+6. **Confirmación de acciones sensibles vía `NzModalService.confirm()`, no
+   `nz-popconfirm`**: eliminar/restablecer contraseña se confirman con
+   `this.modal.confirm({ nzTitle, nzContent, nzOnOk })` inyectando
+   `NzModalService` (requiere `NzModalModule` en `imports` del componente —
+   el servicio no es `providedIn: 'root'`, solo se registra vía el módulo).
+   Se prefirió sobre `nz-popconfirm` porque estas acciones se disparan desde
+   un item de `nz-dropdown-menu` (`user-list`) — un popconfirm anidado ahí
+   compite con el cierre automático del menú al hacer click y es un patrón
+   frágil ya conocido en Ant Design. `Modal.confirm()` al ser una llamada
+   programática independiente del menú no tiene ese problema.
+7. **Restablecer contraseña sin backend**: `resetPassword()` genera una
+   contraseña temporal legible (`data/password.util.ts`, función pura) y la
+   devuelve una sola vez para mostrarla en un `nz-message` — no se simula un
+   envío de correo que la app no puede hacer real. El día que exista backend,
+   el service deja de devolver la contraseña y dispara el correo real; el
+   componente no cambia.
+8. **Auditoría como colección independiente, no un campo del usuario**:
+   `AuditLogEntry` guarda `targetUserId` + `targetUserName` (snapshot del
+   nombre al momento del evento) y sobrevive a que el usuario se elimine —
+   el mock incluye a propósito un usuario fantasma (`u9`, ver
+   `user-management-mock.data.ts`) que ya no existe en `MOCK_USERS` pero sí
+   tiene entradas de auditoría, para forzar justo ese caso. **Gotcha real
+   encontrado**: el generador de ids de usuarios nuevos (`nextUserSeq`) debe
+   considerar también los `targetUserId` del log de auditoría, no solo
+   `MOCK_USERS.length` — si no, un usuario creado en la sesión puede reciclar
+   el id de un fantasma y heredar su historial completo (pasó en esta misma
+   sesión de desarrollo; el fix quedó en `maxSeq()` dentro del service).
+9. **Rol → permisos por defecto, ajustables por usuario**: `RoleDef.defaultPermissions`
+   es un punto de partida, no un techo — `AppUser.permissions` es la lista
+   EFECTIVA y puede divergir del default de su rol (ver `Carlos Medina` en el
+   mock, auditor con "Exportar reportes" de más). Cambiar de rol
+   (`changeRole`) resetea el borrador de permisos a los defaults de ese rol;
+   el admin ajusta desde ahí — nunca se re-deriva solo en cada render.
+10. **Tabs para un detalle "gestionable" con varias secciones**: variante del
+    patrón "Drawer vs. ruta" ya documentado — `UserDetail` (ruta, no drawer,
+    porque tiene flujo de acciones propio) usa `nz-tabs` (selector real en
+    ng-zorro-antd 22: `nz-tabs`/`nz-tab`, **no** `nz-tabset`) para separar
+    Información general / Roles y permisos / Historial cuando un solo
+    formulario sería demasiado largo. Modo creación NO muestra tabs (un
+    usuario que no existe aún no tiene roles que ajustar en detalle ni
+    historial) — un solo formulario mínimo, y tras crear se navega al
+    detalle completo con las 3 tabs.
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

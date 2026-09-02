@@ -190,3 +190,35 @@ html body .ant-table-thead > tr > th {
 .ant-drawer-title {
   color: var(--color-foreground) !important;
 }
+
+// Primer uso de nz-dropdown/nz-tabs/nz-modal (módulo "Administración de
+// usuarios") — mismo criterio de siempre: revisar el CSS compilado de
+// ng-zorro antes de darlos por "ya temeados" (ver MASTER.md). Los tres
+// traen fondo/texto fijos de Ant Design que quedan ilegibles en modo
+// oscuro sin este bloque (texto oscuro sobre fondo oscuro, o un panel
+// blanco flotando sobre la página oscura).
+.ant-dropdown-menu {
+  background: var(--color-card) !important;
+}
+
+.ant-dropdown-menu-item {
+  color: var(--color-foreground) !important;
+}
+
+.ant-tabs-top,
+.ant-tabs-tab {
+  color: var(--color-foreground) !important;
+}
+
+.ant-tabs-top > .ant-tabs-nav::before {
+  border-bottom-color: var(--color-border) !important;
+}
+
+.ant-modal-content {
+  background: var(--color-card) !important;
+}
+
+.ant-modal-confirm-body .ant-modal-confirm-title,
+.ant-modal-confirm-body .ant-modal-confirm-content {
+  color: var(--color-foreground) !important;
+}

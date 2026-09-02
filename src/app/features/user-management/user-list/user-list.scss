@@ -1,0 +1,101 @@
+@use '../../../shared/styles/kpi-card';
+@use '../../../shared/styles/toolbar';
+@use '../../../shared/styles/data-table';
+
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+.user-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.user-list__title {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+.user-list__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+// Mismo look que .back-link (ver _back-link.scss) pero es un link hacia
+// adelante ("ver historial"), no "volver a ..." — no se reutiliza esa clase
+// para no confundir su nombre con su semántica en un futuro lector.
+.user-list__audit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--color-foreground);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.toolbar__filter--search {
+  width: 260px;
+}
+
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.user-cell__avatar {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.user-cell__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.user-cell__name {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.user-cell__email {
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+}
+
+.status-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.row-menu-trigger {
+  color: var(--color-muted-foreground);
+}
+
+.user-list__empty {
+  text-align: center;
+  padding: 32px 0;
+}

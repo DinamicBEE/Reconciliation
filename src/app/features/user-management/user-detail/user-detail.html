@@ -1,0 +1,232 @@
+@if (notFound()) {
+  <p>
+    Este usuario no existe o fue eliminado.
+    <a routerLink="/usuarios">Volver a usuarios</a>
+  </p>
+} @else {
+  <div class="user-detail">
+    <div class="user-detail__header">
+      <a routerLink="/usuarios" class="back-link">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+        </svg>
+        Volver a usuarios
+      </a>
+      <h1 class="user-detail__title">
+        {{ isCreate() ? 'Nuevo usuario' : user()?.fullName }}
+      </h1>
+    </div>
+
+    @if (isCreate()) {
+      <nz-card [nzBodyStyle]="{ padding: '20px' }">
+        <form nz-form [formGroup]="infoForm" (ngSubmit)="onCreateSubmit()" class="user-form">
+          <nz-form-item>
+            <nz-form-label nzFor="fullName" nzRequired>Nombre completo</nz-form-label>
+            <nz-form-control [nzErrorTip]="fullNameErrorTpl">
+              <input nz-input id="fullName" formControlName="fullName" placeholder="Nombre y apellido" />
+            </nz-form-control>
+          </nz-form-item>
+          <ng-template #fullNameErrorTpl let-control>
+            @if (control.hasError('required')) {
+              Ingresa el nombre completo.
+            } @else if (control.hasError('minlength')) {
+              Debe tener al menos 3 caracteres.
+            }
+          </ng-template>
+
+          <nz-form-item>
+            <nz-form-label nzFor="email" nzRequired>Correo</nz-form-label>
+            <nz-form-control [nzErrorTip]="emailErrorTpl">
+              <input nz-input id="email" type="email" formControlName="email" placeholder="usuario@conciliacion.mx" />
+            </nz-form-control>
+          </nz-form-item>
+          <ng-template #emailErrorTpl let-control>
+            @if (control.hasError('required')) {
+              Ingresa un correo.
+            } @else if (control.hasError('email')) {
+              El correo no es válido.
+            }
+          </ng-template>
+
+          <nz-form-item>
+            <nz-form-label nzFor="createRole" nzRequired>Rol inicial</nz-form-label>
+            <nz-form-control>
+              <nz-select
+                id="createRole"
+                [ngModel]="createRoleId()"
+                [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="createRoleId.set($event)"
+                placeholder="Selecciona un rol"
+              >
+                @for (opt of roleOptions; track opt.value) {
+                  <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+                }
+              </nz-select>
+            </nz-form-control>
+          </nz-form-item>
+
+          <nz-form-item>
+            <nz-form-label>Estado inicial</nz-form-label>
+            <nz-form-control>
+              <label class="status-switch">
+                <nz-switch
+                  [ngModel]="createActive()"
+                  [ngModelOptions]="{ standalone: true }"
+                  (ngModelChange)="createActive.set($event)"
+                />
+                <span>{{ createActive() ? 'Activo' : 'Inactivo' }}</span>
+              </label>
+            </nz-form-control>
+          </nz-form-item>
+
+          <button nz-button nzType="primary" type="submit">Crear usuario</button>
+        </form>
+      </nz-card>
+    } @else if (user(); as u) {
+      <div class="user-detail__status-bar">
+        <label class="status-switch">
+          <nz-switch
+            [ngModel]="u.status === 'active'"
+            [ngModelOptions]="{ standalone: true }"
+            (ngModelChange)="onToggleStatus($event)"
+          />
+          <span [class.text-success]="u.status === 'active'" [class.text-muted]="u.status === 'inactive'">
+            {{ u.status === 'active' ? 'Cuenta activa' : 'Cuenta inactiva' }}
+          </span>
+        </label>
+
+        <span class="text-muted user-detail__meta">Creado el {{ u.createdAt | date: 'dd/MM/yyyy' }}</span>
+
+        <span class="text-muted user-detail__meta">
+          Último acceso:
+          @if (u.lastAccessAt) {
+            {{ u.lastAccessAt | date: 'dd/MM/yyyy HH:mm' }}
+          } @else {
+            Nunca
+          }
+        </span>
+
+        <button nz-button nzDanger type="button" class="user-detail__delete-btn" (click)="onDeleteClick()">
+          Eliminar usuario
+        </button>
+      </div>
+
+      <nz-tabs>
+        <nz-tab nzTitle="Información general">
+          <nz-card [nzBodyStyle]="{ padding: '20px' }">
+            <form nz-form [formGroup]="infoForm" (ngSubmit)="onSaveInfo()" class="user-form">
+              <nz-form-item>
+                <nz-form-label nzFor="editFullName" nzRequired>Nombre completo</nz-form-label>
+                <nz-form-control [nzErrorTip]="editFullNameErrorTpl">
+                  <input nz-input id="editFullName" formControlName="fullName" placeholder="Nombre y apellido" />
+                </nz-form-control>
+              </nz-form-item>
+              <ng-template #editFullNameErrorTpl let-control>
+                @if (control.hasError('required')) {
+                  Ingresa el nombre completo.
+                } @else if (control.hasError('minlength')) {
+                  Debe tener al menos 3 caracteres.
+                }
+              </ng-template>
+
+              <nz-form-item>
+                <nz-form-label nzFor="editEmail" nzRequired>Correo</nz-form-label>
+                <nz-form-control [nzErrorTip]="editEmailErrorTpl">
+                  <input nz-input id="editEmail" type="email" formControlName="email" placeholder="usuario@conciliacion.mx" />
+                </nz-form-control>
+              </nz-form-item>
+              <ng-template #editEmailErrorTpl let-control>
+                @if (control.hasError('required')) {
+                  Ingresa un correo.
+                } @else if (control.hasError('email')) {
+                  El correo no es válido.
+                }
+              </ng-template>
+
+              <div class="user-form__actions">
+                <button nz-button nzType="primary" type="submit">Guardar cambios</button>
+                <button nz-button nzType="default" type="button" (click)="onResetPasswordClick()">
+                  Restablecer contraseña
+                </button>
+              </div>
+            </form>
+          </nz-card>
+        </nz-tab>
+
+        <nz-tab nzTitle="Roles y permisos">
+          <nz-card [nzBodyStyle]="{ padding: '20px' }">
+            <div class="role-field">
+              <label class="role-field__label" for="draftRole">Rol</label>
+              <nz-select
+                id="draftRole"
+                class="role-field__select"
+                [ngModel]="draftRoleId()"
+                (ngModelChange)="onRoleSelectChange($event)"
+              >
+                @for (opt of roleOptions; track opt.value) {
+                  <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+                }
+              </nz-select>
+              <p class="text-muted role-field__hint">
+                Cambiar el rol restablece los permisos a los valores por defecto de ese rol — puedes ajustarlos abajo.
+              </p>
+            </div>
+
+            <div class="permission-groups">
+              @for (grp of permissionGroups; track grp.group) {
+                <div class="permission-group">
+                  <h3 class="permission-group__title">{{ grp.group }}</h3>
+                  @for (perm of grp.items; track perm.key) {
+                    <label
+                      nz-checkbox
+                      class="permission-item"
+                      [ngModel]="isPermissionChecked(perm.key)"
+                      (ngModelChange)="onPermissionToggle(perm.key, $event)"
+                    >
+                      {{ perm.label }}
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+
+            <button nz-button nzType="primary" type="button" (click)="onSaveRoleAndPermissions()">
+              Guardar permisos
+            </button>
+          </nz-card>
+        </nz-tab>
+
+        <nz-tab nzTitle="Historial">
+          <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
+            @if (userAudit().length === 0) {
+              <p class="text-muted user-detail__empty-audit">Sin actividad registrada todavía.</p>
+            } @else {
+              <table class="audit-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Acción</th>
+                    <th class="col-truncate" style="--col-max-width: 320px">Detalle</th>
+                    <th>Realizado por</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (entry of userAudit(); track entry.id) {
+                    <tr>
+                      <td class="font-mono">{{ entry.timestamp | date: 'dd/MM/yyyy HH:mm' }}</td>
+                      <td>{{ auditActionLabel[entry.action] }}</td>
+                      <td class="col-truncate" style="--col-max-width: 320px" [attr.title]="entry.detail">
+                        {{ entry.detail }}
+                      </td>
+                      <td>{{ entry.actorName }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </nz-card>
+        </nz-tab>
+      </nz-tabs>
+    }
+  </div>
+}

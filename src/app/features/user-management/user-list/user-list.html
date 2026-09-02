@@ -1,0 +1,158 @@
+<div class="user-list">
+  <div class="user-list__header">
+    <h1 class="user-list__title">Administración de usuarios</h1>
+    <div class="user-list__header-actions">
+      <a routerLink="/usuarios/auditoria" class="user-list__audit-link">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 2" />
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+        Ver historial completo
+      </a>
+      <button nz-button nzType="primary" type="button" routerLink="/usuarios/nuevo">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+        </svg>
+        Nuevo usuario
+      </button>
+    </div>
+  </div>
+
+  <!-- 3 KPIs, solo stat (ver kpi-card partial / MASTER.md) -->
+  <section class="kpi-grid">
+    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
+      <span class="kpi-card__title">Usuarios totales</span>
+      <div class="kpi-card__body kpi-card__body--stat">
+        <div class="kpi-card__stat">
+          <span class="kpi-card__value">{{ service.summary().total }}</span>
+        </div>
+      </div>
+    </nz-card>
+
+    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
+      <span class="kpi-card__title">Cuentas activas</span>
+      <div class="kpi-card__body kpi-card__body--stat">
+        <div class="kpi-card__stat">
+          <span class="kpi-card__value text-success">{{ service.summary().active }}</span>
+        </div>
+      </div>
+    </nz-card>
+
+    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
+      <span class="kpi-card__title">Cuentas inactivas</span>
+      <div class="kpi-card__body kpi-card__body--stat">
+        <div class="kpi-card__stat">
+          <span class="kpi-card__value" [class.text-muted]="service.summary().inactive === 0" [class.text-destructive]="service.summary().inactive > 0">
+            {{ service.summary().inactive }}
+          </span>
+        </div>
+      </div>
+    </nz-card>
+  </section>
+
+  <section class="toolbar">
+    <input
+      nz-input
+      type="text"
+      class="toolbar__filter toolbar__filter--search"
+      placeholder="Buscar por nombre o correo"
+      [ngModel]="service.search()"
+      (ngModelChange)="onSearchChange($event)"
+    />
+
+    <nz-select class="toolbar__filter" [ngModel]="service.roleFilter()" (ngModelChange)="onRoleFilterChange($event)">
+      @for (opt of roleOptions; track opt.value) {
+        <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+      }
+    </nz-select>
+
+    <nz-select class="toolbar__filter" [ngModel]="service.statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+      @for (opt of statusOptions; track opt.value) {
+        <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+      }
+    </nz-select>
+  </section>
+
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
+    <nz-table #tbl [nzData]="service.filteredUsers()" [nzPageSize]="10" nzSize="middle">
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th>Último acceso</th>
+          <th class="text-right">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (user of tbl.data; track user.id) {
+          <tr class="clickable-row" (click)="onRowClick(user)">
+            <td>
+              <div class="user-cell">
+                <nz-avatar class="user-cell__avatar" [nzText]="initials(user)" [ngStyle]="avatarStyle(user)" />
+                <div class="user-cell__text">
+                  <span class="user-cell__name">{{ user.fullName }}</span>
+                  <span class="user-cell__email col-truncate" style="--col-max-width: 240px" [attr.title]="user.email">
+                    {{ user.email }}
+                  </span>
+                </div>
+              </div>
+            </td>
+            <td>{{ roleLabel[user.roleId] }}</td>
+            <td (click)="$event.stopPropagation()">
+              <label class="status-switch">
+                <nz-switch
+                  [ngModel]="user.status === 'active'"
+                  (ngModelChange)="onToggleStatus(user, $event)"
+                  nzSize="small"
+                />
+                <span [class.text-success]="user.status === 'active'" [class.text-muted]="user.status === 'inactive'">
+                  {{ user.status === 'active' ? 'Activo' : 'Inactivo' }}
+                </span>
+              </label>
+            </td>
+            <td class="font-mono">
+              @if (user.lastAccessAt) {
+                {{ user.lastAccessAt | date: 'dd/MM/yyyy HH:mm' }}
+              } @else {
+                <span class="text-muted">Nunca</span>
+              }
+            </td>
+            <td class="text-right" (click)="$event.stopPropagation()">
+              <button
+                nz-button
+                nzType="text"
+                nzSize="small"
+                type="button"
+                class="row-menu-trigger"
+                nz-dropdown
+                [nzDropdownMenu]="rowMenu"
+                nzTrigger="click"
+                nzPlacement="bottomRight"
+                aria-label="Más acciones"
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <circle cx="12" cy="5" r="1.6" />
+                  <circle cx="12" cy="12" r="1.6" />
+                  <circle cx="12" cy="19" r="1.6" />
+                </svg>
+              </button>
+
+              <nz-dropdown-menu #rowMenu="nzDropdownMenu">
+                <ul nz-menu>
+                  <li nz-menu-item [routerLink]="['/usuarios', user.id]">Ver detalle</li>
+                  <li nz-menu-item (click)="onResetPasswordClick(user)">Restablecer contraseña</li>
+                  <li nz-menu-item nzDanger (click)="onDeleteClick(user)">Eliminar</li>
+                </ul>
+              </nz-dropdown-menu>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5" class="text-muted user-list__empty">Ningún usuario coincide con los filtros aplicados.</td>
+          </tr>
+        }
+      </tbody>
+    </nz-table>
+  </nz-card>
+</div>

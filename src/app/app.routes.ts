@@ -29,6 +29,24 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/difference-management/difference-management').then((m) => m.DifferenceManagement),
       },
+      {
+        path: 'usuarios',
+        loadComponent: () => import('./features/user-management/user-list/user-list').then((m) => m.UserList),
+      },
+      // 'auditoria' y 'nuevo' antes de ':userId' — si no, ':userId' las
+      // captura primero y nunca se llega a estas dos rutas estáticas.
+      {
+        path: 'usuarios/auditoria',
+        loadComponent: () => import('./features/user-management/user-audit/user-audit').then((m) => m.UserAudit),
+      },
+      {
+        path: 'usuarios/nuevo',
+        loadComponent: () => import('./features/user-management/user-detail/user-detail').then((m) => m.UserDetail),
+      },
+      {
+        path: 'usuarios/:userId',
+        loadComponent: () => import('./features/user-management/user-detail/user-detail').then((m) => m.UserDetail),
+      },
     ],
   },
   { path: '**', redirectTo: 'login' },

@@ -1,0 +1,139 @@
+@use '../../../shared/styles/back-link';
+@use '../../../shared/styles/data-table';
+
+.user-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+  max-width: 720px;
+}
+
+.user-detail__header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-detail__title {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+.user-form {
+  display: flex;
+  flex-direction: column;
+  max-width: 420px;
+}
+
+.user-form__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.status-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+// Barra de estado de la cuenta arriba de las tabs — no es un "resumen
+// global" de sumas (ver _summary-strip.scss), es una fila de metadatos +
+// acciones puntuales del registro, de ahí que no reutilice ese partial.
+.user-detail__status-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 12px 16px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+}
+
+.user-detail__meta {
+  font-size: 13px;
+}
+
+.user-detail__delete-btn {
+  margin-left: auto;
+}
+
+.role-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+  margin-bottom: 20px;
+}
+
+.role-field__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.role-field__hint {
+  font-size: 12px;
+  margin: 0;
+}
+
+.permission-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.permission-group__title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+  margin: 0 0 8px;
+}
+
+.permission-item {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--color-foreground);
+}
+
+.user-detail__empty-audit {
+  padding: 16px;
+  margin: 0;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th {
+    text-align: left;
+    padding: 10px 16px;
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  td {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-foreground);
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+}
