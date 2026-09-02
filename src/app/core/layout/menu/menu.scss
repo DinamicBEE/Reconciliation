@@ -16,9 +16,9 @@
   // 100% menos los 4px de margin arriba y abajo — si no se descuentan, la
   // caja excede el alto de `.shell` y el margen inferior queda recortado
   // por su `overflow: hidden` en vez de verse como espacio real.
-  height: calc(100% - 8px);
+  height: calc(100% - 16px);
   width: 64px;
-  margin: 4px 0 4px 4px;
+  margin: 8px 0 8px 8px;
   padding: 8px 0;
   border: 1px solid var(--color-border);
   border-radius: 8px;

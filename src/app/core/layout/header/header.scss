@@ -2,7 +2,7 @@
 // `--color-background` (el body/shell ya tiene su propio fondo), a
 // diferencia del resto de "cards" del design system.
 .app-header {
-  height: var(--header-height);
+  height: 72px;
   display: flex;
   align-items: center;
   gap: 32px;
