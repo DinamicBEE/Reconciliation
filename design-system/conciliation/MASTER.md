@@ -310,6 +310,55 @@ su propio componente; `Shell` solo orquesta `<app-header>` +
   Mantenerlos separados evita forzar un campo a cumplir dos propósitos
   distintos.
 
+### Acciones del Header: búsqueda de pantallas y notificaciones
+
+`app-header__actions` (de izquierda a derecha): buscador → notificaciones →
+cerrar sesión → card de usuario. **Ya no hay toggle de tema ni selector de
+paleta en el Header** (se quitaron a pedido explícito). `ThemeService` sigue
+viva porque `login.ts` todavía la usa fuera de `Shell`. Si al leer esto
+`PaletteService`/`ThemeService` ya tienen otro punto de entrada de UI (p.
+ej. en `Menu`), es porque se movieron ahí después de este cambio — no es
+parte de lo que documenta esta sección, revisar el commit que lo haya
+introducido.
+
+- **Búsqueda** (`core/layout/header/header-search.util.ts` +
+  signals en `Header`): el botón de lupa (`.icon-button`) y el input de
+  búsqueda **nunca conviven** — un `@if`/`@else` sobre `searchOpen()` los
+  intercambia dentro del mismo `.app-header__search`, así el dropdown de
+  resultados se posiciona relativo a ese contenedor sin importar cuál de
+  los dos está montado. El input (`.search-box__input`) es un pill
+  (`border-radius: 9999px`) con el icono de lupa **dentro**, a la
+  izquierda, vía `position: absolute` — mismo criterio de "esquinas
+  totalmente redondeadas" que ya usan `.icon-button`/`.palette-swatch`.
+  - `SEARCHABLE_PAGES`: registro estático de rutas SIN params (Dashboard,
+    Conciliación, Usuarios, Nuevo usuario, Auditoría de usuarios) — las
+    rutas con `:param` (`difference-management`, `usuarios/:userId`) se
+    excluyen a propósito, no tienen un destino único que buscar. `searchPages()`
+    es la función pura de filtrado (label + keywords, substring
+    case-insensitive) — sin resultados con query vacío, el dropdown solo
+    aparece mientras se escribe.
+  - **"pantallas que el usuario pueda tener acceso"**: hoy `AuthUser` no
+    tiene permisos granulares (ver bullet de `fullName`/`role` arriba), así
+    que el registro es el mismo para cualquier logeado — el comentario en
+    `header-search.util.ts` deja explícito que el filtrado por permisos
+    llega ahí el día que `AuthUser` los tenga, no inventar un sistema de
+    permisos paralelo solo para el buscador.
+  - **Foco automático**: `viewChild('searchInput')` + un `effect()` en el
+    constructor que llama `.focus()` cuando `searchOpen()` pasa a `true` —
+    no se puede enfocar en el mismo tick de `openSearch()` porque el
+    `@else` todavía no renderizó el `<input>`.
+  - **Cerrar sin perder el click de un resultado**: cada
+    `.search-box__result` lleva `(mousedown)="$event.preventDefault()"` —
+    evita que el input pierda el foco (y dispare `(blur)="closeSearch()"`)
+    antes de que el `(click)` de navegación llegue a correr. Patrón estándar
+    de combobox, sin necesidad de `setTimeout`. `Escape` cierra explícito
+    (`closeSearch()`), `Enter` navega al primer resultado si hay alguno.
+- **Notificaciones**: mismo patrón de `nz-popover` que ya usaba el selector
+  de paleta (trigger `click`, `nzPopoverPlacement="bottomRight"`) — hoy solo
+  muestra "No tienes notificaciones nuevas." porque no existe todavía un
+  sistema de notificaciones real en la app; el botón queda listo para
+  conectarse a uno sin cambiar el patrón de interacción.
+
 ## Patrón: navegación entre módulos (Menu lateral)
 
 Los módulos de nivel superior se acceden desde `core/layout/menu/` (`Menu`,
@@ -426,24 +475,90 @@ fijo) vs `scopedSales`/`summary` (KPIs, sigue a `period`).
 
 ## Patrón: Drawer de detalle al hacer click en una fila (sin navegar)
 
-Usado en `sales-dashboard` para ver el detalle completo de una venta
-(cliente, artículos, descuentos) sin abandonar la tabla — a diferencia de
-`reconciliation-dashboard`/`difference-management`, que sí navegan a otra
-ruta al hacer click en una fila accionable. Usar Drawer (no ruta) cuando el
-detalle es
-puramente informativo/de solo lectura y no tiene su propio flujo de acciones
-que amerite una URL propia; usar ruta cuando el detalle es "gestionable"
-(como resolver una diferencia).
+Usado en `sales-dashboard` para ver el detalle completo de una venta sin
+abandonar la tabla — a diferencia de `reconciliation-dashboard`/
+`difference-management`, que sí navegan a otra ruta al hacer click en una
+fila accionable. Usar Drawer (no ruta) cuando el detalle es puramente
+informativo/de solo lectura y no tiene su propio flujo de acciones que
+amerite una URL propia; usar ruta cuando el detalle es "gestionable" (como
+resolver una diferencia). Mismo criterio que siguió después `UserDetail`
+(ruta, no drawer — sí es gestionable).
 
 - Estado en el service, no en el componente: `selectedSale = signal<Sale | null>(null)`,
   `openSale(sale)`/`closeSale()`. El template solo hace
   `[nzVisible]="service.selectedSale() !== null"` y `(nzOnClose)="service.closeSale()"`.
 - Contenido con `<ng-container *nzDrawerContent>` + `@if (service.selectedSale(); as sale)`.
+- `nzWidth="50%"` — mitad de la pantalla, no un ancho fijo en px (a
+  diferencia del ancho fijo típico de otros drawers de Ant); ajustar aquí si
+  un futuro drawer necesita otra proporción, no asumir 50% por defecto.
 - Primer uso de `nz-drawer` en el proyecto → necesitó su propia entrada en el
   puente ng-zorro↔tokens (`.ant-drawer-content`, `.ant-drawer-header`,
   `.ant-drawer-title`) — mismo patrón de siempre: cualquier componente nuevo
   de ng-zorro, revisar si trae colores fijos antes de darlo por "ya
   temeado".
+- **Secciones fijas, en este orden**: Resumen de la venta (2 columnas, ver
+  abajo) → Productos (tabla de `items`, con fila `TOTAL` = suma de
+  subtotales únicamente, sin impuestos/propina) → Pagos (tabla de
+  `payments[]` — pago MIXTO real, ver `V-2007` en el mock: BBVA + Efectivo en
+  la misma venta; fila `TOTAL PAGADO` solo se muestra si hay más de un pago)
+  → Descuentos y propinas → Impuestos (base gravable + IVA 16%,
+  `SALE_TAX_RATE` en `sale.util.ts`) → Desglose financiero (el recap final:
+  subtotal, descuento, IVA, propina, total). Los montos de impuesto y total
+  son SIEMPRE derivados (`saleTaxAmount`/`saleTotal` en `sale.util.ts`),
+  nunca un campo guardado aparte que se pueda desincronizar. Excepción
+  deliberada: cuando una venta trae `payments` explícito (pago mixto), esos
+  montos NO se derivan de `saleTotal()` — el reparto entre métodos es un
+  dato propio de esa venta que debe sumar el total, no algo calculable a
+  partir de él (ver `withPayment()` en `sales-mock.data.ts`: respeta
+  `payments` si ya viene, solo deriva un pago único si no).
+
+### Resumen de la venta: 2 columnas, campo "icono + etiqueta + valor"
+
+Patrón nuevo (`.summary-columns`/`.summary-col`/`.summary-field*` en
+`sales-dashboard.scss`) para cuando un grupo de datos relacionados debe
+verse como dos bloques de igual jerarquía en vez de una sola lista larga:
+
+- Grid de 2 columnas fijas (4 campos + 3 campos aquí, pero el layout no
+  asume ningún número concreto — el reparto es decisión de quien lo usa).
+  Colapsa a 1 columna en `max-width: 640px` (divisor pasa de `border-right`
+  a `border-bottom`).
+- El separador entre columnas usa `var(--color-primary)` — **no**
+  `var(--color-border)` — es la única línea divisoria del proyecto con el
+  acento de marca en vez del borde neutro de siempre; úsalo cuando el
+  divisor debe sentirse como parte de la identidad visual (responde al
+  selector de paleta), no como una simple separación estructural.
+- Cada campo: icono SVG inline (`.summary-field__icon`, `color: var(--color-primary)`,
+  `stroke="currentColor"`) + `.summary-field__label` (termina en "`:`") +
+  `.summary-field__value` — o, si el valor es un estado, el `*StatusTag`
+  directo sin envolverlo en `.summary-field__value` (esa clase fuerza
+  `white-space: nowrap` pensado para texto, no para un tag).
+- Icono por campo, no genérico: cada uno referencia visualmente su dato
+  (documento→folio, calendario→fecha, persona→cliente, tarjeta→medio de
+  pago, numeral→referencia, check→estado de venta, eslabones→conciliación).
+  Si un campo nuevo no tiene un icono obvio, es señal de que ese campo no
+  pertenece a este patrón (úsalo para identidad/metadatos, no para
+  cualquier lista de datos).
+
+### Gotcha de CSS: una utilidad compartida puede perder contra un selector
+### local con más especificidad
+
+`.text-right` (de `_data-table.scss`) dejó de aplicarse en los headers de
+"Productos" porque `.sale-drawer__items th { text-align: left; ... }` (1
+clase + 1 elemento) es MÁS específico que `.text-right` sola (1 clase) — el
+header se quedaba a la izquierda mientras su columna de valores ya estaba a
+la derecha, y visualmente parecía que el valor "se corría" a la columna
+siguiente. Nunca asumir que agregar una clase utilidad gana solo por venir
+después en el HTML — si el selector local del componente apunta al mismo
+elemento con igual o mayor especificidad, hay que neutralizarlo
+explícitamente ahí mismo (`&.text-right { text-align: right; }` dentro del
+bloque del componente), no en la utilidad compartida.
+- `sale.reconciliationStatus` reusa `MatchStatus`/`MatchStatusTag` (no un
+  enum nuevo "para ventas") — es el mismo concepto que en
+  `reconciliation-dashboard`: ¿ya se cruzó este registro contra lo que
+  liquidó el proveedor? `SaleStatus` (`completada`/`cancelada`, su propio
+  `SaleStatusTag`) es un concepto DISTINTO — si la venta en sí se completó o
+  se canceló — y ambos se muestran juntos en "Resumen de la venta" sin
+  fusionarse en un solo estado.
 
 ## Iconografía
 
@@ -557,6 +672,25 @@ del proyecto que no gira en torno al cruce venta/liquidación — sirve de
 referencia para cualquier futuro módulo de administración (roles, catálogos,
 configuración) con el mismo shape: lista con filtros + alta/edición +
 activar-desactivar + acción sensible con confirmación + auditoría.
+
+**Campos del registro (`AppUser`), organizados en 3 secciones** — la lista
+(`user-list`) muestra exactamente los campos de "Información general":
+Nombre(s)/Apellidos (separados, no un `fullName` guardado — se deriva con la
+función pura `fullName()` del model), Correo, Teléfono, Estado, Fecha de
+creación, Última conexión. El detalle (`user-detail`) repite esos mismos
+campos en su primera tab y agrega dos tabs más: "Seguridad y acceso" (roles
+asignados — **array `roleIds: RoleId[]`, no un rol único** — permisos
+efectivos, estado de la cuenta, email verificado, último inicio de
+sesión/última actividad, intentos fallidos, 2FA, sesiones activas) y
+"Organización" (departamento, área, puesto, administrador responsable —
+`managerId` referencia a otro `AppUser` con rol admin/supervisor, ver
+`MANAGER_ROLE_IDS`). "Historial" (auditoría) se conservó como cuarta tab
+aunque no forma parte de las 3 secciones pedidas — información valiosa ya
+construida, ninguna razón para retirarla. Un rol/permiso NUNCA se re-deriva
+solo en cada render: cambiar `roleIds` resetea `permissions` a la UNIÓN de
+los defaults de los roles seleccionados (`defaultPermissionsForRoles()`), el
+admin ajusta desde ahí — mismo criterio de "rol como punto de partida, no
+techo fijo" que ya regía con un solo rol.
 
 1. **Service `providedIn: 'root'`, no `providers` de componente**: a
    diferencia de `SalesDashboardService`/`ReconciliationService`

@@ -55,6 +55,9 @@
   width: 260px;
 }
 
+// Solo avatar + Nombre(s) — Apellidos/Correo/Teléfono son columnas propias
+// (ver spec de columnas de la tabla), a diferencia de la celda combinada que
+// tenía esta tabla antes de separar nombre y apellido en dos columnas.
 .user-cell {
   display: flex;
   align-items: center;
@@ -67,20 +70,9 @@
   font-weight: 600;
 }
 
-.user-cell__text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .user-cell__name {
   color: var(--color-foreground);
   font-weight: 600;
-}
-
-.user-cell__email {
-  font-size: 12px;
-  color: var(--color-muted-foreground);
 }
 
 .status-switch {

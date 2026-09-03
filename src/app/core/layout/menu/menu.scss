@@ -61,27 +61,60 @@
   }
 }
 
+// `flex: 1 1 auto` es lo que empuja `.app-menu__separator` +
+// `.app-menu__footer` hasta el fondo del menú — crece para llenar el
+// espacio vertical sobrante entre los links de navegación y el pie,
+// sin necesitar `position: absolute` ni alto fijo.
 .app-menu__items {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   gap: 4px;
   padding: 0 8px;
   overflow: hidden;
 }
 
+// Separador entre la navegación y las acciones de sesión/preferencias del
+// pie — el margin horizontal es lo que evita que toque los bordes
+// izquierdo/derecho de la tarjeta del menú (mismo inset que el padding de
+// `.app-menu__items`/`.app-menu__footer`, para que quede alineado con los
+// iconos/etiquetas de arriba y abajo).
+.app-menu__separator {
+  flex: 0 0 auto;
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--color-border);
+}
+
+.app-menu__footer {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 0 8px;
+}
+
 // Mismos efectos de hover/seleccionado que ya existían en el nav de texto
 // del Header (`app-header__nav-link`) — solo se agrega el icono a color
-// primary cuando el link está activo.
+// primary cuando el link está activo. Se reutiliza también para los
+// botones del pie (paleta/tema/logout, ver `.app-menu__footer`), por eso
+// el reset de estilos nativos de `<button>` de abajo.
 .app-menu__link {
   display: flex;
   align-items: center;
+  width: 100%;
   gap: 12px;
   height: 40px;
   padding: 0 10px;
+  border: none;
   border-radius: 8px;
+  background: transparent;
   color: var(--color-muted-foreground);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
   white-space: nowrap;
+  cursor: pointer;
   transition:
     background-color 150ms ease,
     color 150ms ease;
@@ -127,4 +160,37 @@
 
 .app-menu:not(.app-menu--expanded) .app-menu__label {
   display: none;
+}
+
+// --- Selector de paleta (contenido del nz-popover del botón de paleta) ----
+.palette-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 2px;
+}
+
+.palette-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--color-card);
+  outline: 1px solid var(--color-border);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 120ms ease;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.palette-swatch--selected {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: 1px;
 }

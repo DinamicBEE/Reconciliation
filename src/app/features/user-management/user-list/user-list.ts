@@ -13,7 +13,7 @@ import { NzDropdownModule } from 'ng-zorro-antd/dropdown';
 import { NzMenuModule } from 'ng-zorro-antd/menu';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
-import { AppUser, ROLE_LABEL, ROLE_OPTIONS } from '../data/user-management.model';
+import { AppUser, ROLE_OPTIONS, fullName } from '../data/user-management.model';
 import { RoleFilter, StatusFilter, UserManagementService } from '../data/user-management.service';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 
@@ -44,7 +44,7 @@ export class UserList {
   private readonly modal = inject(NzModalService);
   private readonly router = inject(Router);
 
-  protected readonly roleLabel = ROLE_LABEL;
+  protected readonly fullName = fullName;
 
   protected readonly roleOptions: { value: RoleFilter; label: string }[] = [
     { value: 'all', label: 'Todos los roles' },
@@ -74,7 +74,7 @@ export class UserList {
   }
 
   protected initials(user: AppUser): string {
-    return initialsFor(user.fullName);
+    return initialsFor(fullName(user));
   }
 
   protected onRowClick(user: AppUser): void {
@@ -85,7 +85,7 @@ export class UserList {
   // template) para no disparar también onRowClick de la fila completa.
   protected onToggleStatus(user: AppUser, checked: boolean): void {
     this.service.setStatus(user.id, checked ? 'active' : 'inactive');
-    this.message.success(checked ? `${user.fullName} fue activado.` : `${user.fullName} fue desactivado.`);
+    this.message.success(checked ? `${fullName(user)} fue activado.` : `${fullName(user)} fue desactivado.`);
   }
 
   // Confirmación vía NzModalService (no nz-popconfirm) — un popconfirm
@@ -95,12 +95,12 @@ export class UserList {
   protected onResetPasswordClick(user: AppUser): void {
     this.modal.confirm({
       nzTitle: 'Restablecer contraseña',
-      nzContent: `¿Restablecer la contraseña de <b>${user.fullName}</b>? Se generará una nueva contraseña temporal.`,
+      nzContent: `¿Restablecer la contraseña de <b>${fullName(user)}</b>? Se generará una nueva contraseña temporal.`,
       nzOkText: 'Restablecer',
       nzOnOk: () => {
         const tempPassword = this.service.resetPassword(user.id);
         if (tempPassword) {
-          this.message.success(`Contraseña de ${user.fullName} restablecida. Temporal: ${tempPassword}`, { nzDuration: 8000 });
+          this.message.success(`Contraseña de ${fullName(user)} restablecida. Temporal: ${tempPassword}`, { nzDuration: 8000 });
         }
       },
     });
@@ -109,12 +109,12 @@ export class UserList {
   protected onDeleteClick(user: AppUser): void {
     this.modal.confirm({
       nzTitle: 'Eliminar usuario',
-      nzContent: `¿Eliminar a <b>${user.fullName}</b>? Esta acción no se puede deshacer.`,
+      nzContent: `¿Eliminar a <b>${fullName(user)}</b>? Esta acción no se puede deshacer.`,
       nzOkText: 'Eliminar',
       nzOkDanger: true,
       nzOnOk: () => {
         this.service.deleteUser(user.id);
-        this.message.success(`${user.fullName} fue eliminado.`);
+        this.message.success(`${fullName(user)} fue eliminado.`);
       },
     });
   }

@@ -9,6 +9,7 @@ import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
+import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
@@ -18,9 +19,11 @@ import {
   PERMISSIONS,
   PermissionDef,
   PermissionKey,
+  ROLE_LABEL,
   ROLE_OPTIONS,
-  ROLES,
   RoleId,
+  defaultPermissionsForRoles,
+  fullName,
 } from '../data/user-management.model';
 import { UserManagementService } from '../data/user-management.service';
 
@@ -36,6 +39,8 @@ const PERMISSION_GROUPS: { group: string; items: PermissionDef[] }[] = (() => {
   return [...byGroup.entries()].map(([group, items]) => ({ group, items }));
 })();
 
+const PHONE_PATTERN = /^[+]?[0-9()\-\s]{7,20}$/;
+
 @Component({
   selector: 'app-user-detail',
   imports: [
@@ -50,6 +55,7 @@ const PERMISSION_GROUPS: { group: string; items: PermissionDef[] }[] = (() => {
     NzSelectModule,
     NzSwitchModule,
     NzCheckboxModule,
+    NzTagModule,
     NzTabsModule,
     NzModalModule,
   ],
@@ -69,6 +75,8 @@ export class UserDetail {
   private readonly modal = inject(NzModalService);
   private readonly router = inject(Router);
 
+  protected readonly fullName = fullName;
+  protected readonly roleLabel = ROLE_LABEL;
   protected readonly roleOptions = ROLE_OPTIONS;
   protected readonly permissionGroups = PERMISSION_GROUPS;
   protected readonly auditActionLabel = AUDIT_ACTION_LABEL;
@@ -89,26 +97,54 @@ export class UserDetail {
     return id ? this.service.auditForUser(id) : [];
   });
 
-  // Nombre/correo con validación real (requerido, formato) → Reactive Forms,
-  // mismo criterio que login.ts. Rol/estado/permisos son controles simples
-  // sin reglas de validación propias → ngModel directo (mismo criterio que
-  // los filtros de reconciliation-dashboard) — de ahí la mezcla de
-  // FormsModule + ReactiveFormsModule en este componente.
+  // Candidatos a "Administrador responsable" — cualquier admin/supervisor
+  // EXCEPTO el propio usuario que se está editando (no puede ser su propio
+  // responsable).
+  protected readonly managerOptions = computed(() => {
+    const id = this.userId();
+    return this.service
+      .managerCandidates()
+      .filter((m) => m.id !== id)
+      .map((m) => ({ value: m.id, label: fullName(m) }));
+  });
+
+  protected readonly manager = computed<AppUser | null>(() => {
+    const u = this.user();
+    if (!u?.managerId) return null;
+    return this.service.allUsers().find((m) => m.id === u.managerId) ?? null;
+  });
+
+  // Nombre/correo/teléfono con validación real (requerido, formato) →
+  // Reactive Forms, mismo criterio que login.ts. Roles/permisos/estado son
+  // controles simples sin reglas de validación propias → ngModel directo
+  // (mismo criterio que los filtros de reconciliation-dashboard) — de ahí la
+  // mezcla de FormsModule + ReactiveFormsModule en este componente.
   protected readonly infoForm = this.fb.group({
-    fullName: this.fb.control('', [Validators.required, Validators.minLength(3)]),
+    firstName: this.fb.control('', [Validators.required, Validators.minLength(2)]),
+    lastName: this.fb.control('', [Validators.required, Validators.minLength(2)]),
     email: this.fb.control('', [Validators.required, Validators.email]),
+    phone: this.fb.control('', [Validators.required, Validators.pattern(PHONE_PATTERN)]),
+  });
+
+  // "Organización" no se pide al crear — solo aplica editando un usuario
+  // existente (ver CreateUserInput / UserManagementService.createUser).
+  protected readonly orgForm = this.fb.group({
+    department: this.fb.control(''),
+    area: this.fb.control(''),
+    jobTitle: this.fb.control(''),
+    managerId: this.fb.control<string | null>(null),
   });
 
   // --- Estado local de creación (solo aplica cuando isCreate()) ---
-  protected readonly createRoleId = signal<RoleId | null>(null);
+  protected readonly createRoleIds = signal<RoleId[]>([]);
   protected readonly createActive = signal(true);
 
-  // --- Borrador de "Roles y permisos" (solo aplica editando un usuario existente) ---
-  protected readonly draftRoleId = signal<RoleId | null>(null);
+  // --- Borrador de "Seguridad y acceso" (solo aplica editando un usuario existente) ---
+  protected readonly draftRoleIds = signal<RoleId[]>([]);
   protected readonly draftPermissions = signal<Set<PermissionKey>>(new Set());
 
   constructor() {
-    // effect (no computed): reinicia formulario + borradores al entrar a un
+    // effect (no computed): reinicia formularios + borradores al entrar a un
     // usuario distinto — tiene side-effects (patchValue, reset), mismo
     // criterio que DifferenceManagement con tenderMedia()/orderId() (ver
     // difference-management.ts). untracked() al leer el service evita que
@@ -120,14 +156,21 @@ export class UserDetail {
       const found = id ? untracked(() => this.service.allUsers().find((u) => u.id === id) ?? null) : null;
 
       if (found) {
-        this.infoForm.reset({ fullName: found.fullName, email: found.email });
-        this.draftRoleId.set(found.roleId);
+        this.infoForm.reset({ firstName: found.firstName, lastName: found.lastName, email: found.email, phone: found.phone });
+        this.orgForm.reset({
+          department: found.department,
+          area: found.area,
+          jobTitle: found.jobTitle,
+          managerId: found.managerId,
+        });
+        this.draftRoleIds.set([...found.roleIds]);
         this.draftPermissions.set(new Set(found.permissions));
       } else {
-        this.infoForm.reset({ fullName: '', email: '' });
-        this.createRoleId.set(null);
+        this.infoForm.reset({ firstName: '', lastName: '', email: '', phone: '' });
+        this.orgForm.reset({ department: '', area: '', jobTitle: '', managerId: null });
+        this.createRoleIds.set([]);
         this.createActive.set(true);
-        this.draftRoleId.set(null);
+        this.draftRoleIds.set([]);
         this.draftPermissions.set(new Set());
       }
     });
@@ -149,12 +192,12 @@ export class UserDetail {
     });
   }
 
-  // Cambiar de rol resetea el borrador de permisos a los defaults de ese rol
-  // — el admin ajusta desde ahí (ver UserManagementService.changeRole).
-  protected onRoleSelectChange(roleId: RoleId): void {
-    this.draftRoleId.set(roleId);
-    const role = ROLES.find((r) => r.id === roleId)!;
-    this.draftPermissions.set(new Set(role.defaultPermissions));
+  // Cambiar los roles asignados resetea el borrador de permisos a la unión
+  // de los defaults de esos roles — el admin ajusta desde ahí (ver
+  // UserManagementService.changeRoles).
+  protected onRolesSelectChange(roleIds: RoleId[]): void {
+    this.draftRoleIds.set(roleIds);
+    this.draftPermissions.set(new Set(defaultPermissionsForRoles(roleIds)));
   }
 
   protected onSaveInfo(): void {
@@ -169,13 +212,25 @@ export class UserDetail {
     this.message.success('Datos actualizados.');
   }
 
-  protected onSaveRoleAndPermissions(): void {
+  protected onSaveOrganization(): void {
     const id = this.userId();
-    const roleId = this.draftRoleId();
-    if (!id || !roleId) return;
+    if (!id) return;
 
-    this.service.changeRole(id, roleId, [...this.draftPermissions()]);
-    this.message.success('Rol y permisos actualizados.');
+    this.service.updateOrganization(id, this.orgForm.getRawValue());
+    this.message.success('Datos de organización actualizados.');
+  }
+
+  protected onSaveRolesAndPermissions(): void {
+    const id = this.userId();
+    if (!id) return;
+
+    if (this.draftRoleIds().length === 0) {
+      this.message.error('Selecciona al menos un rol.');
+      return;
+    }
+
+    this.service.changeRoles(id, this.draftRoleIds(), [...this.draftPermissions()]);
+    this.message.success('Roles y permisos actualizados.');
   }
 
   protected onToggleStatus(checked: boolean): void {
@@ -186,13 +241,29 @@ export class UserDetail {
     this.message.success(checked ? 'Cuenta activada.' : 'Cuenta desactivada.');
   }
 
+  protected onVerifyEmailClick(): void {
+    const id = this.userId();
+    if (!id) return;
+
+    this.service.setEmailVerified(id);
+    this.message.success('Correo marcado como verificado.');
+  }
+
+  protected onCloseSessionsClick(): void {
+    const id = this.userId();
+    if (!id) return;
+
+    this.service.closeSessions(id);
+    this.message.success('Sesiones activas cerradas.');
+  }
+
   protected onResetPasswordClick(): void {
     const user = this.user();
     if (!user) return;
 
     this.modal.confirm({
       nzTitle: 'Restablecer contraseña',
-      nzContent: `¿Restablecer la contraseña de <b>${user.fullName}</b>? Se generará una nueva contraseña temporal.`,
+      nzContent: `¿Restablecer la contraseña de <b>${fullName(user)}</b>? Se generará una nueva contraseña temporal.`,
       nzOkText: 'Restablecer',
       nzOnOk: () => {
         const tempPassword = this.service.resetPassword(user.id);
@@ -209,7 +280,7 @@ export class UserDetail {
 
     this.modal.confirm({
       nzTitle: 'Eliminar usuario',
-      nzContent: `¿Eliminar a <b>${user.fullName}</b>? Esta acción no se puede deshacer.`,
+      nzContent: `¿Eliminar a <b>${fullName(user)}</b>? Esta acción no se puede deshacer.`,
       nzOkText: 'Eliminar',
       nzOkDanger: true,
       nzOnOk: () => {
@@ -221,12 +292,15 @@ export class UserDetail {
   }
 
   protected onCreateSubmit(): void {
-    if (this.infoForm.invalid || !this.createRoleId()) {
+    if (this.infoForm.invalid || this.createRoleIds().length === 0) {
       this.infoForm.markAllAsTouched();
+      if (this.createRoleIds().length === 0) {
+        this.message.error('Selecciona al menos un rol.');
+      }
       return;
     }
 
-    const { fullName, email } = this.infoForm.getRawValue();
+    const { firstName, lastName, email, phone } = this.infoForm.getRawValue();
     const normalizedEmail = email.trim().toLowerCase();
     const emailTaken = this.service.allUsers().some((u) => u.email.toLowerCase() === normalizedEmail);
     if (emailTaken) {
@@ -235,12 +309,14 @@ export class UserDetail {
     }
 
     const user = this.service.createUser({
-      fullName,
+      firstName,
+      lastName,
       email,
-      roleId: this.createRoleId()!,
+      phone,
+      roleIds: this.createRoleIds(),
       status: this.createActive() ? 'active' : 'inactive',
     });
-    this.message.success(`Usuario ${user.fullName} creado.`);
+    this.message.success(`Usuario ${fullName(user)} creado.`);
     this.router.navigate(['/usuarios', user.id]);
   }
 }

@@ -103,35 +103,93 @@
   text-overflow: ellipsis;
 }
 
-// --- Selector de paleta (contenido del nz-popover) -------------------------
-.palette-picker {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 2px;
+// --- Búsqueda de pantallas ------------------------------------------------
+// El botón de lupa se reemplaza por el input al abrir (no conviven) — mismo
+// contenedor para que el dropdown de resultados se posicione relativo a él.
+.app-header__search {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
-.palette-swatch {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid var(--color-card);
-  outline: 1px solid var(--color-border);
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-box__icon {
+  position: absolute;
+  left: 12px;
+  color: var(--color-muted-foreground);
+  pointer-events: none;
+}
+
+// Esquinas totalmente redondeadas (pill), como el resto de controles
+// interactivos del Header — icono de lupa a la izquierda, dentro del input.
+.search-box__input {
+  width: 240px;
+  height: 36px;
+  padding: 0 14px 0 36px;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  font-size: 13px;
+
+  &::placeholder {
+    color: var(--color-muted-foreground);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+}
+
+.search-box__results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.search-box__result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  font-size: 13px;
   cursor: pointer;
-  padding: 0;
-  transition: transform 120ms ease;
 
-  &:hover {
-    transform: scale(1.1);
-  }
-
+  &:hover,
   &:focus-visible {
-    outline: 2px solid var(--color-ring);
-    outline-offset: 2px;
+    background: var(--color-muted);
+    outline: none;
   }
 }
 
-.palette-swatch--selected {
-  outline: 2px solid var(--color-foreground);
-  outline-offset: 1px;
+// --- Notificaciones (contenido del nz-popover) -----------------------------
+.notifications-empty {
+  padding: 8px 4px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
 }

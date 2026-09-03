@@ -74,4 +74,96 @@
       <span class="app-menu__label">Usuarios</span>
     </a>
   </div>
+
+  <div class="app-menu__separator"></div>
+
+  <div class="app-menu__footer">
+    <button
+      type="button"
+      class="app-menu__link"
+      nz-popover
+      [nzPopoverContent]="paletteContent"
+      nzPopoverTrigger="click"
+      nzPopoverPlacement="rightBottom"
+      aria-label="Cambiar paleta de colores"
+      [attr.title]="!menu.expanded() ? 'Paleta de colores' : null"
+    >
+      <span class="app-menu__icon">
+        <!-- paleta de colores -->
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="7.5" r="1.3" fill="currentColor" stroke="none" />
+          <circle cx="16.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="16.5" r="1.3" fill="currentColor" stroke="none" />
+          <circle cx="7.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+        </svg>
+      </span>
+      <span class="app-menu__label">Paleta de colores</span>
+    </button>
+
+    <button
+      type="button"
+      class="app-menu__link"
+      (click)="theme.toggle()"
+      [attr.aria-label]="theme.mode() === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+      [attr.title]="!menu.expanded() ? (theme.mode() === 'dark' ? 'Modo claro' : 'Modo oscuro') : null"
+    >
+      <span class="app-menu__icon">
+        @if (theme.mode() === 'dark') {
+          <!-- sol -->
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="4" />
+            <path
+              stroke-linecap="round"
+              d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+            />
+          </svg>
+        } @else {
+          <!-- luna -->
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"
+            />
+          </svg>
+        }
+      </span>
+      <span class="app-menu__label">{{ theme.mode() === 'dark' ? 'Modo claro' : 'Modo oscuro' }}</span>
+    </button>
+
+    <button
+      type="button"
+      class="app-menu__link"
+      (click)="onLogout()"
+      aria-label="Cerrar sesión"
+      [attr.title]="!menu.expanded() ? 'Cerrar sesión' : null"
+    >
+      <span class="app-menu__icon">
+        <!-- salir -->
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10 17l5-5-5-5" />
+          <path stroke-linecap="round" d="M15 12H3" />
+        </svg>
+      </span>
+      <span class="app-menu__label">Cerrar sesión</span>
+    </button>
+  </div>
 </nav>
+
+<ng-template #paletteContent>
+  <div class="palette-picker">
+    @for (opt of palette.options; track opt.hex) {
+      <button
+        type="button"
+        class="palette-swatch"
+        [class.palette-swatch--selected]="palette.selected() === opt.hex"
+        [style.background]="opt.hex"
+        [attr.aria-label]="'Usar acento ' + opt.name"
+        [attr.title]="opt.name"
+        (click)="onSwatchClick(opt.hex)"
+      ></button>
+    }
+  </div>
+</ng-template>
