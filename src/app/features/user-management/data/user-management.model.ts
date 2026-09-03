@@ -3,7 +3,8 @@
 // ("Estructura de carpetas"). No confundir con `AuthUser` de
 // `features/auth/data/auth.service.ts`: ese es el tipo mínimo de sesión
 // (usuario que inició sesión); `AppUser` es el registro administrable
-// completo (rol, permisos, estado, auditoría) que ve este módulo.
+// completo (roles, permisos, estado, seguridad, organización) que ve este
+// módulo.
 
 export type UserStatus = 'active' | 'inactive';
 
@@ -30,25 +31,61 @@ export interface RoleDef {
   label: string;
   description: string;
   // Permisos que un usuario recién asignado a este rol recibe por defecto —
-  // el admin puede ajustarlos después por usuario (ver "Roles y permisos" en
-  // user-detail). Cambiar de rol RESETEA a este set (ver
-  // UserManagementService.changeRole).
+  // el admin puede ajustarlos después por usuario (ver "Seguridad y acceso"
+  // en user-detail). Cambiar los roles asignados RESETEA a la unión de estos
+  // sets (ver UserManagementService.changeRoles / defaultPermissionsForRoles).
   defaultPermissions: PermissionKey[];
 }
 
 export interface AppUser {
   id: string;
-  fullName: string;
-  email: string;
-  roleId: RoleId;
-  permissions: PermissionKey[];
-  status: UserStatus;
-  createdAt: string; // ISO datetime
-  lastAccessAt: string | null; // ISO datetime — null = nunca ha iniciado sesión
+  // "Información general" — mismos campos que la lista (ver user-list).
+  firstName: string; // Nombre(s)
+  lastName: string; // Apellidos
+  email: string; // Correo electrónico
+  phone: string; // Teléfono
+  status: UserStatus; // Estado
+  createdAt: string; // ISO datetime — Fecha de creación
+  lastAccessAt: string | null; // ISO datetime — Última conexión / último inicio de sesión; null = nunca ha iniciado sesión
+
+  // "Seguridad y acceso" — roleIds/permissions son editables; el resto lo
+  // reporta el sistema (aquí, simulado) y no tiene control de edición propio
+  // salvo las acciones puntuales que expone el service (verificar correo,
+  // cerrar sesiones).
+  roleIds: RoleId[]; // Roles asignados — al menos uno
+  permissions: PermissionKey[]; // Permisos efectivos (puede divergir del default de sus roles, ver arriba)
+  emailVerified: boolean;
+  lastActivityAt: string | null; // ISO datetime — distinto de lastAccessAt: es la última acción dentro de la app, no el último login
+  failedLoginAttempts: number;
+  twoFactorEnabled: boolean;
+  activeSessions: number;
+
+  // "Organización" — todos opcionales/editables en cualquier momento; no se
+  // piden al crear la cuenta (ver CreateUserInput), se completan después.
+  department: string; // Departamento
+  area: string; // Área
+  jobTitle: string; // Cargo o puesto
+  managerId: string | null; // Administrador responsable — id de otro AppUser (admin/supervisor), null = sin asignar
+}
+
+export function fullName(user: Pick<AppUser, 'firstName' | 'lastName'>): string {
+  return `${user.firstName} ${user.lastName}`.trim();
+}
+
+// Unión de los defaultPermissions de cada rol asignado — punto de partida al
+// crear un usuario o al cambiar sus roles (ver UserManagementService).
+export function defaultPermissionsForRoles(roleIds: RoleId[]): PermissionKey[] {
+  const set = new Set<PermissionKey>();
+  for (const roleId of roleIds) {
+    const role = ROLES.find((r) => r.id === roleId);
+    role?.defaultPermissions.forEach((p) => set.add(p));
+  }
+  return [...set];
 }
 
 // created/updated/role_changed/permissions_changed/activated/deactivated/
-// password_reset/deleted — un enum cerrado en vez de texto libre para poder
+// password_reset/deleted/organization_updated/email_verified/
+// sessions_closed — un enum cerrado en vez de texto libre para poder
 // filtrar y, eventualmente, dar color/ícono propio por tipo (mismo criterio
 // que MatchStatus/SaleStatus, ver MASTER.md).
 export type AuditAction =
@@ -59,7 +96,10 @@ export type AuditAction =
   | 'activated'
   | 'deactivated'
   | 'password_reset'
-  | 'deleted';
+  | 'deleted'
+  | 'organization_updated'
+  | 'email_verified'
+  | 'sessions_closed';
 
 export interface AuditLogEntry {
   id: string;
@@ -113,6 +153,12 @@ export const ROLE_LABEL: Record<RoleId, string> = Object.fromEntries(
 
 export const ROLE_OPTIONS: { value: RoleId; label: string }[] = ROLES.map((r) => ({ value: r.id, label: r.label }));
 
+// Roles considerados "responsables" a efectos de "Administrador responsable"
+// (Organización) — cualquier AppUser con al menos uno de estos roles puede
+// elegirse como responsable de otro. Auditor/Analista quedan fuera a
+// propósito: son roles de operación/consulta, no de gestión de personas.
+export const MANAGER_ROLE_IDS: RoleId[] = ['admin', 'supervisor'];
+
 export const PERMISSIONS: PermissionDef[] = [
   { key: 'view_dashboard', label: 'Ver resumen de venta', group: 'Consulta' },
   { key: 'view_reconciliation', label: 'Ver conciliación', group: 'Consulta' },
@@ -127,10 +173,13 @@ export const PERMISSIONS: PermissionDef[] = [
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   created: 'Usuario creado',
   updated: 'Datos actualizados',
-  role_changed: 'Rol modificado',
+  role_changed: 'Roles modificados',
   permissions_changed: 'Permisos modificados',
   activated: 'Cuenta activada',
   deactivated: 'Cuenta desactivada',
   password_reset: 'Contraseña restablecida',
   deleted: 'Usuario eliminado',
+  organization_updated: 'Datos organizacionales actualizados',
+  email_verified: 'Correo verificado manualmente',
+  sessions_closed: 'Sesiones activas cerradas',
 };

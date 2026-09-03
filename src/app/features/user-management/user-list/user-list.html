@@ -77,10 +77,13 @@
     <nz-table #tbl [nzData]="service.filteredUsers()" [nzPageSize]="10" nzSize="middle">
       <thead>
         <tr>
-          <th>Usuario</th>
-          <th>Rol</th>
+          <th>Nombre(s)</th>
+          <th>Apellidos</th>
+          <th>Correo electrónico</th>
+          <th>Teléfono</th>
           <th>Estado</th>
-          <th>Último acceso</th>
+          <th>Fecha de creación</th>
+          <th>Última conexión</th>
           <th class="text-right">Acciones</th>
         </tr>
       </thead>
@@ -90,15 +93,12 @@
             <td>
               <div class="user-cell">
                 <nz-avatar class="user-cell__avatar" [nzText]="initials(user)" [ngStyle]="avatarStyle(user)" />
-                <div class="user-cell__text">
-                  <span class="user-cell__name">{{ user.fullName }}</span>
-                  <span class="user-cell__email col-truncate" style="--col-max-width: 240px" [attr.title]="user.email">
-                    {{ user.email }}
-                  </span>
-                </div>
+                <span class="user-cell__name">{{ user.firstName }}</span>
               </div>
             </td>
-            <td>{{ roleLabel[user.roleId] }}</td>
+            <td>{{ user.lastName }}</td>
+            <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="user.email">{{ user.email }}</td>
+            <td class="font-mono">{{ user.phone }}</td>
             <td (click)="$event.stopPropagation()">
               <label class="status-switch">
                 <nz-switch
@@ -111,6 +111,7 @@
                 </span>
               </label>
             </td>
+            <td class="font-mono">{{ user.createdAt | date: 'dd/MM/yyyy' }}</td>
             <td class="font-mono">
               @if (user.lastAccessAt) {
                 {{ user.lastAccessAt | date: 'dd/MM/yyyy HH:mm' }}
@@ -149,7 +150,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="5" class="text-muted user-list__empty">Ningún usuario coincide con los filtros aplicados.</td>
+            <td colspan="8" class="text-muted user-list__empty">Ningún usuario coincide con los filtros aplicados.</td>
           </tr>
         }
       </tbody>

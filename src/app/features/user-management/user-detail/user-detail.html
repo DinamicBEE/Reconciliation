@@ -12,30 +12,49 @@
         </svg>
         Volver a usuarios
       </a>
-      <h1 class="user-detail__title">
-        {{ isCreate() ? 'Nuevo usuario' : user()?.fullName }}
-      </h1>
+      <div class="user-detail__title-row">
+        <h1 class="user-detail__title">
+          {{ isCreate() ? 'Nuevo usuario' : fullName(user()!) }}
+        </h1>
+        @if (!isCreate()) {
+          <button nz-button nzDanger type="button" (click)="onDeleteClick()">Eliminar usuario</button>
+        }
+      </div>
     </div>
 
     @if (isCreate()) {
       <nz-card [nzBodyStyle]="{ padding: '20px' }">
         <form nz-form [formGroup]="infoForm" (ngSubmit)="onCreateSubmit()" class="user-form">
           <nz-form-item>
-            <nz-form-label nzFor="fullName" nzRequired>Nombre completo</nz-form-label>
-            <nz-form-control [nzErrorTip]="fullNameErrorTpl">
-              <input nz-input id="fullName" formControlName="fullName" placeholder="Nombre y apellido" />
+            <nz-form-label nzFor="firstName" nzRequired>Nombre(s)</nz-form-label>
+            <nz-form-control [nzErrorTip]="firstNameErrorTpl">
+              <input nz-input id="firstName" formControlName="firstName" placeholder="Nombre(s)" />
             </nz-form-control>
           </nz-form-item>
-          <ng-template #fullNameErrorTpl let-control>
+          <ng-template #firstNameErrorTpl let-control>
             @if (control.hasError('required')) {
-              Ingresa el nombre completo.
+              Ingresa el/los nombre(s).
             } @else if (control.hasError('minlength')) {
-              Debe tener al menos 3 caracteres.
+              Debe tener al menos 2 caracteres.
             }
           </ng-template>
 
           <nz-form-item>
-            <nz-form-label nzFor="email" nzRequired>Correo</nz-form-label>
+            <nz-form-label nzFor="lastName" nzRequired>Apellidos</nz-form-label>
+            <nz-form-control [nzErrorTip]="lastNameErrorTpl">
+              <input nz-input id="lastName" formControlName="lastName" placeholder="Apellidos" />
+            </nz-form-control>
+          </nz-form-item>
+          <ng-template #lastNameErrorTpl let-control>
+            @if (control.hasError('required')) {
+              Ingresa los apellidos.
+            } @else if (control.hasError('minlength')) {
+              Debe tener al menos 2 caracteres.
+            }
+          </ng-template>
+
+          <nz-form-item>
+            <nz-form-label nzFor="email" nzRequired>Correo electrónico</nz-form-label>
             <nz-form-control [nzErrorTip]="emailErrorTpl">
               <input nz-input id="email" type="email" formControlName="email" placeholder="usuario@conciliacion.mx" />
             </nz-form-control>
@@ -49,14 +68,29 @@
           </ng-template>
 
           <nz-form-item>
-            <nz-form-label nzFor="createRole" nzRequired>Rol inicial</nz-form-label>
+            <nz-form-label nzFor="phone" nzRequired>Teléfono</nz-form-label>
+            <nz-form-control [nzErrorTip]="phoneErrorTpl">
+              <input nz-input id="phone" formControlName="phone" placeholder="+52 55 1234 5678" />
+            </nz-form-control>
+          </nz-form-item>
+          <ng-template #phoneErrorTpl let-control>
+            @if (control.hasError('required')) {
+              Ingresa un teléfono.
+            } @else if (control.hasError('pattern')) {
+              El teléfono no es válido.
+            }
+          </ng-template>
+
+          <nz-form-item>
+            <nz-form-label nzFor="createRoles" nzRequired>Roles asignados</nz-form-label>
             <nz-form-control>
               <nz-select
-                id="createRole"
-                [ngModel]="createRoleId()"
+                id="createRoles"
+                nzMode="multiple"
+                [ngModel]="createRoleIds()"
                 [ngModelOptions]="{ standalone: true }"
-                (ngModelChange)="createRoleId.set($event)"
-                placeholder="Selecciona un rol"
+                (ngModelChange)="createRoleIds.set($event)"
+                placeholder="Selecciona uno o más roles"
               >
                 @for (opt of roleOptions; track opt.value) {
                   <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
@@ -79,58 +113,48 @@
             </nz-form-control>
           </nz-form-item>
 
+          <p class="text-muted user-form__hint">
+            Departamento, área, puesto y responsable se completan después, desde la pestaña "Organización".
+          </p>
+
           <button nz-button nzType="primary" type="submit">Crear usuario</button>
         </form>
       </nz-card>
     } @else if (user(); as u) {
-      <div class="user-detail__status-bar">
-        <label class="status-switch">
-          <nz-switch
-            [ngModel]="u.status === 'active'"
-            [ngModelOptions]="{ standalone: true }"
-            (ngModelChange)="onToggleStatus($event)"
-          />
-          <span [class.text-success]="u.status === 'active'" [class.text-muted]="u.status === 'inactive'">
-            {{ u.status === 'active' ? 'Cuenta activa' : 'Cuenta inactiva' }}
-          </span>
-        </label>
-
-        <span class="text-muted user-detail__meta">Creado el {{ u.createdAt | date: 'dd/MM/yyyy' }}</span>
-
-        <span class="text-muted user-detail__meta">
-          Último acceso:
-          @if (u.lastAccessAt) {
-            {{ u.lastAccessAt | date: 'dd/MM/yyyy HH:mm' }}
-          } @else {
-            Nunca
-          }
-        </span>
-
-        <button nz-button nzDanger type="button" class="user-detail__delete-btn" (click)="onDeleteClick()">
-          Eliminar usuario
-        </button>
-      </div>
-
       <nz-tabs>
         <nz-tab nzTitle="Información general">
           <nz-card [nzBodyStyle]="{ padding: '20px' }">
             <form nz-form [formGroup]="infoForm" (ngSubmit)="onSaveInfo()" class="user-form">
               <nz-form-item>
-                <nz-form-label nzFor="editFullName" nzRequired>Nombre completo</nz-form-label>
-                <nz-form-control [nzErrorTip]="editFullNameErrorTpl">
-                  <input nz-input id="editFullName" formControlName="fullName" placeholder="Nombre y apellido" />
+                <nz-form-label nzFor="editFirstName" nzRequired>Nombre(s)</nz-form-label>
+                <nz-form-control [nzErrorTip]="editFirstNameErrorTpl">
+                  <input nz-input id="editFirstName" formControlName="firstName" placeholder="Nombre(s)" />
                 </nz-form-control>
               </nz-form-item>
-              <ng-template #editFullNameErrorTpl let-control>
+              <ng-template #editFirstNameErrorTpl let-control>
                 @if (control.hasError('required')) {
-                  Ingresa el nombre completo.
+                  Ingresa el/los nombre(s).
                 } @else if (control.hasError('minlength')) {
-                  Debe tener al menos 3 caracteres.
+                  Debe tener al menos 2 caracteres.
                 }
               </ng-template>
 
               <nz-form-item>
-                <nz-form-label nzFor="editEmail" nzRequired>Correo</nz-form-label>
+                <nz-form-label nzFor="editLastName" nzRequired>Apellidos</nz-form-label>
+                <nz-form-control [nzErrorTip]="editLastNameErrorTpl">
+                  <input nz-input id="editLastName" formControlName="lastName" placeholder="Apellidos" />
+                </nz-form-control>
+              </nz-form-item>
+              <ng-template #editLastNameErrorTpl let-control>
+                @if (control.hasError('required')) {
+                  Ingresa los apellidos.
+                } @else if (control.hasError('minlength')) {
+                  Debe tener al menos 2 caracteres.
+                }
+              </ng-template>
+
+              <nz-form-item>
+                <nz-form-label nzFor="editEmail" nzRequired>Correo electrónico</nz-form-label>
                 <nz-form-control [nzErrorTip]="editEmailErrorTpl">
                   <input nz-input id="editEmail" type="email" formControlName="email" placeholder="usuario@conciliacion.mx" />
                 </nz-form-control>
@@ -143,36 +167,77 @@
                 }
               </ng-template>
 
-              <div class="user-form__actions">
-                <button nz-button nzType="primary" type="submit">Guardar cambios</button>
-                <button nz-button nzType="default" type="button" (click)="onResetPasswordClick()">
-                  Restablecer contraseña
-                </button>
-              </div>
+              <nz-form-item>
+                <nz-form-label nzFor="editPhone" nzRequired>Teléfono</nz-form-label>
+                <nz-form-control [nzErrorTip]="editPhoneErrorTpl">
+                  <input nz-input id="editPhone" formControlName="phone" placeholder="+52 55 1234 5678" />
+                </nz-form-control>
+              </nz-form-item>
+              <ng-template #editPhoneErrorTpl let-control>
+                @if (control.hasError('required')) {
+                  Ingresa un teléfono.
+                } @else if (control.hasError('pattern')) {
+                  El teléfono no es válido.
+                }
+              </ng-template>
+
+              <button nz-button nzType="primary" type="submit" class="user-form__submit">Guardar cambios</button>
             </form>
+          </nz-card>
+
+          <nz-card [nzBodyStyle]="{ padding: '20px' }">
+            <dl class="detail-facts">
+              <dt>Estado</dt>
+              <dd>
+                <label class="status-switch">
+                  <nz-switch
+                    [ngModel]="u.status === 'active'"
+                    [ngModelOptions]="{ standalone: true }"
+                    (ngModelChange)="onToggleStatus($event)"
+                  />
+                  <span [class.text-success]="u.status === 'active'" [class.text-muted]="u.status === 'inactive'">
+                    {{ u.status === 'active' ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </label>
+              </dd>
+
+              <dt>Fecha de creación</dt>
+              <dd class="font-mono">{{ u.createdAt | date: 'dd/MM/yyyy' }}</dd>
+
+              <dt>Última conexión</dt>
+              <dd class="font-mono">
+                @if (u.lastAccessAt) {
+                  {{ u.lastAccessAt | date: 'dd/MM/yyyy HH:mm' }}
+                } @else {
+                  <span class="text-muted">Nunca</span>
+                }
+              </dd>
+            </dl>
           </nz-card>
         </nz-tab>
 
-        <nz-tab nzTitle="Roles y permisos">
+        <nz-tab nzTitle="Seguridad y acceso">
           <nz-card [nzBodyStyle]="{ padding: '20px' }">
             <div class="role-field">
-              <label class="role-field__label" for="draftRole">Rol</label>
+              <label class="role-field__label" for="draftRoles">Roles asignados</label>
               <nz-select
-                id="draftRole"
+                id="draftRoles"
                 class="role-field__select"
-                [ngModel]="draftRoleId()"
-                (ngModelChange)="onRoleSelectChange($event)"
+                nzMode="multiple"
+                [ngModel]="draftRoleIds()"
+                (ngModelChange)="onRolesSelectChange($event)"
               >
                 @for (opt of roleOptions; track opt.value) {
                   <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
                 }
               </nz-select>
               <p class="text-muted role-field__hint">
-                Cambiar el rol restablece los permisos a los valores por defecto de ese rol — puedes ajustarlos abajo.
+                Cambiar los roles restablece los permisos a los valores por defecto de esos roles — puedes ajustarlos abajo.
               </p>
             </div>
 
             <div class="permission-groups">
+              <span class="permission-groups__label">Permisos</span>
               @for (grp of permissionGroups; track grp.group) {
                 <div class="permission-group">
                   <h3 class="permission-group__title">{{ grp.group }}</h3>
@@ -190,9 +255,112 @@
               }
             </div>
 
-            <button nz-button nzType="primary" type="button" (click)="onSaveRoleAndPermissions()">
-              Guardar permisos
-            </button>
+            <div class="user-form__actions">
+              <button nz-button nzType="primary" type="button" (click)="onSaveRolesAndPermissions()">
+                Guardar permisos
+              </button>
+              <button nz-button nzType="default" type="button" (click)="onResetPasswordClick()">
+                Restablecer contraseña
+              </button>
+            </div>
+          </nz-card>
+
+          <nz-card [nzBodyStyle]="{ padding: '20px' }">
+            <dl class="detail-facts">
+              <dt>Estado de la cuenta</dt>
+              <dd><nz-tag [nzColor]="u.status === 'active' ? 'success' : 'default'">{{ u.status === 'active' ? 'Activo' : 'Inactivo' }}</nz-tag></dd>
+
+              <dt>Email verificado</dt>
+              <dd class="detail-facts__inline">
+                <nz-tag [nzColor]="u.emailVerified ? 'success' : 'warning'">
+                  {{ u.emailVerified ? 'Verificado' : 'No verificado' }}
+                </nz-tag>
+                @if (!u.emailVerified) {
+                  <button nz-button nzType="link" nzSize="small" type="button" (click)="onVerifyEmailClick()">
+                    Marcar como verificado
+                  </button>
+                }
+              </dd>
+
+              <dt>Último inicio de sesión</dt>
+              <dd class="font-mono">
+                @if (u.lastAccessAt) {
+                  {{ u.lastAccessAt | date: 'dd/MM/yyyy HH:mm' }}
+                } @else {
+                  <span class="text-muted">Nunca</span>
+                }
+              </dd>
+
+              <dt>Última actividad</dt>
+              <dd class="font-mono">
+                @if (u.lastActivityAt) {
+                  {{ u.lastActivityAt | date: 'dd/MM/yyyy HH:mm' }}
+                } @else {
+                  <span class="text-muted">Sin actividad</span>
+                }
+              </dd>
+
+              <dt>Intentos fallidos de acceso</dt>
+              <dd [class.text-destructive]="u.failedLoginAttempts > 0" [class.text-muted]="u.failedLoginAttempts === 0">
+                {{ u.failedLoginAttempts }}
+              </dd>
+
+              <dt>Autenticación de dos factores (2FA)</dt>
+              <dd><nz-tag [nzColor]="u.twoFactorEnabled ? 'success' : 'default'">{{ u.twoFactorEnabled ? 'Activada' : 'Desactivada' }}</nz-tag></dd>
+
+              <dt>Sesiones activas</dt>
+              <dd class="detail-facts__inline">
+                <span class="font-mono">{{ u.activeSessions }}</span>
+                @if (u.activeSessions > 0) {
+                  <button nz-button nzType="link" nzSize="small" type="button" (click)="onCloseSessionsClick()">
+                    Cerrar sesiones
+                  </button>
+                }
+              </dd>
+            </dl>
+          </nz-card>
+        </nz-tab>
+
+        <nz-tab nzTitle="Organización">
+          <nz-card [nzBodyStyle]="{ padding: '20px' }">
+            <form nz-form [formGroup]="orgForm" (ngSubmit)="onSaveOrganization()" class="user-form">
+              <nz-form-item>
+                <nz-form-label nzFor="department">Departamento</nz-form-label>
+                <nz-form-control>
+                  <input nz-input id="department" formControlName="department" placeholder="p. ej. Finanzas" />
+                </nz-form-control>
+              </nz-form-item>
+
+              <nz-form-item>
+                <nz-form-label nzFor="area">Área</nz-form-label>
+                <nz-form-control>
+                  <input nz-input id="area" formControlName="area" placeholder="p. ej. Conciliación Bancaria" />
+                </nz-form-control>
+              </nz-form-item>
+
+              <nz-form-item>
+                <nz-form-label nzFor="jobTitle">Cargo o puesto</nz-form-label>
+                <nz-form-control>
+                  <input nz-input id="jobTitle" formControlName="jobTitle" placeholder="p. ej. Analista de Conciliación" />
+                </nz-form-control>
+              </nz-form-item>
+
+              <nz-form-item>
+                <nz-form-label nzFor="managerId">Administrador responsable</nz-form-label>
+                <nz-form-control>
+                  <nz-select id="managerId" formControlName="managerId" nzAllowClear nzPlaceholder="Sin asignar">
+                    @for (opt of managerOptions(); track opt.value) {
+                      <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+                    }
+                  </nz-select>
+                  @if (manager(); as m) {
+                    <a class="org-manager-link" [routerLink]="['/usuarios', m.id]">Ver perfil de {{ fullName(m) }}</a>
+                  }
+                </nz-form-control>
+              </nz-form-item>
+
+              <button nz-button nzType="primary" type="submit" class="user-form__submit">Guardar cambios</button>
+            </form>
           </nz-card>
         </nz-tab>
 

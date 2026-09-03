@@ -4,11 +4,13 @@ import {
   AppUser,
   AuditAction,
   AuditLogEntry,
+  MANAGER_ROLE_IDS,
   PermissionKey,
   ROLE_LABEL,
-  ROLES,
   RoleId,
   UserStatus,
+  defaultPermissionsForRoles,
+  fullName,
 } from './user-management.model';
 import { MOCK_AUDIT_LOG, MOCK_USERS } from './user-management-mock.data';
 import { generateTempPassword } from './password.util';
@@ -17,15 +19,26 @@ export type StatusFilter = 'all' | UserStatus;
 export type RoleFilter = 'all' | RoleId;
 
 export interface CreateUserInput {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
-  roleId: RoleId;
+  phone: string;
+  roleIds: RoleId[];
   status: UserStatus;
 }
 
 export interface UpdateUserInfoInput {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
+  phone: string;
+}
+
+export interface UpdateOrganizationInput {
+  department: string;
+  area: string;
+  jobTitle: string;
+  managerId: string | null;
 }
 
 // El siguiente id debe ser mayor al de CUALQUIER id 'uN' ya usado, no solo
@@ -73,9 +86,9 @@ export class UserManagementService {
     const status = this.statusFilter();
 
     return this.usersSignal().filter((user) => {
-      if (role !== 'all' && user.roleId !== role) return false;
+      if (role !== 'all' && !user.roleIds.includes(role)) return false;
       if (status !== 'all' && user.status !== status) return false;
-      if (term && !user.fullName.toLowerCase().includes(term) && !user.email.toLowerCase().includes(term)) return false;
+      if (term && !fullName(user).toLowerCase().includes(term) && !user.email.toLowerCase().includes(term)) return false;
       return true;
     });
   });
@@ -88,6 +101,14 @@ export class UserManagementService {
       inactive: users.filter((u) => u.status === 'inactive').length,
     };
   });
+
+  // Candidatos a "Administrador responsable" (Organización) — cualquier
+  // usuario con un rol de gestión (ver MANAGER_ROLE_IDS). El componente
+  // excluye además al propio usuario que se está editando (no puede ser su
+  // propio responsable).
+  readonly managerCandidates = computed(() =>
+    this.usersSignal().filter((u) => u.roleIds.some((r) => MANAGER_ROLE_IDS.includes(r))),
+  );
 
   // Más reciente primero — todas las pantallas que muestran auditoría
   // (historial por usuario, historial global) parten de este mismo orden.
@@ -111,55 +132,94 @@ export class UserManagementService {
     return this.recentAuditLog().filter((entry) => entry.targetUserId === userId);
   }
 
+  findUser(userId: string): AppUser | null {
+    return this.usersSignal().find((u) => u.id === userId) ?? null;
+  }
+
   createUser(input: CreateUserInput): AppUser {
-    const role = ROLES.find((r) => r.id === input.roleId)!;
     const user: AppUser = {
       id: `u${nextUserSeq++}`,
-      fullName: input.fullName.trim(),
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
       email: input.email.trim(),
-      roleId: input.roleId,
-      permissions: [...role.defaultPermissions],
+      phone: input.phone.trim(),
       status: input.status,
       createdAt: new Date().toISOString(),
       lastAccessAt: null,
+      roleIds: input.roleIds,
+      permissions: defaultPermissionsForRoles(input.roleIds),
+      emailVerified: false,
+      lastActivityAt: null,
+      failedLoginAttempts: 0,
+      twoFactorEnabled: false,
+      activeSessions: 0,
+      // No se piden al crear — se completan después desde la pestaña
+      // "Organización" (ver UpdateOrganizationInput / updateOrganization).
+      department: '',
+      area: '',
+      jobTitle: '',
+      managerId: null,
     };
 
     this.usersSignal.update((list) => [user, ...list]);
-    this.appendAudit(user, 'created', `Usuario creado con rol ${ROLE_LABEL[user.roleId]}.`);
+    this.appendAudit(user, 'created', `Usuario creado con rol${input.roleIds.length > 1 ? 'es' : ''} ${input.roleIds.map((r) => ROLE_LABEL[r]).join(', ')}.`);
     return user;
   }
 
   updateInfo(userId: string, input: UpdateUserInfoInput): void {
-    const user = this.usersSignal().find((u) => u.id === userId);
+    const user = this.findUser(userId);
     if (!user) return;
 
-    const updated: AppUser = { ...user, fullName: input.fullName.trim(), email: input.email.trim() };
+    const updated: AppUser = {
+      ...user,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      email: input.email.trim(),
+      phone: input.phone.trim(),
+    };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-    this.appendAudit(updated, 'updated', 'Se actualizó nombre y/o correo.');
+    this.appendAudit(updated, 'updated', 'Se actualizó nombre, correo y/o teléfono.');
   }
 
-  // Cambiar de rol resetea los permisos al default de ese rol — el
-  // componente parte de ahí y el admin ajusta manualmente lo que necesite
-  // (mismo criterio que un selector de rol en cualquier admin panel: el rol
-  // es un punto de partida, no una regla que se re-derive sola en cada
-  // render).
-  changeRole(userId: string, roleId: RoleId, permissions: PermissionKey[]): void {
-    const user = this.usersSignal().find((u) => u.id === userId);
-    if (!user) return;
+  // Cambiar los roles asignados resetea los permisos a la UNIÓN de los
+  // defaults de esos roles — el componente parte de ahí y el admin ajusta
+  // manualmente lo que necesite (mismo criterio que un selector de rol en
+  // cualquier admin panel: el rol es un punto de partida, no una regla que
+  // se re-derive sola en cada render).
+  changeRoles(userId: string, roleIds: RoleId[], permissions: PermissionKey[]): void {
+    const user = this.findUser(userId);
+    if (!user || roleIds.length === 0) return;
 
-    const roleChanged = user.roleId !== roleId;
-    const updated: AppUser = { ...user, roleId, permissions };
+    const rolesChanged = user.roleIds.length !== roleIds.length || user.roleIds.some((r) => !roleIds.includes(r));
+    const updated: AppUser = { ...user, roleIds, permissions };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
 
-    if (roleChanged) {
-      this.appendAudit(updated, 'role_changed', `Rol cambiado de ${ROLE_LABEL[user.roleId]} a ${ROLE_LABEL[roleId]}.`);
+    if (rolesChanged) {
+      const from = user.roleIds.map((r) => ROLE_LABEL[r]).join(', ');
+      const to = roleIds.map((r) => ROLE_LABEL[r]).join(', ');
+      this.appendAudit(updated, 'role_changed', `Roles cambiados de ${from} a ${to}.`);
     } else {
       this.appendAudit(updated, 'permissions_changed', 'Se actualizaron los permisos asignados.');
     }
   }
 
+  updateOrganization(userId: string, input: UpdateOrganizationInput): void {
+    const user = this.findUser(userId);
+    if (!user) return;
+
+    const updated: AppUser = {
+      ...user,
+      department: input.department.trim(),
+      area: input.area.trim(),
+      jobTitle: input.jobTitle.trim(),
+      managerId: input.managerId,
+    };
+    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+    this.appendAudit(updated, 'organization_updated', 'Se actualizaron departamento, área, puesto y/o responsable.');
+  }
+
   setStatus(userId: string, status: UserStatus): void {
-    const user = this.usersSignal().find((u) => u.id === userId);
+    const user = this.findUser(userId);
     if (!user || user.status === status) return;
 
     const updated: AppUser = { ...user, status };
@@ -167,21 +227,47 @@ export class UserManagementService {
     this.appendAudit(updated, status === 'active' ? 'activated' : 'deactivated', status === 'active' ? 'Cuenta activada.' : 'Cuenta desactivada.');
   }
 
+  setEmailVerified(userId: string): void {
+    const user = this.findUser(userId);
+    if (!user || user.emailVerified) return;
+
+    const updated: AppUser = { ...user, emailVerified: true };
+    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+    this.appendAudit(updated, 'email_verified', 'Un administrador marcó el correo como verificado.');
+  }
+
+  // Cerrar sesiones activas no revoca 2FA ni cambia contraseña — solo el
+  // contador de sesiones abiertas (mismo alcance que un botón "cerrar todas
+  // las sesiones" real: obliga a re-autenticar en cada dispositivo).
+  closeSessions(userId: string): void {
+    const user = this.findUser(userId);
+    if (!user || user.activeSessions === 0) return;
+
+    const updated: AppUser = { ...user, activeSessions: 0 };
+    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+    this.appendAudit(updated, 'sessions_closed', `Se cerraron ${user.activeSessions} sesión(es) activa(s).`);
+  }
+
   // No hay backend/correo real todavía — genera una contraseña temporal y la
   // devuelve para que el componente la muestre UNA vez (toast). El día que
   // exista backend, esto pasa a disparar un correo real y deja de devolver
-  // la contraseña en claro.
+  // la contraseña en claro. También limpia los intentos fallidos — mismo
+  // criterio que un "desbloqueo" real: una contraseña nueva reinicia el
+  // contador de intentos previos.
   resetPassword(userId: string): string | null {
-    const user = this.usersSignal().find((u) => u.id === userId);
+    const user = this.findUser(userId);
     if (!user) return null;
 
+    const updated: AppUser = { ...user, failedLoginAttempts: 0 };
+    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+
     const tempPassword = generateTempPassword();
-    this.appendAudit(user, 'password_reset', 'Se generó una nueva contraseña temporal.');
+    this.appendAudit(updated, 'password_reset', 'Se generó una nueva contraseña temporal.');
     return tempPassword;
   }
 
   deleteUser(userId: string): void {
-    const user = this.usersSignal().find((u) => u.id === userId);
+    const user = this.findUser(userId);
     if (!user) return;
 
     this.usersSignal.update((list) => list.filter((u) => u.id !== userId));
@@ -196,7 +282,7 @@ export class UserManagementService {
       timestamp: new Date().toISOString(),
       actorName: this.auth.currentUser()?.displayName ?? 'Sistema',
       targetUserId: user.id,
-      targetUserName: user.fullName,
+      targetUserName: fullName(user),
       action,
       detail,
     };
