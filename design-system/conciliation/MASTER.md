@@ -310,6 +310,55 @@ su propio componente; `Shell` solo orquesta `<app-header>` +
   Mantenerlos separados evita forzar un campo a cumplir dos propósitos
   distintos.
 
+### Acciones del Header: búsqueda de pantallas y notificaciones
+
+`app-header__actions` (de izquierda a derecha): buscador → notificaciones →
+cerrar sesión → card de usuario. **Ya no hay toggle de tema ni selector de
+paleta en el Header** (se quitaron a pedido explícito). `ThemeService` sigue
+viva porque `login.ts` todavía la usa fuera de `Shell`. Si al leer esto
+`PaletteService`/`ThemeService` ya tienen otro punto de entrada de UI (p.
+ej. en `Menu`), es porque se movieron ahí después de este cambio — no es
+parte de lo que documenta esta sección, revisar el commit que lo haya
+introducido.
+
+- **Búsqueda** (`core/layout/header/header-search.util.ts` +
+  signals en `Header`): el botón de lupa (`.icon-button`) y el input de
+  búsqueda **nunca conviven** — un `@if`/`@else` sobre `searchOpen()` los
+  intercambia dentro del mismo `.app-header__search`, así el dropdown de
+  resultados se posiciona relativo a ese contenedor sin importar cuál de
+  los dos está montado. El input (`.search-box__input`) es un pill
+  (`border-radius: 9999px`) con el icono de lupa **dentro**, a la
+  izquierda, vía `position: absolute` — mismo criterio de "esquinas
+  totalmente redondeadas" que ya usan `.icon-button`/`.palette-swatch`.
+  - `SEARCHABLE_PAGES`: registro estático de rutas SIN params (Dashboard,
+    Conciliación, Usuarios, Nuevo usuario, Auditoría de usuarios) — las
+    rutas con `:param` (`difference-management`, `usuarios/:userId`) se
+    excluyen a propósito, no tienen un destino único que buscar. `searchPages()`
+    es la función pura de filtrado (label + keywords, substring
+    case-insensitive) — sin resultados con query vacío, el dropdown solo
+    aparece mientras se escribe.
+  - **"pantallas que el usuario pueda tener acceso"**: hoy `AuthUser` no
+    tiene permisos granulares (ver bullet de `fullName`/`role` arriba), así
+    que el registro es el mismo para cualquier logeado — el comentario en
+    `header-search.util.ts` deja explícito que el filtrado por permisos
+    llega ahí el día que `AuthUser` los tenga, no inventar un sistema de
+    permisos paralelo solo para el buscador.
+  - **Foco automático**: `viewChild('searchInput')` + un `effect()` en el
+    constructor que llama `.focus()` cuando `searchOpen()` pasa a `true` —
+    no se puede enfocar en el mismo tick de `openSearch()` porque el
+    `@else` todavía no renderizó el `<input>`.
+  - **Cerrar sin perder el click de un resultado**: cada
+    `.search-box__result` lleva `(mousedown)="$event.preventDefault()"` —
+    evita que el input pierda el foco (y dispare `(blur)="closeSearch()"`)
+    antes de que el `(click)` de navegación llegue a correr. Patrón estándar
+    de combobox, sin necesidad de `setTimeout`. `Escape` cierra explícito
+    (`closeSearch()`), `Enter` navega al primer resultado si hay alguno.
+- **Notificaciones**: mismo patrón de `nz-popover` que ya usaba el selector
+  de paleta (trigger `click`, `nzPopoverPlacement="bottomRight"`) — hoy solo
+  muestra "No tienes notificaciones nuevas." porque no existe todavía un
+  sistema de notificaciones real en la app; el botón queda listo para
+  conectarse a uno sin cambiar el patrón de interacción.
+
 ## Patrón: navegación entre módulos (Menu lateral)
 
 Los módulos de nivel superior se acceden desde `core/layout/menu/` (`Menu`,
