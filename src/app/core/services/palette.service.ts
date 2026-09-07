@@ -63,13 +63,16 @@ function buildPalette(seedHex: string, mode: ThemeMode): Record<string, string> 
       '--color-on-secondary': '#ffffff',
       '--color-accent': hsl(h, 80, 40),
       '--color-on-accent': '#ffffff',
-      '--color-background': hsl(h, 40, 98),
+      // Fondo más oscuro que la card (antes 98 vs 99 — casi el mismo tono)
+      // para que la card se note como superficie elevada; muted/border
+      // bajan en cadena para seguir siendo distinguibles del nuevo fondo.
+      '--color-background': hsl(h, 35, 94),
       '--color-foreground': foreground,
-      '--color-card': hsl(h, 20, 99),
+      '--color-card': hsl(h, 15, 99),
       '--color-card-foreground': foreground,
-      '--color-muted': hsl(h, 25, 93),
+      '--color-muted': hsl(h, 25, 90),
       '--color-muted-foreground': hsl(h, 15, 40),
-      '--color-border': hsl(h, 20, 88),
+      '--color-border': hsl(h, 20, 85),
       '--color-ring': primary,
       '--color-chart-donut': primary,
     };
@@ -84,13 +87,16 @@ function buildPalette(seedHex: string, mode: ThemeMode): Record<string, string> 
     '--color-on-secondary': hsl(h, 30, 8),
     '--color-accent': hsl(h, 80, 55),
     '--color-on-accent': hsl(h, 30, 8),
-    '--color-background': hsl(h, 45, 4),
+    // Misma idea que en claro pero invertida: la card debe verse más CLARA
+    // que el fondo (antes 8 vs 4 — apenas un salto de 4 puntos), así se lee
+    // como una superficie elevada sobre la página oscura.
+    '--color-background': hsl(h, 45, 3),
     '--color-foreground': foregroundDark,
-    '--color-card': hsl(h, 35, 8),
+    '--color-card': hsl(h, 30, 13),
     '--color-card-foreground': foregroundDark,
-    '--color-muted': hsl(h, 30, 14),
+    '--color-muted': hsl(h, 28, 19),
     '--color-muted-foreground': hsl(h, 15, 65),
-    '--color-border': hsl(h, 25, 22),
+    '--color-border': hsl(h, 25, 27),
     '--color-ring': foregroundDark,
     '--color-chart-donut': primaryDark,
   };

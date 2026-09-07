@@ -19,14 +19,24 @@
   --color-accent: #a16207;
   --color-on-accent: #ffffff;
 
-  // Superficies
-  --color-background: #f8fafc;
+  // Superficies — el fondo de página es un poco más oscuro que el card
+  // (antes #f8fafc vs #ffffff, una diferencia casi imperceptible) para que
+  // las cards se noten como una superficie elevada distinta de la página,
+  // sin perder legibilidad ni contraste (ver "Patrón: card base").
+  --color-background: #eef1f6;
   --color-foreground: #020617;
   --color-card: #ffffff;
   --color-card-foreground: #020617;
-  --color-muted: #e8ecf1;
+  --color-muted: #e4e8ef;
   --color-muted-foreground: #475569;
-  --color-border: #e2e8f0;
+  --color-border: #dde2ea;
+
+  // Sombra sutil de las cards — no es un color, pero vive junto a los demás
+  // tokens de superficie porque cambia entre claro/oscuro igual que ellos
+  // (un negro puro casi no se nota sobre un fondo ya oscuro).
+  --card-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 4px 10px rgba(15, 23, 42, 0.06);
 
   // Estados (semántica de conciliación)
   --color-success: #16a34a;
@@ -62,11 +72,15 @@ html.dark {
 
   --color-background: #020617;
   --color-foreground: #f8fafc;
-  --color-card: #0e1223;
+  --color-card: #141a2e;
   --color-card-foreground: #f8fafc;
-  --color-muted: #1a1e2f;
+  --color-muted: #1c2338;
   --color-muted-foreground: #94a3b8;
-  --color-border: #334155;
+  --color-border: #33395a;
+
+  --card-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.3);
 
   --color-success: #22c55e;
   --color-on-success: #0f172a;
@@ -136,6 +150,18 @@ html.dark body {
 .ant-card,
 .ant-picker {
   border-color: var(--color-border) !important;
+}
+
+// Card base — aplica a TODA nz-card de la app, actual y futura (ver
+// MASTER.md "Patrón: card base"). Un módulo nuevo que use <nz-card> hereda
+// esto automáticamente, sin tocar su propio .scss. Excepciones puntuales
+// (p. ej. .table-card sin border-radius, ver _data-table.scss) pisan esto
+// con un selector más específico — no tocar esta regla para casos de un
+// solo componente.
+.ant-card {
+  border: 1px solid var(--color-border) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--card-shadow) !important;
 }
 
 // Reforzado con "html body" (mayor especificidad) — estos dos, al estar
@@ -221,4 +247,108 @@ html body .ant-table-thead > tr > th {
 .ant-modal-confirm-body .ant-modal-confirm-title,
 .ant-modal-confirm-body .ant-modal-confirm-content {
   color: var(--color-foreground) !important;
+}
+
+// ---------------------------------------------------------------------------
+// Botones — border-radius uniforme + colores atados a la paleta activa.
+// Antes ni una cosa ni la otra: `.ant-btn` traía sus propios hex fijos
+// (azul #1890ff siempre, sin importar el acento elegido en el selector de
+// paleta) y radius:2px. `PaletteService` ya escribe --color-primary/
+// -secondary/-accent en <html> en runtime — este bloque solo necesita LEER
+// esas variables para que los botones se ajusten automáticamente cuando
+// cambia la paleta, sin tocar PaletteService.
+//
+// Orden de las reglas = orden de especificidad de Ant (mismo criterio que
+// el propio ng-zorro-antd.min.css): base (.ant-btn) → primary → dangerous
+// → dangerous+primary → link → dangerous+link → text → disabled (siempre
+// al final, debe ganarle a cualquier variante de color de arriba). Todas
+// con !important y la MISMA especificidad (una sola clase) — el orden de
+// declaración es lo que decide, igual que en el CSS de Ant.
+//
+// "Semáforo": nzDanger se queda en --color-destructive (fijo, no sigue la
+// paleta) a propósito — es el mismo criterio que los 3 colores semánticos
+// de MASTER.md ("Colores semánticos — fijos, no cambian con la paleta"):
+// un botón de eliminar debe seguir leyéndose como destructivo sin importar
+// qué acento haya elegido el usuario.
+// ---------------------------------------------------------------------------
+.ant-btn {
+  border-radius: 8px !important;
+  background: var(--color-card) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-foreground) !important;
+}
+
+.ant-btn-primary {
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-on-primary) !important;
+}
+
+.ant-btn-primary:hover,
+.ant-btn-primary:focus {
+  filter: brightness(1.1);
+}
+
+.ant-btn-primary:active {
+  filter: brightness(0.9);
+}
+
+.ant-btn-dangerous {
+  background: var(--color-card) !important;
+  border-color: var(--color-destructive) !important;
+  color: var(--color-destructive) !important;
+}
+
+.ant-btn-dangerous.ant-btn-primary {
+  background: var(--color-destructive) !important;
+  border-color: var(--color-destructive) !important;
+  color: var(--color-on-destructive) !important;
+}
+
+.ant-btn-dangerous:hover,
+.ant-btn-dangerous:focus,
+.ant-btn-dangerous.ant-btn-primary:hover,
+.ant-btn-dangerous.ant-btn-primary:focus {
+  filter: brightness(1.1);
+}
+
+.ant-btn-dangerous:active,
+.ant-btn-dangerous.ant-btn-primary:active {
+  filter: brightness(0.9);
+}
+
+.ant-btn-link {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--color-primary) !important;
+}
+
+.ant-btn-dangerous.ant-btn-link {
+  color: var(--color-destructive) !important;
+}
+
+.ant-btn-link:hover,
+.ant-btn-link:focus {
+  filter: brightness(1.15);
+}
+
+.ant-btn-text {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--color-foreground) !important;
+}
+
+.ant-btn-text:hover,
+.ant-btn-text:focus {
+  background: var(--color-muted) !important;
+}
+
+.ant-btn[disabled],
+.ant-btn[disabled]:hover,
+.ant-btn[disabled]:focus,
+.ant-btn[disabled]:active {
+  background: var(--color-muted) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-muted-foreground) !important;
+  filter: none;
 }

@@ -4,7 +4,6 @@ import { FormsModule, NonNullableFormBuilder, ReactiveFormsModule, Validators } 
 import { Router, RouterLink } from '@angular/router';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
@@ -26,6 +25,7 @@ import {
   fullName,
 } from '../data/user-management.model';
 import { UserManagementService } from '../data/user-management.service';
+import { AREAS, DEPARTMENTS, JOB_TITLES } from '../data/organization-catalog';
 
 // Agrupación estática de PERMISSIONS por `group` — se calcula una sola vez
 // al cargar el módulo (la lista de permisos no cambia en runtime), no en
@@ -50,7 +50,6 @@ const PHONE_PATTERN = /^[+]?[0-9()\-\s]{7,20}$/;
     RouterLink,
     NzButtonModule,
     NzCardModule,
-    NzFormModule,
     NzInputModule,
     NzSelectModule,
     NzSwitchModule,
@@ -80,6 +79,9 @@ export class UserDetail {
   protected readonly roleOptions = ROLE_OPTIONS;
   protected readonly permissionGroups = PERMISSION_GROUPS;
   protected readonly auditActionLabel = AUDIT_ACTION_LABEL;
+  protected readonly departments = DEPARTMENTS;
+  protected readonly areas = AREAS;
+  protected readonly jobTitles = JOB_TITLES;
 
   protected readonly isCreate = computed(() => !this.userId());
 

@@ -18,38 +18,6 @@
     </div>
   </div>
 
-  <!-- 3 KPIs, solo stat (ver kpi-card partial / MASTER.md) -->
-  <section class="kpi-grid">
-    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
-      <span class="kpi-card__title">Usuarios totales</span>
-      <div class="kpi-card__body kpi-card__body--stat">
-        <div class="kpi-card__stat">
-          <span class="kpi-card__value">{{ service.summary().total }}</span>
-        </div>
-      </div>
-    </nz-card>
-
-    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
-      <span class="kpi-card__title">Cuentas activas</span>
-      <div class="kpi-card__body kpi-card__body--stat">
-        <div class="kpi-card__stat">
-          <span class="kpi-card__value text-success">{{ service.summary().active }}</span>
-        </div>
-      </div>
-    </nz-card>
-
-    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
-      <span class="kpi-card__title">Cuentas inactivas</span>
-      <div class="kpi-card__body kpi-card__body--stat">
-        <div class="kpi-card__stat">
-          <span class="kpi-card__value" [class.text-muted]="service.summary().inactive === 0" [class.text-destructive]="service.summary().inactive > 0">
-            {{ service.summary().inactive }}
-          </span>
-        </div>
-      </div>
-    </nz-card>
-  </section>
-
   <section class="toolbar">
     <input
       nz-input
@@ -141,9 +109,26 @@
 
               <nz-dropdown-menu #rowMenu="nzDropdownMenu">
                 <ul nz-menu>
-                  <li nz-menu-item [routerLink]="['/usuarios', user.id]">Ver detalle</li>
-                  <li nz-menu-item (click)="onResetPasswordClick(user)">Restablecer contraseña</li>
-                  <li nz-menu-item nzDanger (click)="onDeleteClick(user)">Eliminar</li>
+                  <li nz-menu-item class="menu-item" [routerLink]="['/usuarios', user.id]">
+                    <svg class="menu-item__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2 12c1.3-3.6 5-7 10-7s8.7 3.4 10 7c-1.3 3.6-5 7-10 7s-8.7-3.4-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    Ver detalle
+                  </li>
+                  <li nz-menu-item class="menu-item" (click)="onResetPasswordClick(user)">
+                    <svg class="menu-item__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="5" y="11" width="14" height="9" rx="2" />
+                      <path stroke-linecap="round" d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                    Restablecer contraseña
+                  </li>
+                  <li nz-menu-item class="menu-item" nzDanger (click)="onDeleteClick(user)">
+                    <svg class="menu-item__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m3 0-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7h14Z" />
+                    </svg>
+                    Eliminar
+                  </li>
                 </ul>
               </nz-dropdown-menu>
             </td>

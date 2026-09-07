@@ -1,0 +1,92 @@
+// Patrón "icono + etiqueta + valor" — ver design-system/conciliation/MASTER.md.
+// Promovido desde sales-dashboard.scss ("Resumen de la venta" en el drawer
+// de detalle) al aparecer un segundo consumidor: `user-detail` lo reutiliza
+// en "Información general"/"Organización", con la diferencia de que ahí
+// varios campos son EDITABLES (nz-input/nz-select), no solo texto — de ahí
+// `.summary-field__control`/`.summary-field__error`, que sales-dashboard no
+// necesita (su resumen es de solo lectura).
+
+.summary-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.summary-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+
+  // El separador toma el color primary de la paleta activa a propósito —
+  // es la única línea divisoria del proyecto que no usa --color-border.
+  &:first-child {
+    padding-right: 24px;
+    border-right: 2px solid var(--color-primary);
+
+    @media (max-width: 640px) {
+      padding-right: 0;
+      border-right: none;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--color-primary);
+    }
+  }
+}
+
+// Misma lista de campos que .summary-col pero SIN el divisor — para cuando
+// no hace falta partir en 2 columnas (p. ej. una sola card con pocos
+// campos). No anidar esto dentro de .summary-columns: el divisor de
+// .summary-col depende de ser :first-child de ESE grid.
+.summary-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.summary-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  min-width: 0;
+  // Permite que .summary-field__error baje de línea sin romper la fila
+  // icono+etiqueta+control (los campos de solo lectura nunca la usan).
+  flex-wrap: wrap;
+}
+
+.summary-field__icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.summary-field__label {
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.summary-field__value {
+  color: var(--color-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Variante editable: el "valor" es un control real (nz-input/nz-select),
+// no texto — crece para ocupar el espacio restante de la fila.
+.summary-field__control {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+.summary-field__error {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--color-destructive);
+  margin-left: 24px; // alinea bajo la etiqueta, no bajo el icono
+}

@@ -25,7 +25,7 @@ export const MOCK_USERS: AppUser[] = [
     activeSessions: 2,
     department: 'Tecnología',
     area: 'Sistemas',
-    jobTitle: 'Administrador de plataforma',
+    jobTitle: 'Administrador de Plataforma',
     managerId: null,
   },
   {
@@ -67,7 +67,7 @@ export const MOCK_USERS: AppUser[] = [
     activeSessions: 1,
     department: 'Finanzas',
     area: 'Conciliación Bancaria',
-    jobTitle: 'Supervisora de Conciliación',
+    jobTitle: 'Supervisor de Conciliación',
     managerId: 'u1',
   },
   {
@@ -154,7 +154,7 @@ export const MOCK_USERS: AppUser[] = [
     activeSessions: 0,
     department: 'Finanzas',
     area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación (en incorporación)',
+    jobTitle: 'Analista de Conciliación',
     managerId: 'u3',
   },
   {

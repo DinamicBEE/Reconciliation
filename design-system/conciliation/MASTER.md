@@ -72,15 +72,16 @@ y `html.dark` (oscuro). **Nunca hardcodear un hex en un componente** — siempre
 | `--color-on-primary` | `#ffffff` | `#0f172a` | Texto sobre `--color-primary` |
 | `--color-secondary` | `#1e3a8a` | `#93c5fd` | Énfasis secundario |
 | `--color-accent` | `#a16207` | `#eab308` | CTA |
-| `--color-background` | `#f8fafc` | `#020617` | Fondo de página (`body`, `.shell`) |
+| `--color-background` | `#eef1f6` | `#020617` | Fondo de página (`body`, `.shell`) |
 | `--color-foreground` | `#020617` | `#f8fafc` | Texto principal |
-| `--color-card` | `#ffffff` | `#0e1223` | Fondo de tarjetas/tabla |
+| `--color-card` | `#ffffff` | `#141a2e` | Fondo de tarjetas/tabla |
 | `--color-card-foreground` | `#020617` | `#f8fafc` | Texto sobre card |
-| `--color-muted` | `#e8ecf1` | `#1a1e2f` | Fondos tenues (hover de fila, header de tabla) |
+| `--color-muted` | `#e4e8ef` | `#1c2338` | Fondos tenues (hover de fila, header de tabla) |
 | `--color-muted-foreground` | `#475569` | `#94a3b8` | Texto secundario/etiquetas |
-| `--color-border` | `#e2e8f0` | `#334155` | Bordes |
+| `--color-border` | `#dde2ea` | `#33395a` | Bordes |
 | `--color-ring` | `#0f172a` | `#f8fafc` | Focus ring |
 | `--color-chart-donut` | `#2563eb` | `#eab308` | Acento de gráficas (dona KPI) |
+| `--card-shadow` | ver `styles.scss` | ver `styles.scss` | Sombra de `.ant-card` (ver "Patrón: card base" abajo) |
 
 ### Colores semánticos — **fijos, no cambian con la paleta**
 
@@ -145,6 +146,102 @@ Pendiente conocido: el borde de `nz-range-picker` no toma `--color-border`
 pese a varios overrides reforzados — cosmético, no bloqueante, sin causa raíz
 confirmada aún (posible tooling del entorno de verificación, no descartado
 del todo). Investigar con captura de pantalla real antes de insistir más con CSS.
+
+### Patrón: card base (aplica a TODA `nz-card`, actual y futura)
+
+`.ant-card { border: 1px solid var(--color-border); border-radius: 8px;
+box-shadow: var(--card-shadow); background: var(--color-card); }` vive en el
+bloque de puente de `styles.scss` — **no** en el `.scss` de cada feature. Un
+módulo nuevo que use `<nz-card>` hereda esto automáticamente sin tocar nada;
+no repitas estas propiedades en un componente a menos que necesites
+DESVIARTE (como `.table-card`, ver abajo). Verificar que esto siga
+cumpliéndose es tan simple como: ¿la card nueva se ve con borde + esquinas
+redondeadas + sombra sin que su propio `.scss` declare nada de eso? Si no,
+algo con más especificidad la está pisando (mismo gotcha de siempre, ver
+"Gotcha de CSS" en `sales-dashboard`).
+
+**Gotcha real encontrado con `.table-card`**: la regla de `_data-table.scss`
+(`.table-card { border-radius: 0; }`, la excepción documentada para que las
+tablas mantengan bordes rectos) dejó de funcionar al agregar el bloque de
+arriba — las tablas aparecieron con esquinas redondeadas Y una sombra que
+nunca debieron tener. La causa NO fue especificidad (`.table-card` con su
+atributo `[_ngcontent-*]` de encapsulación YA es más específico que
+`.ant-card` sola) sino **`!important`**: el bloque de card base usa
+`!important`, y una declaración con `!important` le gana a CUALQUIER
+declaración sin `!important` sin importar cuánto más específico sea su
+selector — la especificidad solo desempata entre reglas de la MISMA
+importancia. La solución fue agregar `!important` también a `.table-card`
+(border/border-radius/box-shadow, los tres explícitos a "ninguno", no solo
+heredados). **Regla general**: cualquier excepción puntual a `.ant-card`
+(o a cualquier bridge con `!important` en `styles.scss`) necesita su propio
+`!important` para poder ganar — confirmar visualmente después de escribirla,
+nunca asumir que "más específico" alcanza cuando el otro lado ya usa
+`!important`.
+
+### Patrón: card centrada (formulario de una sola columna)
+
+`.card-centered` (`user-detail.scss`) — `max-width: 560px; margin: 0 auto;`
+sobre el `<nz-card>`, para cuando una pantalla es UN SOLO formulario sin
+nada al lado (creación de usuario, "Organización") y no debe estirarse de
+borde a borde como sí hacen las cards de `.tab-columns` ("Información
+general"/"Seguridad y acceso", ver arriba) o una tabla. Dentro de
+`.card-centered`, el botón de guardar (`.user-form__submit`) se centra
+horizontalmente en vez de pegarse a la izquierda — sigue siendo el último
+elemento del formulario, así que "abajo de la card" ya lo resuelve el flujo
+normal del documento, sin necesitar un spacer ni una card de altura fija.
+
+### Patrón: botones — radius uniforme + color atado a la paleta
+
+Bloque de puente en `styles.scss` (después del de `.ant-card`). Dos
+problemas que resolvió a la vez:
+
+1. **`border-radius` de Ant (2px) → 8px en todos**, mismo valor que las
+   cards — `.ant-btn { border-radius: 8px !important; ... }`.
+2. **Los botones no reaccionaban al selector de paleta**: `.ant-btn-primary`
+   traía su azul de Ant (`#1890ff`) fijo en el CSS precompilado,
+   completamente ajeno a `--color-primary`. Se puentea
+   `background`/`border-color` a `var(--color-primary)` (y `color` a
+   `var(--color-on-primary)`) — como `PaletteService` ya escribe esa
+   variable en `<html>` en runtime, el botón cambia solo, sin tocar
+   `PaletteService`. Hover/focus/active usan `filter: brightness(1.1/0.9)`
+   en vez de un segundo tono fijo (no hay un token "--color-primary-hover" y
+   crear uno solo para esto habría sido de más) — funciona con cualquier
+   matiz sin necesitar más tokens.
+3. **"Semáforo" preservado a propósito**: `nzDanger` (`.ant-btn-dangerous`)
+   se puentea a `var(--color-destructive)` — **fijo, no sigue la paleta** —
+   mismo criterio que los 3 colores semánticos de la sección de tokens
+   ("fijos, no cambian con la paleta"): un botón de eliminar debe seguir
+   leyéndose como destructivo sin importar qué acento haya elegido el
+   usuario. `.ant-btn-text`/`.ant-btn-link` también se puentearon (color de
+   Ant fijo en negro/azul, invisible o desentonado en oscuro) — mismo
+   criterio de siempre: revisar el CSS compilado antes de asumir que un
+   componente "ya está temeado".
+4. **Orden de las reglas = orden de especificidad de Ant** (base → primary →
+   dangerous → dangerous+primary → link → dangerous+link → text →
+   disabled): todas usan `!important` con la MISMA especificidad (una sola
+   clase), así que el orden de declaración decide cuál gana — igual que en
+   el CSS fuente de ng-zorro. Cualquier override LOCAL de color sobre un
+   `nz-button` (como `.row-menu-trigger` en `user-list`) necesita su propio
+   `!important` para poder ganarle a este bloque — mismo gotcha que
+   `.table-card` de arriba.
+
+Pendiente/deuda deliberada: `nz-radio-group`/`nz-switch` siguen sin
+bridgear (azul de Ant fijo) — "los botones" de este pase se entendió como
+`nz-button`/`.ant-btn`, no como cualquier control interactivo de ng-zorro.
+Si un módulo futuro necesita que un radio-toggle o un switch también se
+ajuste a la paleta, es el mismo patrón: revisar el CSS compilado, puentear
+`background`/`border-color` al token correspondiente.
+
+`--color-background` y `--color-card` se separaron a propósito (antes casi
+idénticos — `#f8fafc`/`#ffffff` en claro, una diferencia de 1-2 puntos de
+luminosidad en las paletas derivadas por `PaletteService`) para que la card
+se lea como una superficie ELEVADA sobre la página, no como el mismo plano:
+en claro el fondo baja de tono (más gris) y la card se queda cerca del
+blanco puro; en oscuro es al revés, la card sube de tono (más clara) sobre
+un fondo casi negro. `PaletteService.buildPalette()` seedea `--color-muted`/
+`--color-border` en cadena a partir de esos dos para que seguir siendo
+distinguibles entre sí — si ajustas alguno de los 4, revisa los otros tres
+en la misma función antes de dar por bueno un solo hex.
 
 ## Tipografía
 
@@ -512,11 +609,23 @@ resolver una diferencia). Mismo criterio que siguió después `UserDetail`
   partir de él (ver `withPayment()` en `sales-mock.data.ts`: respeta
   `payments` si ya viene, solo deriva un pago único si no).
 
-### Resumen de la venta: 2 columnas, campo "icono + etiqueta + valor"
+### Patrón "icono + etiqueta + valor" (2 columnas opcional)
 
-Patrón nuevo (`.summary-columns`/`.summary-col`/`.summary-field*` en
-`sales-dashboard.scss`) para cuando un grupo de datos relacionados debe
-verse como dos bloques de igual jerarquía en vez de una sola lista larga:
+`shared/styles/_summary-columns.scss` (`.summary-columns`/`.summary-col`/
+`.summary-field*`) — promovido desde `sales-dashboard.scss` ("Resumen de la
+venta" en el drawer) al aparecer un segundo consumidor: `user-detail`
+("Información general"/"Organización") lo reutiliza para sus campos, con la
+diferencia de que ahí son EDITABLES (nz-input/nz-select dentro de
+`.summary-field__control`, con `.summary-field__error` para el mensaje de
+validación) en vez de solo texto — `sales-dashboard` sigue usando
+`.summary-field__value` (texto) porque su resumen es de solo lectura.
+`.summary-fields` es la variante SIN el divisor de 2 columnas, para una sola
+card con pocos campos que no necesita partirse (ver "Información general"/
+"Organización" de `user-detail`, cada una es una sola lista vertical, no dos
+columnas de campos).
+
+Para cuando un grupo de datos relacionados sí debe verse como dos bloques de
+igual jerarquía en vez de una sola lista larga (`.summary-columns`):
 
 - Grid de 2 columnas fijas (4 campos + 3 campos aquí, pero el layout no
   asume ningún número concreto — el reparto es decisión de quien lo usa).

@@ -1,4 +1,3 @@
-@use '../../../shared/styles/kpi-card';
 @use '../../../shared/styles/toolbar';
 @use '../../../shared/styles/data-table';
 
@@ -83,8 +82,30 @@
   font-weight: 600;
 }
 
+// !important necesario: el puente de botones en styles.scss también usa
+// !important sobre .ant-btn-text con la misma especificidad (una clase) —
+// sin esto, este color pierde pase lo que pase (mismo gotcha que
+// .table-card, ver _data-table.scss).
 .row-menu-trigger {
+  color: var(--color-muted-foreground) !important;
+}
+
+// Icono antes del label en cada item del menú de acciones.
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-item__icon {
+  flex-shrink: 0;
   color: var(--color-muted-foreground);
+}
+
+// nzDanger tiñe el texto de rojo vía ng-zorro — el icono debe seguirlo para
+// no quedar gris junto a un label rojo.
+li.ant-dropdown-menu-item-danger .menu-item__icon {
+  color: var(--color-destructive);
 }
 
 .user-list__empty {
