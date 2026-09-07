@@ -1,5 +1,6 @@
 @use '../../shared/styles/kpi-card';
 @use '../../shared/styles/data-table';
+@use '../../shared/styles/summary-columns';
 
 .sales-dashboard {
   display: flex;
@@ -124,59 +125,6 @@
   }
 }
 
-// --- Resumen de la venta: 2 columnas, icono + etiqueta + valor -------------
-.summary-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.summary-col {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-
-  // El separador toma el color primary de la paleta activa a propósito —
-  // es la única línea divisoria del proyecto que no usa --color-border.
-  &:first-child {
-    padding-right: 24px;
-    border-right: 2px solid var(--color-primary);
-
-    @media (max-width: 640px) {
-      padding-right: 0;
-      border-right: none;
-      padding-bottom: 10px;
-      border-bottom: 2px solid var(--color-primary);
-    }
-  }
-}
-
-.summary-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  min-width: 0;
-}
-
-.summary-field__icon {
-  flex-shrink: 0;
-  color: var(--color-primary);
-}
-
-.summary-field__label {
-  color: var(--color-muted-foreground);
-  white-space: nowrap;
-}
-
-.summary-field__value {
-  color: var(--color-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+// Resumen de la venta: 2 columnas, icono + etiqueta + valor — clases
+// promovidas a shared/styles/_summary-columns.scss al aparecer un segundo
+// consumidor (user-detail). Ver ese partial y MASTER.md.

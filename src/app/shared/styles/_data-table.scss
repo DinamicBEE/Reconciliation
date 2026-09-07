@@ -3,9 +3,18 @@
 // rectos), y ninguna columna de texto libre debe crecer según su contenido
 // más largo.
 
+// Las tablas quedan FUERA del "card base" general (ver styles.scss /
+// MASTER.md "Patrón: card base") — bordes rectos, sin borde ni sombra,
+// exactamente como estaban antes de ese patrón. `!important` es
+// obligatorio aquí: `.ant-card` en styles.scss también usa `!important` con
+// la MISMA especificidad (una sola clase) — sin `!important` de este lado,
+// esta regla pierde pase lo que pase con la especificidad (así se coló el
+// bug: el radius de 8px se filtraba a las tablas).
 .table-card {
   overflow: auto;
-  border-radius: 0;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 
   // ng-zorro trae su propio border-radius sutil (2px) en .ant-table — se
   // anula aquí, con ::ng-deep quedando scoped a este componente.
