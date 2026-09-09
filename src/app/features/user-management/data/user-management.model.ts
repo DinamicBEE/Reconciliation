@@ -6,7 +6,7 @@
 // completo (roles, permisos, estado, seguridad, organización) que ve este
 // módulo.
 
-export type UserStatus = 'active' | 'inactive';
+export type UserStatus = 'active' | 'inactive' | 'blocked';
 
 export type RoleId = 'admin' | 'supervisor' | 'analista' | 'auditor';
 
@@ -37,6 +37,19 @@ export interface RoleDef {
   defaultPermissions: PermissionKey[];
 }
 
+// Dirección postal — sub-objeto propio (no 5 campos sueltos en AppUser)
+// porque siempre se edita/muestra como una unidad ("la dirección"), nunca un
+// campo aislado de los demás. `street2` es el único opcional de verdad
+// (depto/interior) — el resto son requeridos en la práctica aunque el tipo
+// no los valide todavía (ver AppUser.address).
+export interface AppUserAddress {
+  city: string; // Ciudad
+  state: string; // Estado
+  zipCode: string; // Código Postal
+  street1: string; // Calle 1
+  street2: string | null; // Calle 2 — depto/interior, opcional
+}
+
 export interface AppUser {
   id: string;
   // "Información general" — mismos campos que la lista (ver user-list).
@@ -44,9 +57,22 @@ export interface AppUser {
   lastName: string; // Apellidos
   email: string; // Correo electrónico
   phone: string; // Teléfono
+  // Foto de perfil — null cuando el usuario no la ha subido (caso real, no
+  // solo de mock): `nz-avatar` recibe `avatarUrl` como `nzSrc` y cae solo a
+  // `nzText`/`avatarTokensFor` (iniciales + color) cuando es null O cuando la
+  // imagen falla al cargar (`nz-avatar` maneja ese fallback por sí mismo, ver
+  // user-list.ts) — nunca hay que romper el layout distinguiendo los casos.
+  avatarUrl: string | null;
   status: UserStatus; // Estado
   createdAt: string; // ISO datetime — Fecha de creación
   lastAccessAt: string | null; // ISO datetime — Última conexión / último inicio de sesión; null = nunca ha iniciado sesión
+
+  // Datos personales adicionales — igual que "Organización" (abajo), no se
+  // piden al crear la cuenta, se completan después editando el detalle.
+  birthDate: string; // ISO date (solo fecha, sin hora) — Fecha de nacimiento
+  ssn: string; // SSN
+  gender: string; // Género — ver GENDER_OPTIONS
+  address: AppUserAddress;
 
   // "Seguridad y acceso" — roleIds/permissions son editables; el resto lo
   // reporta el sistema (aquí, simulado) y no tiene control de edición propio
@@ -66,7 +92,14 @@ export interface AppUser {
   area: string; // Área
   jobTitle: string; // Cargo o puesto
   managerId: string | null; // Administrador responsable — id de otro AppUser (admin/supervisor), null = sin asignar
+  employeeId: string; // ID empleado
+  hireDate: string; // ISO date — Fecha de contratación
+  contractEndDate: string | null; // ISO date — Fecha fin de contrato; null = contrato indefinido
 }
+
+// Género — lista cerrada (mismo criterio que STATUS_OPTIONS/ROLE_OPTIONS):
+// un `<nz-select>`, no texto libre.
+export const GENDER_OPTIONS: string[] = ['Femenino', 'Masculino', 'Otro', 'Prefiero no decir'];
 
 export function fullName(user: Pick<AppUser, 'firstName' | 'lastName'>): string {
   return `${user.firstName} ${user.lastName}`.trim();
@@ -95,6 +128,7 @@ export type AuditAction =
   | 'permissions_changed'
   | 'activated'
   | 'deactivated'
+  | 'blocked'
   | 'password_reset'
   | 'deleted'
   | 'organization_updated'
@@ -147,6 +181,50 @@ export const ROLES: RoleDef[] = [
   },
 ];
 
+// Estado de cuenta — chip con fondo por estado (ver StatusChip) y, en
+// user-detail ("Seguridad y acceso"), el mismo estado como `nz-tag` plano.
+// `bg`/`fg`/`border` usan los tokens --color-tag-* (estilo "tag" — fondo
+// tenue + borde, ver MASTER.md "Colores de tag"), NO los --color-success/
+// -warning/-destructive de relleno sólido: son la MISMA semántica
+// (activo=success/verde, inactivo=error/rojo, bloqueado=warning/naranja)
+// pero con el look que pidió el chip, no el de un botón. `tagPreset` es el
+// nombre de color que ya entiende `nz-tag` — así el nz-tag de "Estado de la
+// cuenta" queda igual de simple que los de "Email verificado"/"2FA"
+// ([nzColor]="'success'|'warning'"), sin repetir bg/fg a mano ahí.
+// Fijos, no siguen la paleta — mismo "semáforo" de siempre.
+export const STATUS_META: Record<
+  UserStatus,
+  { label: string; bg: string; fg: string; border: string; tagPreset: 'success' | 'error' | 'warning' }
+> = {
+  active: {
+    label: 'Activo',
+    bg: 'var(--color-tag-success-bg)',
+    fg: 'var(--color-tag-success-fg)',
+    border: 'var(--color-tag-success-border)',
+    tagPreset: 'success',
+  },
+  inactive: {
+    label: 'Inactivo',
+    bg: 'var(--color-tag-error-bg)',
+    fg: 'var(--color-tag-error-fg)',
+    border: 'var(--color-tag-error-border)',
+    tagPreset: 'error',
+  },
+  blocked: {
+    label: 'Bloqueado',
+    bg: 'var(--color-tag-warning-bg)',
+    fg: 'var(--color-tag-warning-fg)',
+    border: 'var(--color-tag-warning-border)',
+    tagPreset: 'warning',
+  },
+};
+
+export const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
+  { value: 'active', label: 'Activo' },
+  { value: 'inactive', label: 'Inactivo' },
+  { value: 'blocked', label: 'Bloqueado' },
+];
+
 export const ROLE_LABEL: Record<RoleId, string> = Object.fromEntries(
   ROLES.map((r) => [r.id, r.label]),
 ) as Record<RoleId, string>;
@@ -177,6 +255,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   permissions_changed: 'Permisos modificados',
   activated: 'Cuenta activada',
   deactivated: 'Cuenta desactivada',
+  blocked: 'Cuenta bloqueada',
   password_reset: 'Contraseña restablecida',
   deleted: 'Usuario eliminado',
   organization_updated: 'Datos organizacionales actualizados',

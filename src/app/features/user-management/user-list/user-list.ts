@@ -8,14 +8,14 @@ import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
-import { NzSwitchModule } from 'ng-zorro-antd/switch';
-import { NzDropdownModule } from 'ng-zorro-antd/dropdown';
-import { NzMenuModule } from 'ng-zorro-antd/menu';
+import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
+import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
-import { AppUser, ROLE_OPTIONS, fullName } from '../data/user-management.model';
+import { AppUser, ROLE_OPTIONS, RoleId, STATUS_META, STATUS_OPTIONS, UserStatus, defaultPermissionsForRoles, fullName } from '../data/user-management.model';
 import { RoleFilter, StatusFilter, UserManagementService } from '../data/user-management.service';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
+import { StatusChip } from '../status-chip/status-chip';
 
 @Component({
   selector: 'app-user-list',
@@ -29,10 +29,10 @@ import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color
     NzSelectModule,
     NzInputModule,
     NzAvatarModule,
-    NzSwitchModule,
-    NzDropdownModule,
-    NzMenuModule,
+    NzCheckboxModule,
+    NzTooltipModule,
     NzModalModule,
+    StatusChip,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './user-list.html',
@@ -45,16 +45,17 @@ export class UserList {
   private readonly router = inject(Router);
 
   protected readonly fullName = fullName;
+  protected readonly statusMeta = STATUS_META;
+  protected readonly roleOptions = ROLE_OPTIONS;
 
-  protected readonly roleOptions: { value: RoleFilter; label: string }[] = [
+  protected readonly roleFilterOptions: { value: RoleFilter; label: string }[] = [
     { value: 'all', label: 'Todos los roles' },
     ...ROLE_OPTIONS,
   ];
 
-  protected readonly statusOptions: { value: StatusFilter; label: string }[] = [
+  protected readonly statusFilterOptions: { value: StatusFilter; label: string }[] = [
     { value: 'all', label: 'Todos los estados' },
-    { value: 'active', label: 'Activos' },
-    { value: 'inactive', label: 'Inactivos' },
+    ...STATUS_OPTIONS,
   ];
 
   protected onSearchChange(value: string): void {
@@ -81,17 +82,41 @@ export class UserList {
     this.router.navigate(['/usuarios', user.id]);
   }
 
-  // El switch vive en una celda con (click)="$event.stopPropagation()" (ver
-  // template) para no disparar también onRowClick de la fila completa.
-  protected onToggleStatus(user: AppUser, checked: boolean): void {
-    this.service.setStatus(user.id, checked ? 'active' : 'inactive');
-    this.message.success(checked ? `${fullName(user)} fue activado.` : `${fullName(user)} fue desactivado.`);
+  // --- Selección (checkbox de la primera columna) ---
+  protected onToggleSelectAll(): void {
+    this.service.toggleSelectAllFiltered();
   }
 
-  // Confirmación vía NzModalService (no nz-popconfirm) — un popconfirm
-  // anidado dentro de un item de nz-dropdown-menu compite con el cierre
-  // automático del menú al hacer click; Modal.confirm() es una llamada
-  // programática independiente del menú, sin ese conflicto.
+  protected onToggleRowSelect(userId: string): void {
+    this.service.toggleSelect(userId);
+  }
+
+  // --- Rol: selector sin bordes directo en la fila, sin confirmación (mismo
+  // criterio inmediato que el resto de acciones rápidas de la lista) ---
+  protected onRoleQuickChange(user: AppUser, roleIds: RoleId[]): void {
+    if (roleIds.length === 0) {
+      this.message.error('Selecciona al menos un rol.');
+      return;
+    }
+    this.service.changeRoles(user.id, roleIds, defaultPermissionsForRoles(roleIds));
+    this.message.success(`Roles de ${fullName(user)} actualizados.`);
+  }
+
+  // --- Estado: el chip emite la intención, la confirmación vive aquí (mismo
+  // patrón en user-detail, ver StatusChip) ---
+  protected onStatusChangeRequest(user: AppUser, next: UserStatus): void {
+    const label = STATUS_META[next].label;
+    this.modal.confirm({
+      nzTitle: 'Cambiar estado',
+      nzContent: `¿Cambiar el estado de <b>${fullName(user)}</b> a <b>${label}</b>?`,
+      nzOkText: 'Cambiar',
+      nzOnOk: () => {
+        this.service.setStatus(user.id, next);
+        this.message.success(`Estado de ${fullName(user)} actualizado a ${label}.`);
+      },
+    });
+  }
+
   protected onResetPasswordClick(user: AppUser): void {
     this.modal.confirm({
       nzTitle: 'Restablecer contraseña',

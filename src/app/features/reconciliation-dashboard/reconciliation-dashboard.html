@@ -80,91 +80,98 @@
     </nz-card>
   </section>
 
-  <section class="toolbar">
-    <nz-select
-      class="toolbar__filter"
-      [ngModel]="service.statusFilter()"
-      (ngModelChange)="onStatusFilterChange($event)"
-    >
-      @for (opt of statusOptions; track opt.value) {
-        <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
-      }
-    </nz-select>
-
-    <nz-select
-      class="toolbar__filter"
-      [ngModel]="service.tenderMediaFilter()"
-      (ngModelChange)="onTenderMediaFilterChange($event)"
-    >
-      @for (opt of tenderMediaOptions; track opt.value) {
-        <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
-      }
-    </nz-select>
-
-    <nz-range-picker
-      class="toolbar__filter"
-      [ngModel]="service.dateRange()"
-      (ngModelChange)="onDateRangeChange($event)"
-      nzFormat="dd/MM/yyyy"
-    />
-  </section>
-
-  <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
-    <nz-table #tbl [nzData]="service.filteredItems()" [nzPageSize]="10" nzSize="middle">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th class="col-truncate" style="--col-max-width: 140px">Orden</th>
-          <th class="col-truncate" style="--col-max-width: 130px">Medio de pago</th>
-          <th class="text-right">Monto vendido (POS)</th>
-          <th class="text-right">Monto banco</th>
-          <th class="text-right">Diferencia</th>
-          <th>Estado</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (item of tbl.data; track item.orderId) {
-          <tr
-            [class.clickable-row]="isActionable(item)"
-            [routerLink]="isActionable(item) ? resolveLink(item) : null"
-          >
-            <td>{{ item.date | date: 'dd/MM/yyyy' }}</td>
-            <td class="col-truncate font-mono" style="--col-max-width: 140px" [attr.title]="item.orderId">
-              {{ item.orderId }}
-            </td>
-            <td class="col-truncate" style="--col-max-width: 130px">{{ tenderLabel(item.tenderMedia) }}</td>
-            <td class="text-right font-mono">
-              @if (item.sale) {
-                {{ item.sale.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-              } @else {
-                <span class="text-muted">—</span>
-              }
-            </td>
-            <td class="text-right font-mono">
-              @if (item.settlement) {
-                {{ item.settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-              } @else {
-                <span class="text-muted">—</span>
-              }
-            </td>
-            <td class="text-right font-mono" [class.text-destructive]="difference(item) !== 0">
-              {{ difference(item) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-            </td>
-            <td><app-match-status-tag [status]="item.status" /></td>
-            <td class="text-right">
-              @if (isActionable(item)) {
-                <span class="row-action">
-                  Gestionar
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 18l6-6-6-6" />
-                  </svg>
-                </span>
-              }
-            </td>
-          </tr>
+  <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
+       tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
+    <section class="toolbar">
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.statusFilter()"
+        (ngModelChange)="onStatusFilterChange($event)"
+      >
+        @for (opt of statusOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
         }
-      </tbody>
-    </nz-table>
+      </nz-select>
+
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.tenderMediaFilter()"
+        (ngModelChange)="onTenderMediaFilterChange($event)"
+      >
+        @for (opt of tenderMediaOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
+
+      <nz-range-picker
+        class="toolbar__filter"
+        [ngModel]="service.dateRange()"
+        (ngModelChange)="onDateRangeChange($event)"
+        nzFormat="dd/MM/yyyy"
+      />
+    </section>
+
+    <!-- Bleed: se sale del padding de la card (margin negativo, ver
+         _data-table.scss) para que el borde superior toque los bordes
+         izquierdo/derecho de la card, como divisor entre filtros y tabla. -->
+    <div class="table-bleed">
+      <nz-table #tbl [nzData]="service.filteredItems()" [nzPageSize]="10" nzSize="middle">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th class="col-truncate" style="--col-max-width: 140px">Orden</th>
+            <th class="col-truncate" style="--col-max-width: 130px">Medio de pago</th>
+            <th class="text-right">Monto vendido (POS)</th>
+            <th class="text-right">Monto banco</th>
+            <th class="text-right">Diferencia</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of tbl.data; track item.orderId) {
+            <tr
+              [class.clickable-row]="isActionable(item)"
+              [routerLink]="isActionable(item) ? resolveLink(item) : null"
+            >
+              <td>{{ item.date | date: 'dd/MM/yyyy' }}</td>
+              <td class="col-truncate font-mono" style="--col-max-width: 140px" [attr.title]="item.orderId">
+                {{ item.orderId }}
+              </td>
+              <td class="col-truncate" style="--col-max-width: 130px">{{ tenderLabel(item.tenderMedia) }}</td>
+              <td class="text-right font-mono">
+                @if (item.sale) {
+                  {{ item.sale.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                } @else {
+                  <span class="text-muted">—</span>
+                }
+              </td>
+              <td class="text-right font-mono">
+                @if (item.settlement) {
+                  {{ item.settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                } @else {
+                  <span class="text-muted">—</span>
+                }
+              </td>
+              <td class="text-right font-mono" [class.text-destructive]="difference(item) !== 0">
+                {{ difference(item) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </td>
+              <td><app-match-status-tag [status]="item.status" /></td>
+              <td class="text-right">
+                @if (isActionable(item)) {
+                  <span class="row-action">
+                    Gestionar
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 18l6-6-6-6" />
+                    </svg>
+                  </span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </nz-table>
+    </div>
   </nz-card>
 </div>

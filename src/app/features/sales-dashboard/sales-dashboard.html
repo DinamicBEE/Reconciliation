@@ -51,43 +51,45 @@
     </nz-card>
   </section>
 
-  <h2 class="sales-dashboard__subtitle">Ventas de hoy</h2>
+  <!-- <h2 class="sales-dashboard__subtitle">Ventas de hoy</h2> -->
 
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
-    <nz-table #tbl [nzData]="service.todaySales()" [nzPageSize]="10" nzSize="middle">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th class="col-truncate" style="--col-max-width: 130px">Folio</th>
-          <th class="col-truncate" style="--col-max-width: 180px">Cliente</th>
-          <th>Medio de pago</th>
-          <th class="text-right">Total</th>
-          <th class="col-truncate font-mono" style="--col-max-width: 150px">Referencia</th>
-          <th>Estado de conciliación</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (sale of tbl.data; track sale.id) {
-          <tr class="clickable-row" (click)="onRowClick(sale)">
-            <td>{{ sale.date | date: 'dd/MM/yyyy' }}</td>
-            <td class="col-truncate font-mono" style="--col-max-width: 130px" [attr.title]="sale.folio">
-              {{ sale.folio }}
-            </td>
-            <td class="col-truncate" style="--col-max-width: 180px" [attr.title]="sale.customer.name">
-              {{ sale.customer.name }}
-            </td>
-            <td>{{ tenderMediaLabel[sale.tenderMedia] }}</td>
-            <td class="text-right font-mono">
-              {{ saleTotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-            </td>
-            <td class="col-truncate font-mono" style="--col-max-width: 150px" [attr.title]="sale.reference">
-              {{ sale.reference }}
-            </td>
-            <td><app-match-status-tag [status]="sale.reconciliationStatus" /></td>
+    <div style="padding: 0 24px;">
+      <nz-table #tbl [nzData]="service.todaySales()" [nzPageSize]="10" nzSize="middle" >
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th class="col-truncate" style="--col-max-width: 130px">Folio</th>
+            <th class="col-truncate" style="--col-max-width: 180px">Cliente</th>
+            <th>Medio de pago</th>
+            <th class="text-right">Total</th>
+            <th class="col-truncate font-mono" style="--col-max-width: 150px">Referencia</th>
+            <th>Estado de conciliación</th>
           </tr>
-        }
-      </tbody>
-    </nz-table>
+        </thead>
+        <tbody>
+          @for (sale of tbl.data; track sale.id) {
+            <tr class="clickable-row" (click)="onRowClick(sale)">
+              <td>{{ sale.date | date: 'dd/MM/yyyy' }}</td>
+              <td class="col-truncate font-mono" style="--col-max-width: 130px" [attr.title]="sale.folio">
+                {{ sale.folio }}
+              </td>
+              <td class="col-truncate" style="--col-max-width: 180px" [attr.title]="sale.customer.name">
+                {{ sale.customer.name }}
+              </td>
+              <td>{{ tenderMediaLabel[sale.tenderMedia] }}</td>
+              <td class="text-right font-mono">
+                {{ saleTotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </td>
+              <td class="col-truncate font-mono" style="--col-max-width: 150px" [attr.title]="sale.reference">
+                {{ sale.reference }}
+              </td>
+              <td><app-match-status-tag [status]="sale.reconciliationStatus" /></td>
+            </tr>
+          }
+        </tbody>
+      </nz-table>
+    </div>
   </nz-card>
 </div>
 

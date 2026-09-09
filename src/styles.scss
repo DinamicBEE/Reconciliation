@@ -47,6 +47,27 @@
   --color-on-destructive: #ffffff;
   --color-ring: #0f172a;
 
+  // Colores de "tag" — fondo claro + texto + borde a juego, el estilo que
+  // Ant llama success/error/warning en `nz-tag` (columna "Estado de
+  // conciliación" del dashboard, MatchStatusTag/SaleStatusTag, y ahora
+  // también StatusChip de Administración de usuarios — ver MASTER.md,
+  // "Colores de tag"). Distintos de --color-success/-warning/-destructive de
+  // arriba: esos son para RELLENO SÓLIDO (botones, status-dot); estos son
+  // para el look "tag" (fondo tenue + texto/borde de color). Antes venían
+  // hardcodeados dentro del CSS compilado de ng-zorro (.ant-tag-success,
+  // etc.) — los valores de acá son un calco 1:1 de esos hex para que el modo
+  // claro no cambie ni un pixel; el bridge de abajo es lo que los conecta.
+  // Fijos como el resto de "Colores semánticos": no siguen la paleta.
+  --color-tag-success-bg: #f6ffed;
+  --color-tag-success-fg: #52c41a;
+  --color-tag-success-border: #b7eb8f;
+  --color-tag-error-bg: #fff2f0;
+  --color-tag-error-fg: #ff4d4f;
+  --color-tag-error-border: #ffccc7;
+  --color-tag-warning-bg: #fffbe6;
+  --color-tag-warning-fg: #faad14;
+  --color-tag-warning-border: #ffe58f;
+
   // Acentos de gráficas — independientes de --color-primary para poder
   // ajustar el look de charts sin tocar botones/links.
   --color-chart-donut: #2563eb;
@@ -89,6 +110,20 @@ html.dark {
   --color-destructive: #ef4444;
   --color-on-destructive: #0f172a;
   --color-ring: #f8fafc;
+
+  // Mismo criterio que la variante clara: fondo oscuro y tenue del propio
+  // matiz (no --color-card plano) + texto/borde saturados encima — el
+  // esquema "dark" que usa Ant Design v5 para sus tags de estado, adaptado a
+  // mano porque este proyecto no corre el theme algorithm de Ant.
+  --color-tag-success-bg: #162312;
+  --color-tag-success-fg: #49aa19;
+  --color-tag-success-border: #274916;
+  --color-tag-error-bg: #2a1215;
+  --color-tag-error-fg: #ff7875;
+  --color-tag-error-border: #58181c;
+  --color-tag-warning-bg: #2b2111;
+  --color-tag-warning-fg: #d89614;
+  --color-tag-warning-border: #594214;
 
   --color-chart-donut: #eab308;
 }
@@ -191,6 +226,17 @@ html body .ant-table-thead > tr > th {
   color: var(--color-foreground) !important;
 }
 
+// Radius uniforme para selects/inputs/date-pickers — 6px, distinto del de
+// las cards/botones (8px, ver "Patrón: card base" y el bloque de botones
+// más abajo). Regla global: cualquier nz-select/nz-input/nz-picker nuevo
+// hereda esto automáticamente, sin tocar su .scss.
+.ant-select-selector,
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-picker {
+  border-radius: 6px !important;
+}
+
 .ant-select-item {
   color: var(--color-foreground) !important;
 
@@ -217,6 +263,30 @@ html body .ant-table-thead > tr > th {
   color: var(--color-foreground) !important;
 }
 
+// nz-tag con color preset ([nzColor]="'success'|'error'|'warning'") —
+// MatchStatusTag, SaleStatusTag y el nz-tag de "Estado de la cuenta"/"Email
+// verificado"/"2FA" en user-detail. Ant genera estas 3 clases con hex fijos
+// (ver tag/style/index.css) que nunca respetaron modo oscuro; puentearlas
+// aquí en vez de tocar cada componente retiña TODO uso presente y futuro de
+// estos 3 colores a la vez (ver --color-tag-* arriba y MASTER.md).
+.ant-tag-success {
+  color: var(--color-tag-success-fg) !important;
+  background: var(--color-tag-success-bg) !important;
+  border-color: var(--color-tag-success-border) !important;
+}
+
+.ant-tag-error {
+  color: var(--color-tag-error-fg) !important;
+  background: var(--color-tag-error-bg) !important;
+  border-color: var(--color-tag-error-border) !important;
+}
+
+.ant-tag-warning {
+  color: var(--color-tag-warning-fg) !important;
+  background: var(--color-tag-warning-bg) !important;
+  border-color: var(--color-tag-warning-border) !important;
+}
+
 // Primer uso de nz-dropdown/nz-tabs/nz-modal (módulo "Administración de
 // usuarios") — mismo criterio de siempre: revisar el CSS compilado de
 // ng-zorro antes de darlos por "ya temeados" (ver MASTER.md). Los tres
@@ -236,8 +306,21 @@ html body .ant-table-thead > tr > th {
   color: var(--color-foreground) !important;
 }
 
+// `.ant-tabs-nav` como "pill" propio (borde + radius + fondo, mismo radius
+// que `.table-card` — ver MASTER.md "Patrón: card de tabla") en vez del
+// texto suelto de Ant. Con esto, la línea inferior de ancho completo que
+// Ant dibuja por defecto (`::before`, pensada para un tab-bar SIN borde
+// propio) sobresale por debajo del nuevo borde redondeado — se oculta
+// entera en vez de solo recolorearla.
+.ant-tabs-nav {
+  border: 1px solid var(--color-border) !important;
+  padding: 0 16px !important;
+  border-radius: 12px !important;
+  background: var(--color-card) !important;
+}
+
 .ant-tabs-top > .ant-tabs-nav::before {
-  border-bottom-color: var(--color-border) !important;
+  display: none !important;
 }
 
 .ant-modal-content {

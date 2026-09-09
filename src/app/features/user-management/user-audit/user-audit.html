@@ -9,51 +9,58 @@
     <h1 class="user-audit__title">Historial y auditoría de usuarios</h1>
   </div>
 
-  <section class="toolbar">
-    <input
-      nz-input
-      type="text"
-      class="toolbar__filter toolbar__filter--search"
-      placeholder="Buscar por usuario"
-      [ngModel]="search()"
-      (ngModelChange)="onSearchChange($event)"
-    />
+  <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
+       tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
+    <section class="toolbar">
+      <input
+        nz-input
+        type="text"
+        class="toolbar__filter toolbar__filter--search"
+        placeholder="Buscar por usuario"
+        [ngModel]="search()"
+        (ngModelChange)="onSearchChange($event)"
+      />
 
-    <nz-select class="toolbar__filter" [ngModel]="actionFilter()" (ngModelChange)="onActionFilterChange($event)">
-      @for (opt of actionOptions; track opt.value) {
-        <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
-      }
-    </nz-select>
-  </section>
-
-  <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
-    <nz-table #tbl [nzData]="filteredLog()" [nzPageSize]="15" nzSize="middle">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th>Usuario</th>
-          <th>Acción</th>
-          <th class="col-truncate" style="--col-max-width: 360px">Detalle</th>
-          <th>Realizado por</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (entry of tbl.data; track entry.id) {
-          <tr>
-            <td class="font-mono">{{ entry.timestamp | date: 'dd/MM/yyyy HH:mm' }}</td>
-            <td>{{ entry.targetUserName }}</td>
-            <td>{{ auditActionLabel[entry.action] }}</td>
-            <td class="col-truncate" style="--col-max-width: 360px" [attr.title]="entry.detail">
-              {{ entry.detail }}
-            </td>
-            <td>{{ entry.actorName }}</td>
-          </tr>
-        } @empty {
-          <tr>
-            <td colspan="5" class="text-muted user-audit__empty">Ningún registro coincide con los filtros aplicados.</td>
-          </tr>
+      <nz-select class="toolbar__filter" [ngModel]="actionFilter()" (ngModelChange)="onActionFilterChange($event)">
+        @for (opt of actionOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
         }
-      </tbody>
-    </nz-table>
+      </nz-select>
+    </section>
+
+    <!-- Bleed: se sale del padding de la card (margin negativo, ver
+         _data-table.scss) para que el borde superior toque los bordes
+         izquierdo/derecho de la card, como divisor entre filtros y tabla. -->
+    <div class="table-bleed">
+      <nz-table #tbl [nzData]="filteredLog()" [nzPageSize]="15" nzSize="middle">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Acción</th>
+            <th class="col-truncate" style="--col-max-width: 360px">Detalle</th>
+            <th>Realizado por</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of tbl.data; track entry.id) {
+            <tr>
+              <td class="font-mono">{{ entry.timestamp | date: 'dd/MM/yyyy HH:mm' }}</td>
+              <td>{{ entry.targetUserName }}</td>
+              <td>{{ auditActionLabel[entry.action] }}</td>
+              <td class="col-truncate" style="--col-max-width: 360px" [attr.title]="entry.detail">
+                {{ entry.detail }}
+              </td>
+              <td>{{ entry.actorName }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5" class="text-muted user-audit__empty">Ningún registro coincide con los filtros aplicados.</td>
+            </tr>
+          }
+        </tbody>
+      </nz-table>
+    </div>
   </nz-card>
 </div>

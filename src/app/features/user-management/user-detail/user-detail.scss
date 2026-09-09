@@ -26,6 +26,12 @@
   gap: 12px;
 }
 
+.user-detail__title-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .user-detail__title {
   font-family: var(--font-heading);
   font-size: 18px;
@@ -42,19 +48,55 @@ nz-tabs,
   width: 100%;
 }
 
-// "Información general" y "Seguridad y acceso" muestran sus 2 nz-card uno
-// junto al otro en vez de apiladas — cada tab envuelve sus cards en este
-// grid (ver user-detail.html). Colapsa a 1 columna en pantallas angostas,
-// mismo breakpoint que .kpi-grid/.summary-columns.
-.tab-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--grid-gap);
-  align-items: start;
+// Card general de cada tab — toma todo el ancho de la pantalla, con las
+// sub-cards de esa sección DENTRO (ver MASTER.md "Patrón: card de tabla":
+// mismo radius de 12px que `.table-card`, aquí sin tabla — es el mismo
+// criterio de "contenedor general" aplicado a un tab en vez de a una tabla).
+.tab-card {
+  border-radius: 12px !important;
+}
 
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
+// Las secciones de cada tab (antes lado a lado en un grid de 2 columnas, ver
+// `.tab-columns` — retirada) ahora van apiladas verticalmente. Cada
+// `.tab-card__section` es un `<div>` normal, NO un `<nz-card>` — sin borde
+// propio, así que un hairline (`border-bottom`) entre secciones reemplaza el
+// borde que antes daba cada card individual.
+.tab-card__sections {
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-card__section {
+  padding: 20px 0;
+
+  &:first-child {
+    padding-top: 0;
   }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+.tab-card__section-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+  margin: 0 0 16px;
+}
+
+// Botón de guardar de cada sección editable — el `<form>` ya no es flex
+// (dejó de compartir `.user-form`, ver `.info-fields` abajo), así que solo
+// necesita separarse del grid de campos, sin `align-self` (no aplica fuera
+// de un contenedor flex).
+.tab-card__section-submit {
+  margin-top: 16px;
 }
 
 .user-form {
@@ -103,45 +145,152 @@ nz-tabs,
   font-weight: 600;
 }
 
-// Pares etiqueta/valor de solo lectura — mismo patrón que
-// .sale-drawer__facts en sales-dashboard.scss (drawer de detalle de venta),
-// adaptado a esta pantalla (feature-local hasta que un segundo consumidor
-// lo necesite, ver MASTER.md).
-.detail-facts {
+// Estructura vertical "icono + etiqueta / valor" — a propósito DISTINTA de
+// `.summary-field` (shared/styles/_summary-columns.scss, icono+etiqueta+
+// valor en UNA sola fila horizontal): ese partial es compartido con el
+// drawer de venta de sales-dashboard, que sigue siendo de solo lectura en
+// horizontal — cambiarlo ahí habría roto ese consumidor. Esta es feature-
+// local hasta que un segundo consumidor la necesite (ver MASTER.md
+// "Estructura de carpetas"). Grid de 3 columnas fijas por defecto (ancho
+// total del `.tab-card__section` contenedor) — "Información personal" pisa
+// esto a 4 con `.info-fields--cols-4` (ver abajo) para hacer lugar al
+// avatar.
+.info-fields {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  row-gap: 12px;
-  column-gap: 12px;
-  margin: 0;
-  font-size: 13px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px 24px;
+  width: 100%;
 
-  dt {
-    color: var(--color-muted-foreground);
-  }
-
-  dd {
-    margin: 0;
-    color: var(--color-foreground);
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
-    row-gap: 4px;
-
-    dt {
-      font-weight: 600;
-    }
-
-    dd {
-      margin-bottom: 8px;
-    }
   }
 }
 
-.detail-facts__inline {
+.info-fields--cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+// Encabezado de una subsección DENTRO del mismo grid (p. ej. "Dirección"
+// dentro de "Información personal") — ocupa la fila completa
+// (`grid-column: 1 / -1`) para separar visualmente el grupo de campos que
+// sigue, sin necesitar un grid/card aparte.
+.info-fields__subsection-title {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  margin: 4px 0 0;
+}
+
+.info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+// Primera columna de "Información personal" — la imagen del usuario, no un
+// icono+etiqueta+valor como el resto. `grid-row: span 2` reserva 2 filas de
+// alto (la celda no es cuadrada: 1 columna × 2 filas, de ahí "rectangular").
+// Al ser el primer elemento del grid, el resto de los campos fluye
+// automáticamente alrededor de este hueco (ver user-detail.html).
+.info-field--avatar {
+  grid-column: 1;
+  grid-row: span 2;
+}
+
+.user-detail__avatar {
+  width: 100%;
+  height: 100%;
+  min-height: 96px;
+  border-radius: 8px;
+
+  // El host de nz-avatar ya trae la clase `.ant-avatar` — se sobreescribe
+  // aquí en vez de con `::ng-deep` porque es el propio elemento, no uno
+  // interno. La imagen SÍ es un nodo interno (`<img>`, ver avatar.component
+  // de ng-zorro) — ese sí necesita `::ng-deep`.
+  &.ant-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+  }
+
+  ::ng-deep img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+}
+
+.info-field__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-muted-foreground);
+}
+
+.info-field__icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.info-field__label {
+  font-size: 12px;
+}
+
+.info-field__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info-field__value--link {
+  color: var(--color-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// Para cuando el valor va acompañado de una acción rápida (Email
+// verificado → "Marcar como verificado", Sesiones activas → "Cerrar
+// sesiones") — el valor y el botón quedan en la misma fila, debajo del
+// icono+etiqueta, igual que un `.info-field__value` normal. También se usa
+// para envolver un `nz-tag` SOLO (Estado de la cuenta, 2FA en "Seguridad de
+// la cuenta"): sin este wrapper, el tag —hijo directo de `.info-field`, un
+// flex column— hereda `align-items: stretch` y se estira al ancho completo
+// de la columna del grid; envuelto en esta fila (flex, eje principal
+// horizontal) el tag vuelve a medirse por su contenido, igual que "Email
+// verificado".
+.info-field__value-row {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+// Reemplaza el valor en modo edición — mismo ancho que el resto de un
+// campo del grid (a diferencia de `.summary-field__control`, pensado para
+// una fila horizontal, no una columna de grid).
+.info-field__input {
+  width: 100%;
+}
+
+.info-field__error {
+  font-size: 12px;
+  color: var(--color-destructive);
 }
 
 .role-field {
@@ -163,14 +312,30 @@ nz-tabs,
   margin: 0;
 }
 
+// 4 columnas fijas — cada grupo (Consulta/Operación/Administración/...) en
+// su propia columna con sus permisos debajo, no apilados en una sola lista
+// vertical larga. Si hay menos de 4 grupos (hoy 3), las columnas sobrantes
+// simplemente quedan vacías — sin acomodar el conteo real de grupos a
+// propósito, para no tener que tocar este grid el día que se agregue un 4°.
 .permission-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px 24px;
   margin-bottom: 20px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
 }
 
+// `grid-column: 1 / -1`: ocupa la fila completa arriba de las 4 columnas de
+// grupos (ver `.permission-groups`), en vez de colarse dentro de la primera.
 .permission-groups__label {
+  grid-column: 1 / -1;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-foreground);
@@ -217,7 +382,11 @@ nz-tabs,
   th {
     text-align: left;
     padding: 10px 16px;
-    background: var(--color-muted);
+    // Sin fondo — igual que el header de cualquier `nz-table` dentro de
+    // `.table-card` (ver shared/styles/_data-table.scss y MASTER.md,
+    // "Patrón: card de tabla"); esta tabla es HTML plano, no `nz-table`, así
+    // que ese bridge no la toca sola y hay que igualarlo a mano aquí.
+    background: transparent;
     color: var(--color-foreground);
     font-size: 11px;
     font-weight: 600;

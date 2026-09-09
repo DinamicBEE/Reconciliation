@@ -96,6 +96,30 @@ ninguna personalización de marca. Su significado está atado al ESTADO de un
 movimiento, no al gusto visual — mezclarlos rompe la semántica (ver
 `PaletteService`, que los excluye explícitamente de `TOKEN_NAMES`).
 
+### Colores de tag — **mismo criterio, fijos, distintos de los de arriba**
+
+| Token | Claro | Oscuro | Significado |
+|---|---|---|---|
+| `--color-tag-success-bg` / `-fg` / `-border` | `#f6ffed` / `#52c41a` / `#b7eb8f` | `#162312` / `#49aa19` / `#274916` | Cruzado / exitoso |
+| `--color-tag-error-bg` / `-fg` / `-border` | `#fff2f0` / `#ff4d4f` / `#ffccc7` | `#2a1215` / `#ff7875` / `#58181c` | Discrepancia / error |
+| `--color-tag-warning-bg` / `-fg` / `-border` | `#fffbe6` / `#faad14` / `#ffe58f` | `#2b2111` / `#d89614` / `#594214` | Pendiente / advertencia |
+
+Misma semántica que `--color-success`/`-warning`/`-destructive`, pero para el
+look "tag" (fondo tenue + texto/borde de color) en vez de relleno sólido —
+úsalos cuando el componente es una `nz-tag` o algo con su mismo lenguaje
+visual (p. ej. `StatusChip`); usa los de arriba cuando es relleno sólido
+(botones, `status-dot`). Los valores claros son un calco 1:1 de lo que
+`ng-zorro-antd` trae hardcodeado dentro de `.ant-tag-success/-error/-warning`
+(ver `tag/style/index.css` del paquete) — nunca respetaban modo oscuro porque
+nadie los puenteaba; los oscuros son el esquema dark que usa Ant Design v5
+para sus tags de estado, adaptados a mano (este proyecto no corre el theme
+algorithm de Ant). El puente vive en `styles.scss` junto a los demás
+(`.ant-tag-success`/`-error`/`-warning { background/color/border-color: var(--color-tag-*) !important; }`)
+y retiña de un jalón **todo** `nz-tag` que use `[nzColor]="'success'|'error'|'warning'"`
+en la app (`MatchStatusTag`, `SaleStatusTag`, los `nz-tag` sueltos de
+"Seguridad y acceso" en `user-detail`) sin tocar esos componentes — mismo
+patrón que el resto del puente ng-zorro↔tokens. Fijos, no siguen la paleta.
+
 ### Selector de paleta (personalización en runtime)
 
 `core/services/palette.service.ts` + `core/services/color-utils.ts`.
@@ -154,38 +178,45 @@ box-shadow: var(--card-shadow); background: var(--color-card); }` vive en el
 bloque de puente de `styles.scss` — **no** en el `.scss` de cada feature. Un
 módulo nuevo que use `<nz-card>` hereda esto automáticamente sin tocar nada;
 no repitas estas propiedades en un componente a menos que necesites
-DESVIARTE (como `.table-card`, ver abajo). Verificar que esto siga
-cumpliéndose es tan simple como: ¿la card nueva se ve con borde + esquinas
-redondeadas + sombra sin que su propio `.scss` declare nada de eso? Si no,
-algo con más especificidad la está pisando (mismo gotcha de siempre, ver
-"Gotcha de CSS" en `sales-dashboard`).
+DESVIARTE (como `.table-card`, ver "Patrón: card de tabla" más abajo — hoy la
+única desviación de radius que sigue en pie: 12px en vez de 8px, todo lo
+demás se hereda igual). Verificar que esto siga cumpliéndose es tan simple
+como: ¿la card nueva se ve con borde + esquinas redondeadas + sombra sin que
+su propio `.scss` declare nada de eso? Si no, algo con más especificidad la
+está pisando (mismo gotcha de siempre, ver "Gotcha de CSS" en
+`sales-dashboard`).
 
-**Gotcha real encontrado con `.table-card`**: la regla de `_data-table.scss`
-(`.table-card { border-radius: 0; }`, la excepción documentada para que las
-tablas mantengan bordes rectos) dejó de funcionar al agregar el bloque de
-arriba — las tablas aparecieron con esquinas redondeadas Y una sombra que
-nunca debieron tener. La causa NO fue especificidad (`.table-card` con su
+**Gotcha histórico con `.table-card`** (la lección sigue vigente aunque la
+regla concreta que la disparó ya no exista): en una versión anterior,
+`.table-card` fijaba `border-radius: 0` (las tablas de la app eran
+deliberadamente planas, sin borde ni sombra — ver más abajo por qué se
+abandonó ese criterio) y dejó de funcionar al agregar el bloque de card base
+de arriba — las tablas aparecieron con esquinas redondeadas Y una sombra que
+no debían tener. La causa NO fue especificidad (`.table-card` con su
 atributo `[_ngcontent-*]` de encapsulación YA es más específico que
 `.ant-card` sola) sino **`!important`**: el bloque de card base usa
 `!important`, y una declaración con `!important` le gana a CUALQUIER
 declaración sin `!important` sin importar cuánto más específico sea su
 selector — la especificidad solo desempata entre reglas de la MISMA
-importancia. La solución fue agregar `!important` también a `.table-card`
-(border/border-radius/box-shadow, los tres explícitos a "ninguno", no solo
-heredados). **Regla general**: cualquier excepción puntual a `.ant-card`
+importancia. **Regla general**: cualquier excepción puntual a `.ant-card`
 (o a cualquier bridge con `!important` en `styles.scss`) necesita su propio
 `!important` para poder ganar — confirmar visualmente después de escribirla,
 nunca asumir que "más específico" alcanza cuando el otro lado ya usa
-`!important`.
+`!important`. Por eso `.table-card` sigue usando `border-radius: 12px
+!important` hoy, aunque ya no anule border/box-shadow (ver "Patrón: card de
+tabla").
 
 ### Patrón: card centrada (formulario de una sola columna)
 
 `.card-centered` (`user-detail.scss`) — `max-width: 560px; margin: 0 auto;`
 sobre el `<nz-card>`, para cuando una pantalla es UN SOLO formulario sin
-nada al lado (creación de usuario, "Organización") y no debe estirarse de
-borde a borde como sí hacen las cards de `.tab-columns` ("Información
-general"/"Seguridad y acceso", ver arriba) o una tabla. Dentro de
-`.card-centered`, el botón de guardar (`.user-form__submit`) se centra
+nada al lado. Hoy su único consumidor es la creación de usuario
+(`/usuarios/nuevo`, `isCreate()`) — "Organización" tenía este mismo look
+como tab propia, pero se fusionó dentro de "Información general" y ya no lo
+usa (ver "Patrón: tab con card general…"). No debe estirarse de borde a
+borde como sí hace `.tab-card` (detalle de un usuario existente, ver abajo)
+o una tabla. Dentro de `.card-centered`, el botón de guardar
+(`.user-form__submit`) se centra
 horizontalmente en vez de pegarse a la izquierda — sigue siendo el último
 elemento del formulario, así que "abajo de la card" ya lo resuelve el flujo
 normal del documento, sin necesitar un spacer ni una card de altura fija.
@@ -268,11 +299,14 @@ numérica — activa `font-variant-numeric: tabular-nums` para alinear dígitos.
 - Padding interno de KPI card: `8px` uniforme (no `10px 12px`) cuando el
   card tiene un elemento decorativo (dona) que debe quedar a una distancia
   exacta y conocida del borde.
-- Tablas: sin `border-radius` (bordes rectos, no curvos — regla explícita).
-  Columnas de texto libre (descripción, categoría, referencia, orden) llevan
-  la clase genérica `.col-truncate` (`shared/styles/_data-table.scss`) con el
-  ancho vía variable CSS inline — `<th class="col-truncate" style="--col-max-width: 220px">` —
-  más `[attr.title]` en el `<td>` con el texto completo. Nunca una clase
+- Tablas: SIEMPRE dentro de `.table-card` (12px de radius, con o sin
+  `.toolbar` de filtros dentro — ver "Patrón: card de tabla"). Ya no aplica
+  la regla vieja de "bordes rectos, sin sombra" — eso se abandonó a favor del
+  look de card completo. Columnas de texto libre (descripción, categoría,
+  referencia, orden) llevan la clase genérica `.col-truncate`
+  (`shared/styles/_data-table.scss`) con el ancho vía variable CSS inline —
+  `<th class="col-truncate" style="--col-max-width: 220px">` — más
+  `[attr.title]` en el `<td>` con el texto completo. Nunca una clase
   `.col-<nombre-de-columna>` por columna (así empezó y se refactorizó a esto).
 
 ## Componentes reutilizables (`shared/components`)
@@ -613,16 +647,19 @@ resolver una diferencia). Mismo criterio que siguió después `UserDetail`
 
 `shared/styles/_summary-columns.scss` (`.summary-columns`/`.summary-col`/
 `.summary-field*`) — promovido desde `sales-dashboard.scss` ("Resumen de la
-venta" en el drawer) al aparecer un segundo consumidor: `user-detail`
-("Información general"/"Organización") lo reutiliza para sus campos, con la
-diferencia de que ahí son EDITABLES (nz-input/nz-select dentro de
+venta" en el drawer) al aparecer un segundo consumidor: `user-detail` lo
+reutiliza para sus `<form>` de edición (datos personales/organización,
+dentro de "Información general" — ver "Patrón: tab con card general…"), con
+la diferencia de que ahí son EDITABLES (nz-input/nz-select dentro de
 `.summary-field__control`, con `.summary-field__error` para el mensaje de
 validación) en vez de solo texto — `sales-dashboard` sigue usando
 `.summary-field__value` (texto) porque su resumen es de solo lectura.
 `.summary-fields` es la variante SIN el divisor de 2 columnas, para una sola
-card con pocos campos que no necesita partirse (ver "Información general"/
-"Organización" de `user-detail`, cada una es una sola lista vertical, no dos
-columnas de campos).
+card con pocos campos que no necesita partirse. Nota: la vista de SOLO
+LECTURA de esos mismos campos en `user-detail` (fuera de modo edición) ya NO
+usa este partial — usa `.info-field` (vertical, feature-local, ver "Patrón:
+tab con card general…"), justo para no imponerle esa forma distinta a
+`sales-dashboard`.
 
 Para cuando un grupo de datos relacionados sí debe verse como dos bloques de
 igual jerarquía en vez de una sola lista larga (`.summary-columns`):
@@ -787,15 +824,18 @@ activar-desactivar + acción sensible con confirmación + auditoría.
 Nombre(s)/Apellidos (separados, no un `fullName` guardado — se deriva con la
 función pura `fullName()` del model), Correo, Teléfono, Estado, Fecha de
 creación, Última conexión. El detalle (`user-detail`) repite esos mismos
-campos en su primera tab y agrega dos tabs más: "Seguridad y acceso" (roles
-asignados — **array `roleIds: RoleId[]`, no un rol único** — permisos
-efectivos, estado de la cuenta, email verificado, último inicio de
-sesión/última actividad, intentos fallidos, 2FA, sesiones activas) y
-"Organización" (departamento, área, puesto, administrador responsable —
-`managerId` referencia a otro `AppUser` con rol admin/supervisor, ver
-`MANAGER_ROLE_IDS`). "Historial" (auditoría) se conservó como cuarta tab
-aunque no forma parte de las 3 secciones pedidas — información valiosa ya
-construida, ninguna razón para retirarla. Un rol/permiso NUNCA se re-deriva
+campos en su primera tab, junto con una sub-card de "Organización"
+(departamento, área, puesto, administrador responsable — `managerId`
+referencia a otro `AppUser` con rol admin/supervisor, ver
+`MANAGER_ROLE_IDS`; "Organización" fue su propia tab en una iteración
+anterior, ver "Patrón: tab con card general…") y una de "Cuenta". La segunda
+tab, "Seguridad y acceso", cubre roles asignados (**array `roleIds:
+RoleId[]`, no un rol único**), permisos efectivos, estado de la cuenta,
+email verificado, último inicio de sesión/última actividad, intentos
+fallidos, 2FA, sesiones activas. "Historial" (auditoría) se conservó como
+tercera tab aunque no forma parte de las 3 secciones pedidas originalmente —
+información valiosa ya construida, ninguna razón para retirarla. Un
+rol/permiso NUNCA se re-deriva
 solo en cada render: cambiar `roleIds` resetea `permissions` a la UNIÓN de
 los defaults de los roles seleccionados (`defaultPermissionsForRoles()`), el
 admin ajusta desde ahí — mismo criterio de "rol como punto de partida, no
@@ -879,11 +919,317 @@ techo fijo" que ya regía con un solo rol.
     patrón "Drawer vs. ruta" ya documentado — `UserDetail` (ruta, no drawer,
     porque tiene flujo de acciones propio) usa `nz-tabs` (selector real en
     ng-zorro-antd 22: `nz-tabs`/`nz-tab`, **no** `nz-tabset`) para separar
-    Información general / Roles y permisos / Historial cuando un solo
+    Información general (incluye Organización, ver "Patrón: tab con card
+    general…" abajo) / Seguridad y acceso / Historial cuando un solo
     formulario sería demasiado largo. Modo creación NO muestra tabs (un
     usuario que no existe aún no tiene roles que ajustar en detalle ni
     historial) — un solo formulario mínimo, y tras crear se navega al
     detalle completo con las 3 tabs.
+
+## Patrón: tab con card general + secciones + modo edición (`user-detail`)
+
+Cuarta iteración de la pantalla de detalle — evolucionó de "3 tabs, cada una
+con 1-2 `nz-card` lado a lado en un grid" a esta estructura, más consistente
+entre tabs y más legible de un vistazo (solo lectura por defecto, en vez de
+formularios completos siempre abiertos), y de "editar reemplaza toda la
+sección por un formulario" a "editar cambia solo el VALOR de cada campo,
+in-place, sin mover nada alrededor".
+
+1. **`Organización` dejó de ser su propia tab**: sus campos ahora son una
+   sección más DENTRO de "Información general" — seguían siendo,
+   conceptualmente, información del mismo usuario; no había razón fuerte
+   para una tab aparte una vez que "Información general" pasó a aceptar
+   varias secciones apiladas. `orgForm` (el `FormGroup` en `user-detail.ts`)
+   no cambió de forma — solo su ubicación en el `.html`.
+2. **`.tab-card` (`user-detail.scss`) — la card general de cada tab**: toma
+   todo el ancho de la pantalla, `[nzBodyStyle]="{ padding: '24px' }"`,
+   `border-radius: 12px !important` (mismo radius que `.table-card`, ver
+   "Patrón: card de tabla" — incluso sin tabla, es el mismo criterio de
+   "contenedor general" de una sección). Las 3 tabs (Información general,
+   Seguridad y acceso, Historial) la usan por igual.
+3. **Las secciones DENTRO de `.tab-card` son `<div class="tab-card__section">`,
+   NO `<nz-card>`**: antes cada una era su propia card anidada (8px radius,
+   borde + sombra propios) DENTRO de la card general de 12px — dos cards
+   una dentro de otra. Ahora son `<div>`s simples apiladas
+   (`.tab-card__sections`, reemplaza a `.tab-columns` retirada — el grid de
+   2 columnas lado a lado de la segunda iteración), separadas por un
+   hairline (`border-bottom: 1px solid var(--color-border)` en
+   `.tab-card__section:not(:last-child)`) en vez del borde de una card —
+   una sola superficie de card por tab, no cards anidadas. Cada sección
+   conserva su `.tab-card__section-title` (encabezado pequeño, mayúsculas,
+   mismo estilo que `.sale-drawer__heading` en `sales-dashboard.scss` pero
+   feature-local aquí — un segundo consumidor lo promovería a `shared/`).
+4. **`.info-field` — estructura "icono + etiqueta" arriba, "valor" (negritas)
+   O el control del formulario abajo**: la forma de mostrar/editar
+   CUALQUIER dato en esta pantalla (datos personales, organización, cuenta,
+   seguridad de la cuenta) — a propósito DISTINTA de `.summary-field`
+   (`_summary-columns.scss`, icono+etiqueta+valor en una sola fila
+   horizontal): ese partial es compartido con el drawer de venta de
+   `sales-dashboard`, que sigue de solo lectura en horizontal — convertirlo
+   a vertical ahí habría sido un cambio no pedido a un consumidor distinto.
+   `.info-field` vive local a `user-detail.scss` hasta que un segundo
+   consumidor la necesite (ver "Estructura de carpetas"). `.info-fields` las
+   acomoda en grid — **3 columnas fijas por defecto** (`repeat(3, 1fr)`,
+   ancho completo del `.tab-card__section` contenedor), **4 con
+   `.info-fields--cols-4`** (solo "Información personal", para hacer lugar
+   al avatar — ver punto 6). `.info-field__value--link` para valores que
+   navegan (Administrador responsable → perfil del manager);
+   `.info-field__value-row` para cuando el valor lleva una acción a un lado
+   (Email verificado → "Marcar como verificado", Sesiones activas →
+   "Cerrar sesiones") **o es un `nz-tag` solo** (ver punto 8 — sin este
+   wrapper, el tag se estira al ancho de la columna).
+5. **Modo edición: el MISMO `.info-field` cambia de valor, no de
+   estructura**: "Editar" vive en el header de la pantalla (junto a
+   "Eliminar usuario", ver `.user-detail__title-actions`) y activa
+   `isEditing` (signal en `user-detail.ts`) para AMBAS secciones de
+   "Información general" (datos personales + organización) a la vez. A
+   diferencia de la iteración anterior (que reemplazaba TODA la sección por
+   un `<form>` con otra estructura), ahora cada `.info-field` individual
+   tiene un solo `@if (isEditing()) { <input>/<nz-select>/<nz-date-picker> }
+   @else { <span class="info-field__value">... }` — el `<div
+   class="info-field">`, su icono y su etiqueta NUNCA cambian, solo el nodo
+   de abajo. El `<form>` (`infoForm`/`orgForm`, sin cambios de fondo) envuelve
+   TODO el `.info-fields` de su sección + el botón "Guardar cambios" (visible
+   solo si `isEditing()`) — sigue siendo un formulario real para
+   validación/submit, solo que ya no impone su propio layout visual. Cada
+   sección conserva su propio botón "Guardar cambios" (2 forms
+   independientes, 2 llamadas de servicio distintas) — `onSaveInfo()`/
+   `onSaveOrganization()` ponen `isEditing.set(false)` al terminar, así que
+   guardar cualquiera de las 2 cierra el modo edición completo (no hay un
+   tercer estado "una sección guardada, la otra no"). El botón del header
+   cambia a "Cancelar edición" mientras `isEditing()` es true —
+   `onCancelEditClick()` restaura ambos forms a los valores actuales del
+   usuario (descarta cambios sin guardar) antes de salir del modo.
+   `isEditing` se resetea a `false` en el mismo `effect()` que reinicia los
+   forms al cambiar de usuario — nunca debe sobrevivir a la navegación.
+   **No aplica** a "Roles y permisos" (Seguridad y acceso): ese formulario
+   sigue siempre visible con su propio botón "Guardar permisos" — es una
+   lista de checkboxes/multi-select, no datos con una representación de
+   "solo lectura" natural, y no se pidió el mismo tratamiento ahí.
+6. **Avatar rectangular, 1ª columna de "Información personal"**: `<nz-avatar
+   nzShape="square" class="user-detail__avatar">` (mismo `[nzSrc]`/
+   `[nzText]`/`[ngStyle]` que `user-list`, ver `AppUser.avatarUrl` — foto
+   real con fallback a iniciales+color) dentro de un `.info-field--avatar`
+   con `grid-column: 1; grid-row: span 2;` — al ser el PRIMER elemento del
+   grid de 4 columnas, el resto de los campos fluye automáticamente
+   alrededor de ese hueco de 1 columna × 2 filas (nadie más necesita
+   `grid-row`/`grid-column` explícitos). `border-radius: 8px` en vez del
+   círculo que usa `user-list` — "rectangular", no un avatar de fila de
+   tabla. `.info-fields__subsection-title` (`grid-column: 1 / -1`) separa
+   "Dirección" (Ciudad/Estado/Código Postal/Calle 1/Calle 2, sub-objeto
+   `AppUserAddress`) del resto de "Información personal" sin necesitar un
+   grid/sección aparte — ocupa su propia fila completa y el auto-placement
+   del grid sigue fluyendo después de ella.
+7. **Campos nuevos de "Información personal" (fecha de nacimiento, SSN,
+   género, dirección) y "Organización" (ID empleado, fecha de contratación,
+   fecha fin de contrato)**: agregados a `AppUser` — ver `AppUserAddress`
+   (sub-objeto propio, no 5 campos sueltos: la dirección siempre se
+   edita/muestra como una unidad) y `GENDER_OPTIONS` (lista cerrada, mismo
+   criterio que `STATUS_OPTIONS`) en el model. `contractEndDate` es
+   `string | null` (contrato indefinido = `null`, muestra "Indefinido" en
+   vez de "Sin asignar" — semántica distinta a un campo vacío). Las 25
+   entradas de `MOCK_USERS` NO se editaron a mano una por una para estos
+   campos nuevos — `extraProfileFields()` en `user-management-mock.data.ts`
+   los deriva del ÍNDICE del usuario (determinístico, no `Math.random`,
+   mismo criterio que `avatarTokensFor` para el color de avatar por hash de
+   id) sobre una semilla (`MOCK_USERS_SEED`, tipada `Omit<AppUser, ...>`)
+   que sí conserva los 25 usuarios originales completos a mano.
+   `nz-date-picker` trabaja con `Date | null`, no ISO string — `parseIsoDate`/
+   `toIsoDate`/`toIsoDateOrNull` (funciones locales en `user-detail.ts`) son
+   las únicas que cruzan esa frontera, en los 2 sentidos (reset de forms al
+   entrar/cancelar, y al armar el payload de `updateInfo`/`updateOrganization`
+   antes de guardar).
+8. **Tags "sueltos" (`nz-tag` sin acción al lado) también van en
+   `.info-field__value-row`**: "Estado de la cuenta" y "Autenticación de dos
+   factores (2FA)" en "Seguridad de la cuenta" se estiraban al ancho
+   completo de su columna del grid — un `nz-tag` es hijo directo de
+   `.info-field` (flex-column), y por default hereda `align-items: stretch`
+   del padre. "Email verificado" nunca tuvo este problema porque su tag YA
+   vivía envuelto en `.info-field__value-row` (necesario ahí por el botón
+   "Marcar como verificado" al lado) — un `.info-field__value-row` (flex,
+   eje horizontal) mide a sus hijos por contenido, no por estiramiento.
+   Aplicar el MISMO wrapper a los tags sueltos, aunque no tengan nada al
+   lado, es la solución — no un CSS especial para "tags sin acción".
+9. **Permisos en grid de 4 columnas**: `.permission-groups` pasó de
+   `flex-direction: column` (grupos apilados, cada uno con sus checkboxes
+   debajo) a `display: grid; grid-template-columns: repeat(4, 1fr)` — cada
+   grupo (Consulta/Operación/Administración/...) en su propia columna. Fijo
+   en 4 aunque hoy solo existan 3 grupos (`PERMISSIONS` en el model) — las
+   columnas sobrantes quedan vacías a propósito, para no tener que tocar
+   este grid el día que se agregue un 4° grupo de permisos.
+10. **`.ant-tabs-nav` como "pill" propio**: bridge en `styles.scss` (`border`,
+    `padding: 0 16px`, `border-radius: 12px`, `background: var(--color-card)`,
+    todos `!important` — mismo gotcha de siempre) en vez del texto suelto de
+    Ant. Con esto, la línea inferior de ancho completo que Ant dibuja por
+    defecto (`.ant-tabs-nav::before`) sobresale por debajo del borde
+    redondeado — se oculta entera (`display: none !important`) en vez de
+    solo recolorearla. Único consumidor de `nz-tabs` hoy — si aparece un
+    segundo, hereda esto automáticamente por vivir en el puente global, no
+    en `user-detail.scss`.
+
+## Patrón: card de tabla (estándar de toda la app)
+
+`.table-card` (`shared/styles/_data-table.scss`) es la card que envuelve
+**cualquier tabla nueva** de la app, tenga o no filtros — úsala siempre que
+construyas una pantalla con `nz-table` (o incluso una tabla HTML plana, ver
+`user-detail` "Historial"). Nació como una desviación puntual de `user-list`
+(su "segunda iteración": toolbar de filtros y tabla pasaron de vivir en dos
+elementos sueltos — card de tabla + `<section class="toolbar">` encima — a
+compartir la MISMA `<nz-card>`) y se promovió a estándar global:
+`reconciliation-dashboard` y `user-audit` (historial de auditoría) ya se
+migraron al mismo patrón; `sales-dashboard` y el "Historial" de
+`user-detail` no tenían toolbar que mover, así que solo heredaron el look
+(radius, header sin fondo, sin línea vertical) por usar `.table-card`.
+
+**Con filtros** (toolbar y tabla son conceptualmente una sola unidad — la
+vista es de administración/consulta de una lista): toolbar DENTRO de la
+card, `[nzBodyStyle]="{ padding: '24px' }"`, tabla envuelta en
+`.table-bleed`. **Sin filtros** (tabla sola, o filtros que alimentan también
+KPIs/otro contenido fuera de la tabla — ahí el toolbar se queda afuera):
+`[nzBodyStyle]="{ padding: '0' }"`, sin `.table-bleed` (innecesario: la
+tabla ya toca los 4 bordes). En ambos casos, `.table-card` solo se aplica
+como clase en el `.html` — nada que declarar en el `.scss` del feature.
+
+```html
+<!-- Con filtros (user-list, reconciliation-dashboard, user-audit) -->
+<nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
+  <section class="toolbar">...</section>
+  <div class="table-bleed">
+    <nz-table>...</nz-table>
+  </div>
+</nz-card>
+
+<!-- Sin filtros (sales-dashboard) -->
+<nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
+  <nz-table>...</nz-table>
+</nz-card>
+```
+
+1. **Radius propio de `.table-card`, no el "card base" general**: fuerza
+   `border-radius: 12px !important` (el resto de la app usa 8px, ver "Patrón:
+   card base") — a diferencia de su versión anterior, ya NO anula
+   border/box-shadow: los hereda del bridge de `.ant-card`, así que toda
+   tabla de la app ahora se ve como una card completa (borde + sombra), no
+   plana. `!important` obligatorio — mismo gotcha de siempre (el bridge de
+   `.ant-card` en `styles.scss` también usa `!important` con igual
+   especificidad).
+2. **Header sin fondo y sin línea vertical, en TODA `nz-table` dentro de
+   `.table-card`**: `::ng-deep .ant-table-thead > tr > th { background:
+   transparent !important; &::before { display: none !important; } }` vive
+   en `.table-card` mismo (no en `.table-bleed`) — así aplica igual con o sin
+   toolbar. Los dos `!important` son obligatorios: el fondo compite con el
+   bridge global de `styles.scss` (misma especificidad, misma importancia),
+   la línea vertical compite con un selector de Ant más específico pero SIN
+   `!important` propio (sin el nuestro, ninguno de los dos gana).
+3. **`.table-bleed`, solo cuando hay `.toolbar` dentro**: la card tiene 24px
+   de padding parejo (filtros Y tabla), pero la tabla necesita que su borde
+   superior toque los bordes izquierdo/derecho de la card como divisor —
+   `margin: 0 -24px; width: calc(100% + 48px); padding: 0 24px; border-top:
+   1px solid var(--color-border);` cancela el padding de la card a nivel de
+   caja (por eso el `border-top` sí llega a los bordes) y se lo devuelve al
+   CONTENIDO de la tabla con su propio `padding`, para que las celdas no
+   queden pegadas al borde.
+4. **Selección de filas**: checkbox en la primera columna, tanto por fila
+   (`UserManagementService.toggleSelect`) como en el header
+   (`toggleSelectAllFiltered` — selecciona/deselecciona los usuarios
+   FILTRADOS actualmente visibles, no todos los del sistema). Vive en el
+   service (`selectedIds`, `isAllFilteredSelected`,
+   `isSomeFilteredSelected` para el estado indeterminado del checkbox de
+   header) por el mismo motivo que `search`/`roleFilter`/`statusFilter`: es
+   estado de ESA pantalla. `deleteUser` purga el id eliminado de la
+   selección — evita seleccionar un id que ya no existe.
+5. **`StatusChip` (`features/user-management/status-chip/`)**: componente
+   compartido entre `user-list` (columna Estado) y `user-detail`
+   ("Información general") — el chip cambia de fondo/texto/borde según el
+   estado (`STATUS_META` en el model: activo=verde, inactivo=rojo,
+   bloqueado=naranja, usando `--color-tag-success/-error/-warning-*` — ver
+   "Colores de tag" arriba, mismo look que una `nz-tag`, no relleno sólido) y
+   abre un menú con los 3 estados al hacer click. `STATUS_META` también trae
+   `tagPreset` (`'success'|'error'|'warning'`) para el `nz-tag` plano de
+   "Estado de la cuenta" en "Seguridad y acceso" — así ese `nz-tag` usa
+   `[nzColor]="statusMeta[u.status].tagPreset"` igual de simple que los de
+   "Email verificado"/"2FA", sin repetir bg/fg a mano ahí. **No aplica el
+   cambio por sí solo** — emite `statusChange` y el consumidor decide (hoy:
+   ambos muestran `NzModalService.confirm()` antes de llamar a
+   `UserManagementService.setStatus`). Vive en el feature, no en
+   `shared/components/`, porque sus dos consumidores son de ESTE feature
+   (ver "Estructura de carpetas" — la regla de promoción a `shared/` es para
+   cuando un SEGUNDO FEATURE lo necesita, no un segundo componente del
+   mismo feature).
+6. **`UserStatus` pasó de 2 a 3 valores** (`'active' | 'inactive' |
+   'blocked'`) — cualquier switch/tag binario que asumiera solo
+   activo/inactivo tuvo que revisarse (el switch de "Información general"
+   se reemplazó por `StatusChip`; el `nz-tag` de "Estado de la cuenta" en
+   "Seguridad y acceso" pasó de un ternario a leer `STATUS_META` directo).
+   `AuditAction` ganó su propio valor `'blocked'` — un estado nuevo con
+   semántica propia amerita su propia acción de auditoría, no reusar
+   `'deactivated'` para dos cosas distintas.
+7. **Rol: selector "sin bordes" directo en la fila** — mismo `nz-select
+   [nzMode]="multiple"` que `user-detail`, pero con
+   `background/border-color: transparent` (clase local `.role-select`) para
+   que se lea como parte de la fila, no como un input más. El chevron de
+   apertura ya lo trae `nz-select` de fábrica — no hace falta un icono
+   propio (a diferencia de `StatusChip`, que si necesita el suyo porque no
+   es un `nz-select`). Cambiar el rol aquí llama a
+   `UserManagementService.changeRoles` igual que en el detalle — MISMO
+   efecto secundario (resetea permisos a la unión de defaults), sin
+   confirmación (acción rápida, igual que el resto de ediciones inline de
+   la lista).
+8. **Columna Acciones: iconos + tooltip, no dropdown**: la iteración
+   anterior agrupaba "Ver detalle"/"Restablecer contraseña"/"Eliminar" en un
+   `nz-dropdown-menu` (menú "⋮"). Se reemplazó por 3 botones-icono en línea
+   (`nz-button nzType="text"`, cada uno con `nz-tooltip`/`nzTooltipTitle`)
+   — más click directo (sin abrir un menú primero) a costa de más ancho de
+   columna; preferible cuando son pocas acciones (2-3) y todas caben sin
+   apretar la fila. Con más de ~4 acciones, volver al dropdown. Header de
+   esta columna centrado (`.text-center`, nueva utilidad en
+   `_data-table.scss` junto a `.text-right`).
+9. **Radius global de selects/inputs (6px)**: bridge en `styles.scss`
+   (`.ant-select-selector`, `.ant-input`, `.ant-input-affix-wrapper`,
+   `.ant-picker`) — distinto del radius de cards (8-12px) y botones (8px).
+   Un input/select/date-picker nuevo lo hereda automáticamente.
+10. **Avatar con foto real (`AppUser.avatarUrl`)**: `nz-avatar` recibe
+   `[nzSrc]` (URL o `null`→`undefined`) Y `[nzText]`/`[ngStyle]` (iniciales +
+   color, ver `avatar-color.util.ts`) al mismo tiempo — no hay que elegir uno
+   u otro a mano: `nz-avatar` ya resuelve el fallback solo (muestra la imagen
+   si `nzSrc` tiene valor Y carga bien; si no, cae a `nzText`), tanto para
+   `avatarUrl: null` como para una URL que falle en runtime. El mock mezcla
+   usuarios con y sin foto a propósito (caso real: no todos han subido una).
+11. **IDs de usuario, mínimo 4 dígitos**: `u0001`, `u0010`, etc. — el padding
+    es cosmético (`String(n).padStart(4, '0')` en
+    `UserManagementService.createUser`), `maxSeq` sigue leyendo el número con
+    `Number(...)` así que no depende de cuántos ceros traiga. El mock de
+    `MOCK_USERS`/`MOCK_AUDIT_LOG` se repobló completo con IDs de 4 dígitos —
+    si se agrega un usuario suelto a mano ahí, debe seguir el mismo formato.
+12. **Botones de Acciones: circulares y en el color de marca**: `.row-actions`
+    fuerza `width/height: 34px` (más grande que `nzSize="small"`, ~24px) y
+    `border-radius: 50% !important` sobre `.ant-btn` — así el fondo de
+    `:hover` (`.ant-btn-text:hover`, bridge global) se ve como un círculo
+    completo, no un cuadrado redondeado. `color: var(--color-primary)
+    !important` los ata a la paleta activa (antes heredaban
+    `--color-foreground` del bridge de `.ant-btn-text`); Eliminar
+    (`.ant-btn-dangerous`) se excluye explícitamente y se queda en
+    `--color-destructive` — mismo "semáforo" de siempre.
+13. **Rol: ancho de la caja vs. ancho del panel de opciones son cosas
+    distintas**: `.role-select` pasó de `width: 100%; max-width: 200px` a
+    `width: auto` para que el label y la flecha de apertura queden pegados
+    (la flecha de Ant se ancla al borde derecho de la CAJA, no al texto — si
+    la caja es angosta, quedan juntos gratis). Sin
+    `[nzDropdownMatchSelectWidth]="false"` en el `.html`, el panel de
+    opciones heredaría ese mismo ancho angosto — con `false` mantiene su
+    ancho natural (por contenido), igual que antes del cambio. La "×" de
+    quitar un rol individual (que `nz-select[nzMode=multiple]` muestra por
+    defecto en el tag visible) se oculta
+    (`.ant-select-selection-item-remove { display: none !important; }`):
+    cambiar de rol aquí es reabrir el panel y (des)marcar, no remover el tag
+    a mano — un solo punto de interacción, igual que `StatusChip`.
+14. **Mock de paginación**: `MOCK_USERS` creció de 8 a 25 usuarios (`u0010`
+    en adelante, saltando `u0009` — reservado para el usuario eliminado, ver
+    comentario en `user-management-mock.data.ts`) para poder probar
+    `nzPageSize=10` con 3 páginas reales (10/10/5, la última parcial). Cada
+    usuario nuevo mantiene su propia entrada `'created'` en
+    `MOCK_AUDIT_LOG` — igual que los 8 originales — para que su pestaña
+    "Historial" no se vea vacía solo por ser relleno.
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

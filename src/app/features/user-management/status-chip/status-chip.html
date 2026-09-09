@@ -1,0 +1,28 @@
+<span
+  class="status-chip"
+  [style.background]="meta().bg"
+  [style.color]="meta().fg"
+  [style.border-color]="meta().border"
+  nz-dropdown
+  [nzDropdownMenu]="menu"
+  nzTrigger="click"
+  (click)="$event.stopPropagation()"
+  role="button"
+  tabindex="0"
+  [attr.aria-label]="'Cambiar estado, actual: ' + meta().label"
+>
+  {{ meta().label }}
+  <svg class="status-chip__chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+    <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+  </svg>
+</span>
+
+<nz-dropdown-menu #menu="nzDropdownMenu">
+  <ul nz-menu (click)="$event.stopPropagation()">
+    @for (opt of options; track opt.value) {
+      <li nz-menu-item [nzSelected]="opt.value === status()" (click)="onOptionClick(opt.value)">
+        {{ opt.label }}
+      </li>
+    }
+  </ul>
+</nz-dropdown-menu>

@@ -2,12 +2,14 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { AuthService } from '../../auth/data/auth.service';
 import {
   AppUser,
+  AppUserAddress,
   AuditAction,
   AuditLogEntry,
   MANAGER_ROLE_IDS,
   PermissionKey,
   ROLE_LABEL,
   RoleId,
+  STATUS_META,
   UserStatus,
   defaultPermissionsForRoles,
   fullName,
@@ -32,6 +34,10 @@ export interface UpdateUserInfoInput {
   lastName: string;
   email: string;
   phone: string;
+  birthDate: string;
+  ssn: string;
+  gender: string;
+  address: AppUserAddress;
 }
 
 export interface UpdateOrganizationInput {
@@ -39,11 +45,14 @@ export interface UpdateOrganizationInput {
   area: string;
   jobTitle: string;
   managerId: string | null;
+  employeeId: string;
+  hireDate: string;
+  contractEndDate: string | null;
 }
 
 // El siguiente id debe ser mayor al de CUALQUIER id 'uN' ya usado, no solo
 // los de MOCK_USERS — el mock de auditoría incluye a propósito un
-// targetUserId ('u9') de un usuario YA ELIMINADO que no vive en MOCK_USERS
+// targetUserId ('u0009') de un usuario YA ELIMINADO que no vive en MOCK_USERS
 // (ver user-management-mock.data.ts). Si nextUserSeq solo mirara
 // MOCK_USERS.length, el primer usuario creado en esta sesión reciclaría ese
 // mismo id y heredaría el historial del usuario fantasma.
@@ -93,6 +102,24 @@ export class UserManagementService {
     });
   });
 
+  // Selección de filas en la lista — vive aquí (no en el componente) por el
+  // mismo motivo que search/roleFilter/statusFilter: es estado de ESA
+  // pantalla, y el service ya es el dueño del estado de la pantalla de
+  // lista. Alcance: los usuarios FILTRADOS actualmente visibles, no todos
+  // los usuarios del sistema (seleccionar "todos" con un filtro activo solo
+  // selecciona lo que se ve, no lo oculto por el filtro).
+  private readonly selectedIdsSignal = signal<ReadonlySet<string>>(new Set());
+  readonly selectedIds = this.selectedIdsSignal.asReadonly();
+
+  readonly isAllFilteredSelected = computed(() => {
+    const filtered = this.filteredUsers();
+    return filtered.length > 0 && filtered.every((u) => this.selectedIdsSignal().has(u.id));
+  });
+
+  readonly isSomeFilteredSelected = computed(
+    () => !this.isAllFilteredSelected() && this.filteredUsers().some((u) => this.selectedIdsSignal().has(u.id)),
+  );
+
   readonly summary = computed(() => {
     const users = this.usersSignal();
     return {
@@ -128,6 +155,43 @@ export class UserManagementService {
     this.statusFilter.set(value);
   }
 
+  isSelected(userId: string): boolean {
+    return this.selectedIdsSignal().has(userId);
+  }
+
+  toggleSelect(userId: string): void {
+    this.selectedIdsSignal.update((current) => {
+      const next = new Set(current);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  }
+
+  // Selecciona/deselecciona todos los usuarios FILTRADOS a la vez — si ya
+  // están todos seleccionados, el toggle los quita; si falta alguno (o
+  // ninguno), los agrega todos (mismo comportamiento que el checkbox
+  // "seleccionar todo" de cualquier tabla: el estado indeterminado cuenta
+  // como "no completo" y el siguiente click completa la selección).
+  toggleSelectAllFiltered(): void {
+    const filtered = this.filteredUsers();
+    const allSelected = this.isAllFilteredSelected();
+    this.selectedIdsSignal.update((current) => {
+      const next = new Set(current);
+      for (const user of filtered) {
+        if (allSelected) {
+          next.delete(user.id);
+        } else {
+          next.add(user.id);
+        }
+      }
+      return next;
+    });
+  }
+
   auditForUser(userId: string): AuditLogEntry[] {
     return this.recentAuditLog().filter((entry) => entry.targetUserId === userId);
   }
@@ -138,11 +202,17 @@ export class UserManagementService {
 
   createUser(input: CreateUserInput): AppUser {
     const user: AppUser = {
-      id: `u${nextUserSeq++}`,
+      // Mínimo 4 dígitos (regla de negocio) — el padding es solo cosmético,
+      // `maxSeq` (arriba) sigue leyendo el número con `Number(...)` así que
+      // un id viejo sin padding (no debería haberlo) igual se compara bien.
+      id: `u${String(nextUserSeq++).padStart(4, '0')}`,
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
       email: input.email.trim(),
       phone: input.phone.trim(),
+      // Sin foto al crear — se sube después (no hay flujo de carga de avatar
+      // todavía); cae a iniciales + color hasta entonces (ver AppUser.avatarUrl).
+      avatarUrl: null,
       status: input.status,
       createdAt: new Date().toISOString(),
       lastAccessAt: null,
@@ -153,12 +223,19 @@ export class UserManagementService {
       failedLoginAttempts: 0,
       twoFactorEnabled: false,
       activeSessions: 0,
-      // No se piden al crear — se completan después desde la pestaña
-      // "Organización" (ver UpdateOrganizationInput / updateOrganization).
+      // No se piden al crear — se completan después editando el detalle (ver
+      // UpdateUserInfoInput/UpdateOrganizationInput y sus respectivos update*).
+      birthDate: '',
+      ssn: '',
+      gender: '',
+      address: { city: '', state: '', zipCode: '', street1: '', street2: null },
       department: '',
       area: '',
       jobTitle: '',
       managerId: null,
+      employeeId: '',
+      hireDate: '',
+      contractEndDate: null,
     };
 
     this.usersSignal.update((list) => [user, ...list]);
@@ -176,9 +253,19 @@ export class UserManagementService {
       lastName: input.lastName.trim(),
       email: input.email.trim(),
       phone: input.phone.trim(),
+      birthDate: input.birthDate,
+      ssn: input.ssn.trim(),
+      gender: input.gender,
+      address: {
+        city: input.address.city.trim(),
+        state: input.address.state.trim(),
+        zipCode: input.address.zipCode.trim(),
+        street1: input.address.street1.trim(),
+        street2: input.address.street2?.trim() || null,
+      },
     };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-    this.appendAudit(updated, 'updated', 'Se actualizó nombre, correo y/o teléfono.');
+    this.appendAudit(updated, 'updated', 'Se actualizó información personal.');
   }
 
   // Cambiar los roles asignados resetea los permisos a la UNIÓN de los
@@ -213,18 +300,26 @@ export class UserManagementService {
       area: input.area.trim(),
       jobTitle: input.jobTitle.trim(),
       managerId: input.managerId,
+      employeeId: input.employeeId.trim(),
+      hireDate: input.hireDate,
+      contractEndDate: input.contractEndDate,
     };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
     this.appendAudit(updated, 'organization_updated', 'Se actualizaron departamento, área, puesto y/o responsable.');
   }
 
+  // 3 estados posibles (activo/inactivo/bloqueado, ver StatusChip) — cada
+  // uno tiene su propia AuditAction para que el historial diga exactamente
+  // qué pasó, no un genérico "estado cambiado".
   setStatus(userId: string, status: UserStatus): void {
     const user = this.findUser(userId);
     if (!user || user.status === status) return;
 
     const updated: AppUser = { ...user, status };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-    this.appendAudit(updated, status === 'active' ? 'activated' : 'deactivated', status === 'active' ? 'Cuenta activada.' : 'Cuenta desactivada.');
+
+    const action: AuditAction = status === 'active' ? 'activated' : status === 'blocked' ? 'blocked' : 'deactivated';
+    this.appendAudit(updated, action, `Cuenta cambiada a estado "${STATUS_META[status].label}".`);
   }
 
   setEmailVerified(userId: string): void {
@@ -271,8 +366,14 @@ export class UserManagementService {
     if (!user) return;
 
     this.usersSignal.update((list) => list.filter((u) => u.id !== userId));
+    this.selectedIdsSignal.update((current) => {
+      if (!current.has(userId)) return current;
+      const next = new Set(current);
+      next.delete(userId);
+      return next;
+    });
     // La entrada de auditoría queda — no depende de que el usuario siga
-    // existiendo (ver nota en user-management-mock.data.ts sobre 'u9').
+    // existiendo (ver nota en user-management-mock.data.ts sobre 'u0009').
     this.appendAudit(user, 'deleted', 'Usuario eliminado del sistema.');
   }
 

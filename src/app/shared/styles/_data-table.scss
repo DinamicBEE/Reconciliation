@@ -1,26 +1,65 @@
-// Helpers de tabla reutilizables — ver MASTER.md ("Densidad y layout").
-// Regla dura: las tablas del proyecto no llevan border-radius (bordes
-// rectos), y ninguna columna de texto libre debe crecer según su contenido
-// más largo.
+// Helpers de tabla reutilizables — ver MASTER.md ("Patrón: card de tabla").
+// Regla dura: ninguna columna de texto libre debe crecer según su contenido
+// más largo (ver `.col-truncate`).
 
-// Las tablas quedan FUERA del "card base" general (ver styles.scss /
-// MASTER.md "Patrón: card base") — bordes rectos, sin borde ni sombra,
-// exactamente como estaban antes de ese patrón. `!important` es
-// obligatorio aquí: `.ant-card` en styles.scss también usa `!important` con
-// la MISMA especificidad (una sola clase) — sin `!important` de este lado,
-// esta regla pierde pase lo que pase con la especificidad (así se coló el
-// bug: el radius de 8px se filtraba a las tablas).
+// "Card de tabla" — el estándar de TODA la app para cualquier tabla nueva,
+// tenga o no un `.toolbar` de filtros encima (dentro de la misma card, ver
+// MASTER.md "Patrón: card de tabla"). Nació como una desviación puntual de
+// `user-list` (radius 12px en vez de los 8px del "card base", header sin
+// fondo, sin línea vertical entre columnas) y se promovió aquí para que
+// CUALQUIER pantalla — actual o futura — la herede solo con usar
+// `.table-card`, sin repetir nada en su propio `.scss`.
+//
+// A diferencia de la versión anterior de esta clase (bordes rectos, sin
+// borde ni sombra, fuera del "card base"), ahora SÍ hereda border + shadow
+// del bridge `.ant-card` en `styles.scss` — solo el radius se pisa.
+// `!important` obligatorio: ese bridge también usa `!important` con la
+// MISMA especificidad (una sola clase) — sin esto, pierde pase lo que pase
+// (mismo gotcha de siempre, ver "Patrón: card base" en MASTER.md).
 .table-card {
+  border-radius: 12px !important;
   overflow: auto;
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
 
-  // ng-zorro trae su propio border-radius sutil (2px) en .ant-table — se
-  // anula aquí, con ::ng-deep quedando scoped a este componente.
-  ::ng-deep .ant-table {
-    border-radius: 0;
+  // Si la card trae un `.toolbar` de filtros ARRIBA de la tabla (misma
+  // card, ver `.table-bleed` abajo), separación antes de la tabla — no
+  // aplica cuando no hay `.toolbar` (el selector simplemente no matchea,
+  // sin costo para las tablas que van solas).
+  > .toolbar {
+    margin-bottom: 20px;
   }
+
+  // Header de Ant sin fondo propio y sin la línea vertical entre columnas
+  // (pseudo-elemento ::before) — look "bleed" en TODA tabla de la app, no
+  // solo en la de referencia. `!important` en ambos: el fondo compite con
+  // el bridge global de `styles.scss` (misma especificidad, misma
+  // importancia); la línea vertical compite con un selector de Ant más
+  // específico pero SIN `!important` propio — sin el nuestro, ninguno de
+  // los dos gana (ver "Gotcha de CSS" en MASTER.md).
+  ::ng-deep .ant-table-thead > tr > th {
+    background: transparent !important;
+
+    &::before {
+      display: none !important;
+    }
+  }
+}
+
+// Para cards con `.toolbar` DENTRO (nzBodyStyle padding: 24px, ver
+// MASTER.md "Patrón: card de tabla"): la tabla necesita "escapar" ese
+// padding para que su borde superior toque los bordes izquierdo/derecho de
+// la card, como divisor entre filtros y tabla — `margin` negativo +
+// `width` extendido cancelan el padding a nivel de CAJA (por eso el
+// `border-top` sí llega a los bordes), y el `padding` propio de este mismo
+// bloque devuelve el inset visual al CONTENIDO de la tabla, para que sus
+// celdas no queden pegadas al borde de la card. Innecesario en cards SIN
+// toolbar (`nzBodyStyle: { padding: '0' }`): ahí la tabla ya toca los 4
+// bordes de por sí, sin necesidad de este truco.
+.table-bleed {
+  margin: 0 -24px;
+  width: calc(100% + 48px);
+  padding: 0 24px;
+  border-top: 1px solid var(--color-border);
+  overflow: auto;
 }
 
 .clickable-row {
@@ -44,6 +83,10 @@
 
 .text-right {
   text-align: right;
+}
+
+.text-center {
+  text-align: center;
 }
 
 .text-success {
@@ -75,4 +118,12 @@
   font-weight: 600;
   color: var(--color-primary);
   white-space: nowrap;
+}
+
+::ng-deep .ant-pagination ol, .ant-pagination ul {
+      margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    gap: 4px;
 }
