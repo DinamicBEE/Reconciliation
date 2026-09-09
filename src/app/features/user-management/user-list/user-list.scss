@@ -39,24 +39,38 @@
   font-size: 13px;
   color: var(--color-muted-foreground);
   text-decoration: none;
+  background: var(--color-card) !important;
+  border-color: var(--color-secondary) !important;
+  color: var(--color-secondary) !important;
 
-  &:hover {
-    color: var(--color-foreground);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-ring);
-    outline-offset: 2px;
+  // Mismo criterio de hover que el resto de los botones (.ant-btn-primary/
+  // -dangerous en styles.scss): aclarar con filtro, no cambiar de color.
+  &:hover,
+  &:focus {
+    filter: brightness(1.1);
   }
 }
 
+.user-list__add-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+// Card + bleed de tabla: `.table-card`/`.table-bleed` ahora son el estándar
+// compartido de toda la app (ver shared/styles/_data-table.scss y MASTER.md
+// "Patrón: card de tabla") — esta pantalla ya no necesita su propio radius,
+// fondo de header ni línea vertical: los hereda solo con usar esas dos
+// clases en el .html.
 .toolbar__filter--search {
   width: 260px;
 }
 
-// Solo avatar + Nombre(s) — Apellidos/Correo/Teléfono son columnas propias
-// (ver spec de columnas de la tabla), a diferencia de la celda combinada que
-// tenía esta tabla antes de separar nombre y apellido en dos columnas.
+.checkbox-col {
+  width: 44px;
+  text-align: center;
+}
+
 .user-cell {
   display: flex;
   align-items: center;
@@ -69,43 +83,87 @@
   font-weight: 600;
 }
 
+.user-cell__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .user-cell__name {
   color: var(--color-foreground);
   font-weight: 600;
 }
 
-.status-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.user-cell__email {
   font-size: 12px;
-  font-weight: 600;
-}
-
-// !important necesario: el puente de botones en styles.scss también usa
-// !important sobre .ant-btn-text con la misma especificidad (una clase) —
-// sin esto, este color pierde pase lo que pase (mismo gotcha que
-// .table-card, ver _data-table.scss).
-.row-menu-trigger {
-  color: var(--color-muted-foreground) !important;
-}
-
-// Icono antes del label en cada item del menú de acciones.
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.menu-item__icon {
-  flex-shrink: 0;
   color: var(--color-muted-foreground);
 }
 
-// nzDanger tiñe el texto de rojo vía ng-zorro — el icono debe seguirlo para
-// no quedar gris junto a un label rojo.
-li.ant-dropdown-menu-item-danger .menu-item__icon {
-  color: var(--color-destructive);
+// Selector de rol "sin bordes" directo en la fila — mismo control que
+// user-detail (nz-select multiple), pero sin fondo/borde propio para que se
+// lea como parte de la fila y no como un input más. El chevron de apertura
+// ya lo trae nz-select por defecto (no hace falta un icono propio, a
+// diferencia del chip de Estado — ver StatusChip).
+//
+// `width: auto` (no 100%/max-width fijo) para que la caja se ajuste al
+// contenido — así el label y la flecha quedan pegados en vez de la flecha
+// flotando en el extremo derecho de una caja ancha. `nzDropdownMatchSelectWidth`
+// (en el .html) evita que ESTO reduzca también el ancho del panel de
+// opciones: sin él, el panel heredaría el mismo ancho angosto del selector.
+.role-select {
+  display: inline-block;
+  width: auto;
+  vertical-align: middle;
+
+  ::ng-deep .ant-select-selector {
+    background: transparent !important;
+    border-color: transparent !important;
+    padding-left: 0 !important;
+    box-shadow: none !important;
+  }
+
+  ::ng-deep .ant-select-selection-item {
+    background: none;
+    border: none;
+    padding-right: 4px;
+  }
+
+  // La "x" de quitar un rol individual no aplica aquí: cambiar de rol se
+  // hace reabriendo el selector y (des)marcando en el panel, no removiendo
+  // el tag a mano — mismo criterio que el chip de Estado (un solo punto de
+  // interacción, no dos).
+  ::ng-deep .ant-select-selection-item-remove {
+    display: none !important;
+  }
+}
+
+// Botones de acción: circulares (radio 50%, no el 8px global de .ant-btn —
+// ver "Botones" en styles.scss) y un poco más grandes que nzSize="small"
+// (24px) para que el resalte de :hover se lea como un círculo completo, no
+// un cuadrado con esquinas redondeadas. Color primario de la paleta activa
+// (no --color-foreground, el default de .ant-btn-text) salvo Eliminar, que
+// se queda en --color-destructive vía .ant-btn-dangerous — "semáforo" de
+// siempre, ver MASTER.md.
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  ::ng-deep .ant-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 50% !important;
+    color: var(--color-primary) !important;
+
+    &.ant-btn-dangerous {
+      color: var(--color-destructive) !important;
+    }
+  }
 }
 
 .user-list__empty {

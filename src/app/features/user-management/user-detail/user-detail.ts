@@ -2,8 +2,10 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { CommonModule } from '@angular/common';
 import { FormsModule, NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
@@ -15,17 +17,22 @@ import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import {
   AppUser,
   AUDIT_ACTION_LABEL,
+  GENDER_OPTIONS,
   PERMISSIONS,
   PermissionDef,
   PermissionKey,
   ROLE_LABEL,
   ROLE_OPTIONS,
   RoleId,
+  STATUS_META,
+  UserStatus,
   defaultPermissionsForRoles,
   fullName,
 } from '../data/user-management.model';
 import { UserManagementService } from '../data/user-management.service';
 import { AREAS, DEPARTMENTS, JOB_TITLES } from '../data/organization-catalog';
+import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
+import { StatusChip } from '../status-chip/status-chip';
 
 // Agrupación estática de PERMISSIONS por `group` — se calcula una sola vez
 // al cargar el módulo (la lista de permisos no cambia en runtime), no en
@@ -41,6 +48,21 @@ const PERMISSION_GROUPS: { group: string; items: PermissionDef[] }[] = (() => {
 
 const PHONE_PATTERN = /^[+]?[0-9()\-\s]{7,20}$/;
 
+// `nz-date-picker` trabaja con `Date | null` — el model guarda fecha (sin
+// hora) como ISO string (`'yyyy-MM-dd'`) o `null`. Estas 2 funciones son las
+// únicas que cruzan esa frontera, en los 2 sentidos.
+function parseIsoDate(value: string | null): Date | null {
+  return value ? new Date(value) : null;
+}
+
+function toIsoDate(value: Date | null): string {
+  return value ? value.toISOString().slice(0, 10) : '';
+}
+
+function toIsoDateOrNull(value: Date | null): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
+}
+
 @Component({
   selector: 'app-user-detail',
   imports: [
@@ -48,8 +70,10 @@ const PHONE_PATTERN = /^[+]?[0-9()\-\s]{7,20}$/;
     FormsModule,
     ReactiveFormsModule,
     RouterLink,
+    NzAvatarModule,
     NzButtonModule,
     NzCardModule,
+    NzDatePickerModule,
     NzInputModule,
     NzSelectModule,
     NzSwitchModule,
@@ -57,6 +81,7 @@ const PHONE_PATTERN = /^[+]?[0-9()\-\s]{7,20}$/;
     NzTagModule,
     NzTabsModule,
     NzModalModule,
+    StatusChip,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './user-detail.html',
@@ -75,6 +100,7 @@ export class UserDetail {
   private readonly router = inject(Router);
 
   protected readonly fullName = fullName;
+  protected readonly statusMeta = STATUS_META;
   protected readonly roleLabel = ROLE_LABEL;
   protected readonly roleOptions = ROLE_OPTIONS;
   protected readonly permissionGroups = PERMISSION_GROUPS;
@@ -82,6 +108,7 @@ export class UserDetail {
   protected readonly departments = DEPARTMENTS;
   protected readonly areas = AREAS;
   protected readonly jobTitles = JOB_TITLES;
+  protected readonly genderOptions = GENDER_OPTIONS;
 
   protected readonly isCreate = computed(() => !this.userId());
 
@@ -116,6 +143,17 @@ export class UserDetail {
     return this.service.allUsers().find((m) => m.id === u.managerId) ?? null;
   });
 
+  // Mismo helper que user-list.ts para el avatar (foto real con fallback a
+  // iniciales+color, ver AppUser.avatarUrl) — aquí en un avatar rectangular
+  // más grande, no el circular pequeño de la fila de una tabla.
+  protected avatarStyle(user: AppUser): Record<string, string> {
+    return avatarTokensFor(user.id);
+  }
+
+  protected initials(user: AppUser): string {
+    return initialsFor(fullName(user));
+  }
+
   // Nombre/correo/teléfono con validación real (requerido, formato) →
   // Reactive Forms, mismo criterio que login.ts. Roles/permisos/estado son
   // controles simples sin reglas de validación propias → ngModel directo
@@ -126,6 +164,19 @@ export class UserDetail {
     lastName: this.fb.control('', [Validators.required, Validators.minLength(2)]),
     email: this.fb.control('', [Validators.required, Validators.email]),
     phone: this.fb.control('', [Validators.required, Validators.pattern(PHONE_PATTERN)]),
+    // Fecha de nacimiento/SSN/género/dirección — igual que "Organización":
+    // no se piden al crear, sin validadores propios (datos de referencia,
+    // no credenciales de acceso).
+    birthDate: this.fb.control<Date | null>(null),
+    ssn: this.fb.control(''),
+    gender: this.fb.control(''),
+    address: this.fb.group({
+      city: this.fb.control(''),
+      state: this.fb.control(''),
+      zipCode: this.fb.control(''),
+      street1: this.fb.control(''),
+      street2: this.fb.control<string | null>(null),
+    }),
   });
 
   // "Organización" no se pide al crear — solo aplica editando un usuario
@@ -135,6 +186,9 @@ export class UserDetail {
     area: this.fb.control(''),
     jobTitle: this.fb.control(''),
     managerId: this.fb.control<string | null>(null),
+    employeeId: this.fb.control(''),
+    hireDate: this.fb.control<Date | null>(null),
+    contractEndDate: this.fb.control<Date | null>(null),
   });
 
   // --- Estado local de creación (solo aplica cuando isCreate()) ---
@@ -144,6 +198,14 @@ export class UserDetail {
   // --- Borrador de "Seguridad y acceso" (solo aplica editando un usuario existente) ---
   protected readonly draftRoleIds = signal<RoleId[]>([]);
   protected readonly draftPermissions = signal<Set<PermissionKey>>(new Set());
+
+  // --- Modo edición de "Información general" (datos personales +
+  // organización) — de solo lectura por defecto; el botón "Editar" del
+  // header (junto a "Eliminar usuario") lo activa para AMBAS sub-cards a la
+  // vez, ya que viven bajo el mismo botón (ver user-detail.html). No aplica
+  // a "Seguridad y acceso" (roles/permisos ya tienen su propio flujo de
+  // edición directa, con su propio botón "Guardar permisos").
+  protected readonly isEditing = signal(false);
 
   constructor() {
     // effect (no computed): reinicia formularios + borradores al entrar a un
@@ -158,24 +220,82 @@ export class UserDetail {
       const found = id ? untracked(() => this.service.allUsers().find((u) => u.id === id) ?? null) : null;
 
       if (found) {
-        this.infoForm.reset({ firstName: found.firstName, lastName: found.lastName, email: found.email, phone: found.phone });
+        this.infoForm.reset({
+          firstName: found.firstName,
+          lastName: found.lastName,
+          email: found.email,
+          phone: found.phone,
+          birthDate: parseIsoDate(found.birthDate),
+          ssn: found.ssn,
+          gender: found.gender,
+          address: { ...found.address },
+        });
         this.orgForm.reset({
           department: found.department,
           area: found.area,
           jobTitle: found.jobTitle,
           managerId: found.managerId,
+          employeeId: found.employeeId,
+          hireDate: parseIsoDate(found.hireDate),
+          contractEndDate: parseIsoDate(found.contractEndDate),
         });
         this.draftRoleIds.set([...found.roleIds]);
         this.draftPermissions.set(new Set(found.permissions));
       } else {
-        this.infoForm.reset({ firstName: '', lastName: '', email: '', phone: '' });
-        this.orgForm.reset({ department: '', area: '', jobTitle: '', managerId: null });
+        this.infoForm.reset({
+          firstName: '',
+          lastName: '',
+          email: '',
+          phone: '',
+          birthDate: null,
+          ssn: '',
+          gender: '',
+          address: { city: '', state: '', zipCode: '', street1: '', street2: null },
+        });
+        this.orgForm.reset({ department: '', area: '', jobTitle: '', managerId: null, employeeId: '', hireDate: null, contractEndDate: null });
         this.createRoleIds.set([]);
         this.createActive.set(true);
         this.draftRoleIds.set([]);
         this.draftPermissions.set(new Set());
       }
+      // Nunca entrar a un usuario (o volver a /usuarios/nuevo) ya en modo
+      // edición — es estado de ESTA visita a la pantalla, no debe sobrevivir
+      // a la navegación.
+      this.isEditing.set(false);
     });
+  }
+
+  protected onEditClick(): void {
+    this.isEditing.set(true);
+  }
+
+  // Descarta cambios sin guardar en ambos formularios (info + organización)
+  // y vuelve a la vista de solo lectura — sin esto, "Cancelar" dejaría
+  // valores a medio escribir visibles la próxima vez que se entre a editar.
+  protected onCancelEditClick(): void {
+    const user = this.user();
+    if (user) {
+      this.infoForm.reset({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        birthDate: parseIsoDate(user.birthDate),
+        ssn: user.ssn,
+        gender: user.gender,
+        address: { ...user.address },
+      });
+      this.orgForm.reset({
+        department: user.department,
+        area: user.area,
+        jobTitle: user.jobTitle,
+        managerId: user.managerId,
+        employeeId: user.employeeId,
+        hireDate: parseIsoDate(user.hireDate),
+        contractEndDate: parseIsoDate(user.contractEndDate),
+      });
+    }
+    this.isEditing.set(false);
   }
 
   protected isPermissionChecked(key: PermissionKey): boolean {
@@ -210,16 +330,24 @@ export class UserDetail {
     const id = this.userId();
     if (!id) return;
 
-    this.service.updateInfo(id, this.infoForm.getRawValue());
+    const raw = this.infoForm.getRawValue();
+    this.service.updateInfo(id, { ...raw, birthDate: toIsoDate(raw.birthDate) });
     this.message.success('Datos actualizados.');
+    this.isEditing.set(false);
   }
 
   protected onSaveOrganization(): void {
     const id = this.userId();
     if (!id) return;
 
-    this.service.updateOrganization(id, this.orgForm.getRawValue());
+    const raw = this.orgForm.getRawValue();
+    this.service.updateOrganization(id, {
+      ...raw,
+      hireDate: toIsoDate(raw.hireDate),
+      contractEndDate: toIsoDateOrNull(raw.contractEndDate),
+    });
     this.message.success('Datos de organización actualizados.');
+    this.isEditing.set(false);
   }
 
   protected onSaveRolesAndPermissions(): void {
@@ -235,12 +363,22 @@ export class UserDetail {
     this.message.success('Roles y permisos actualizados.');
   }
 
-  protected onToggleStatus(checked: boolean): void {
-    const id = this.userId();
-    if (!id) return;
+  // El chip emite la intención, la confirmación vive aquí — mismo patrón
+  // que UserList.onStatusChangeRequest (ver StatusChip).
+  protected onStatusChangeRequest(next: UserStatus): void {
+    const user = this.user();
+    if (!user) return;
 
-    this.service.setStatus(id, checked ? 'active' : 'inactive');
-    this.message.success(checked ? 'Cuenta activada.' : 'Cuenta desactivada.');
+    const label = STATUS_META[next].label;
+    this.modal.confirm({
+      nzTitle: 'Cambiar estado',
+      nzContent: `¿Cambiar el estado de <b>${fullName(user)}</b> a <b>${label}</b>?`,
+      nzOkText: 'Cambiar',
+      nzOnOk: () => {
+        this.service.setStatus(user.id, next);
+        this.message.success(`Estado actualizado a ${label}.`);
+      },
+    });
   }
 
   protected onVerifyEmailClick(): void {

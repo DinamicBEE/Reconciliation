@@ -2,14 +2,14 @@
   <div class="user-list__header">
     <h1 class="user-list__title">Administración de usuarios</h1>
     <div class="user-list__header-actions">
-      <a routerLink="/usuarios/auditoria" class="user-list__audit-link">
+      <button routerLink="/usuarios/auditoria" class="user-list__audit-link" nz-button type="button">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 2" />
           <circle cx="12" cy="12" r="9" />
         </svg>
-        Ver historial completo
-      </a>
-      <button nz-button nzType="primary" type="button" routerLink="/usuarios/nuevo">
+        Historial
+      </button>
+      <button nz-button nzType="primary" type="button" routerLink="/usuarios/nuevo" class="user-list__add-user">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" d="M12 5v14M5 12h14" />
         </svg>
@@ -18,127 +18,166 @@
     </div>
   </div>
 
-  <section class="toolbar">
-    <input
-      nz-input
-      type="text"
-      class="toolbar__filter toolbar__filter--search"
-      placeholder="Buscar por nombre o correo"
-      [ngModel]="service.search()"
-      (ngModelChange)="onSearchChange($event)"
-    />
+  <!-- Filtros + tabla en la MISMA card — el estándar de toda la app, ver
+       MASTER.md "Patrón: card de tabla" (`.table-card`, en
+       shared/styles/_data-table.scss). -->
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
+    <section class="toolbar">
+      <input
+        nz-input
+        type="text"
+        class="toolbar__filter toolbar__filter--search"
+        placeholder="Buscar por nombre o correo"
+        [ngModel]="service.search()"
+        (ngModelChange)="onSearchChange($event)"
+      />
 
-    <nz-select class="toolbar__filter" [ngModel]="service.roleFilter()" (ngModelChange)="onRoleFilterChange($event)">
-      @for (opt of roleOptions; track opt.value) {
-        <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
-      }
-    </nz-select>
+      <nz-select class="toolbar__filter" [ngModel]="service.roleFilter()" (ngModelChange)="onRoleFilterChange($event)">
+        @for (opt of roleFilterOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
 
-    <nz-select class="toolbar__filter" [ngModel]="service.statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
-      @for (opt of statusOptions; track opt.value) {
-        <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
-      }
-    </nz-select>
-  </section>
+      <nz-select class="toolbar__filter" [ngModel]="service.statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+        @for (opt of statusFilterOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
+    </section>
 
-  <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
-    <nz-table #tbl [nzData]="service.filteredUsers()" [nzPageSize]="10" nzSize="middle">
-      <thead>
-        <tr>
-          <th>Nombre(s)</th>
-          <th>Apellidos</th>
-          <th>Correo electrónico</th>
-          <th>Teléfono</th>
-          <th>Estado</th>
-          <th>Fecha de creación</th>
-          <th>Última conexión</th>
-          <th class="text-right">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (user of tbl.data; track user.id) {
-          <tr class="clickable-row" (click)="onRowClick(user)">
-            <td>
-              <div class="user-cell">
-                <nz-avatar class="user-cell__avatar" [nzText]="initials(user)" [ngStyle]="avatarStyle(user)" />
-                <span class="user-cell__name">{{ user.firstName }}</span>
-              </div>
-            </td>
-            <td>{{ user.lastName }}</td>
-            <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="user.email">{{ user.email }}</td>
-            <td class="font-mono">{{ user.phone }}</td>
-            <td (click)="$event.stopPropagation()">
-              <label class="status-switch">
-                <nz-switch
-                  [ngModel]="user.status === 'active'"
-                  (ngModelChange)="onToggleStatus(user, $event)"
-                  nzSize="small"
-                />
-                <span [class.text-success]="user.status === 'active'" [class.text-muted]="user.status === 'inactive'">
-                  {{ user.status === 'active' ? 'Activo' : 'Inactivo' }}
-                </span>
-              </label>
-            </td>
-            <td class="font-mono">{{ user.createdAt | date: 'dd/MM/yyyy' }}</td>
-            <td class="font-mono">
-              @if (user.lastAccessAt) {
-                {{ user.lastAccessAt | date: 'dd/MM/yyyy HH:mm' }}
-              } @else {
-                <span class="text-muted">Nunca</span>
-              }
-            </td>
-            <td class="text-right" (click)="$event.stopPropagation()">
-              <button
-                nz-button
-                nzType="text"
-                nzSize="small"
-                type="button"
-                class="row-menu-trigger"
-                nz-dropdown
-                [nzDropdownMenu]="rowMenu"
-                nzTrigger="click"
-                nzPlacement="bottomRight"
-                aria-label="Más acciones"
-              >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                  <circle cx="12" cy="5" r="1.6" />
-                  <circle cx="12" cy="12" r="1.6" />
-                  <circle cx="12" cy="19" r="1.6" />
-                </svg>
-              </button>
-
-              <nz-dropdown-menu #rowMenu="nzDropdownMenu">
-                <ul nz-menu>
-                  <li nz-menu-item class="menu-item" [routerLink]="['/usuarios', user.id]">
-                    <svg class="menu-item__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+    <!-- Bleed: se sale del padding de la card (margin negativo, ver .scss)
+         para que el borde superior toque los bordes izquierdo/derecho de la
+         card, como divisor entre los filtros y la tabla. -->
+    <div class="table-bleed">
+      <nz-table #tbl [nzData]="service.filteredUsers()" [nzPageSize]="10" nzSize="middle">
+        <thead>
+          <tr>
+            <th class="checkbox-col">
+              <label
+                nz-checkbox
+                [ngModel]="service.isAllFilteredSelected()"
+                [nzIndeterminate]="service.isSomeFilteredSelected()"
+                (ngModelChange)="onToggleSelectAll()"
+                aria-label="Seleccionar todos los usuarios visibles"
+              ></label>
+            </th>
+            <th>Usuario</th>
+            <th>Estatus</th>
+            <th>Rol</th>
+            <th>ID</th>
+            <th>Teléfono</th>
+            <th>Última conexión</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of tbl.data; track user.id) {
+            <tr class="clickable-row" (click)="onRowClick(user)">
+              <td class="checkbox-col" (click)="$event.stopPropagation()">
+                <label
+                  nz-checkbox
+                  [ngModel]="service.isSelected(user.id)"
+                  (ngModelChange)="onToggleRowSelect(user.id)"
+                  [attr.aria-label]="'Seleccionar ' + fullName(user)"
+                ></label>
+              </td>
+              <td>
+                <div class="user-cell">
+                  <nz-avatar
+                    class="user-cell__avatar"
+                    [nzSrc]="user.avatarUrl ?? undefined"
+                    [nzText]="initials(user)"
+                    [ngStyle]="avatarStyle(user)"
+                  />
+                  <div class="user-cell__text">
+                    <span class="user-cell__name">{{ fullName(user) }}</span>
+                    <span class="user-cell__email">{{ user.email }}</span>
+                  </div>
+                </div>
+              </td>
+              <td (click)="$event.stopPropagation()">
+                <app-status-chip [status]="user.status" (statusChange)="onStatusChangeRequest(user, $event)" />
+              </td>
+              <td (click)="$event.stopPropagation()">
+                <nz-select
+                  class="role-select"
+                  nzMode="multiple"
+                  [nzMaxTagCount]="1"
+                  [nzMaxTagPlaceholder]="roleOverflowTpl"
+                  [nzDropdownMatchSelectWidth]="false"
+                  [ngModel]="user.roleIds"
+                  nzVariant="underlined"
+                  (ngModelChange)="onRoleQuickChange(user, $event)"
+                >
+                  @for (opt of roleOptions; track opt.value) {
+                    <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+                  }
+                </nz-select>
+                <ng-template #roleOverflowTpl let-omitted>+{{ omitted.length }}</ng-template>
+              </td>
+              <td class="font-mono">{{ user.id }}</td>
+              <td class="font-mono">{{ user.phone }}</td>
+              <td class="font-mono">
+                @if (user.lastAccessAt) {
+                  {{ user.lastAccessAt | date: 'dd/MM/yyyy HH:mm' }}
+                } @else {
+                  <span class="text-muted">Nunca</span>
+                }
+              </td>
+              <td class="text-center" (click)="$event.stopPropagation()">
+                <div class="row-actions">
+                  <button
+                    nz-button
+                    nzType="text"
+                    type="button"
+                    [routerLink]="['/usuarios', user.id]"
+                    nz-tooltip
+                    nzTooltipTitle="Ver detalle"
+                    aria-label="Ver detalle"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M2 12c1.3-3.6 5-7 10-7s8.7 3.4 10 7c-1.3 3.6-5 7-10 7s-8.7-3.4-10-7Z" />
                       <circle cx="12" cy="12" r="3" />
                     </svg>
-                    Ver detalle
-                  </li>
-                  <li nz-menu-item class="menu-item" (click)="onResetPasswordClick(user)">
-                    <svg class="menu-item__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  </button>
+                  <button
+                    nz-button
+                    nzType="text"
+                    type="button"
+                    (click)="onResetPasswordClick(user)"
+                    nz-tooltip
+                    nzTooltipTitle="Restablecer contraseña"
+                    aria-label="Restablecer contraseña"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                       <rect x="5" y="11" width="14" height="9" rx="2" />
                       <path stroke-linecap="round" d="M8 11V7a4 4 0 0 1 8 0v4" />
                     </svg>
-                    Restablecer contraseña
-                  </li>
-                  <li nz-menu-item class="menu-item" nzDanger (click)="onDeleteClick(user)">
-                    <svg class="menu-item__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  </button>
+                  <button
+                    nz-button
+                    nzType="text"
+                    nzDanger
+                    type="button"
+                    (click)="onDeleteClick(user)"
+                    nz-tooltip
+                    nzTooltipTitle="Eliminar"
+                    aria-label="Eliminar"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m3 0-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7h14Z" />
                     </svg>
-                    Eliminar
-                  </li>
-                </ul>
-              </nz-dropdown-menu>
-            </td>
-          </tr>
-        } @empty {
-          <tr>
-            <td colspan="8" class="text-muted user-list__empty">Ningún usuario coincide con los filtros aplicados.</td>
-          </tr>
-        }
-      </tbody>
-    </nz-table>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="8" class="text-muted user-list__empty">Ningún usuario coincide con los filtros aplicados.</td>
+            </tr>
+          }
+        </tbody>
+      </nz-table>
+    </div>
   </nz-card>
 </div>
