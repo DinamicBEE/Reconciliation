@@ -80,22 +80,90 @@
       </svg>
     </button>
 
-    <button type="button" class="icon-button" (click)="onLogout()" aria-label="Cerrar sesión">
-      <!-- salir -->
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-        <path stroke-linecap="round" stroke-linejoin="round" d="M10 17l5-5-5-5" />
-        <path stroke-linecap="round" d="M15 12H3" />
-      </svg>
-    </button>
+    @if (currentAppUser(); as user) {
+      <div class="app-header__avatar-menu" #avatarMenuRoot>
+        <button
+          type="button"
+          class="user-card"
+          (click)="toggleAvatarMenu()"
+          [attr.title]="fullName() + ' — ' + roleLabel()"
+          aria-haspopup="menu"
+          [attr.aria-expanded]="avatarMenuOpen() ? 'true' : 'false'"
+        >
+          <nz-avatar class="user-card__avatar" [nzSrc]="avatarUrl()" [nzText]="initials()" [ngStyle]="avatarStyle()" />
+        </button>
 
-    @if (auth.currentUser(); as user) {
-      <div class="user-card" [attr.title]="user.fullName + ' — ' + user.role">
-        <nz-avatar class="user-card__avatar" [nzText]="initials()" [ngStyle]="avatarStyle()" />
-        <!-- <div class="user-card__info">
-          <span class="user-card__name">{{ shortName() }}</span>
-          <span class="user-card__role">{{ user.role }}</span>
-        </div> -->
+        @if (avatarMenuOpen()) {
+          <div class="avatar-menu" role="menu">
+            <button type="button" class="avatar-menu__item" role="menuitem" (click)="goToProfile()">
+              <svg class="avatar-menu__icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="8" r="4" />
+                <path stroke-linecap="round" d="M4 21c0-4.5 3.5-7 8-7s8 2.5 8 7" />
+              </svg>
+              <span class="avatar-menu__label">Perfil</span>
+            </button>
+
+            <button type="button" class="avatar-menu__item" role="menuitem" (click)="togglePaletteExpanded()">
+              <svg class="avatar-menu__icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9" />
+                <circle cx="12" cy="7.5" r="1.3" fill="currentColor" stroke="none" />
+                <circle cx="16.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+                <circle cx="12" cy="16.5" r="1.3" fill="currentColor" stroke="none" />
+                <circle cx="7.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+              </svg>
+              <span class="avatar-menu__label">Paleta de colores</span>
+            </button>
+
+            @if (paletteExpanded()) {
+              <div class="avatar-menu__palette">
+                @for (opt of palette.options; track opt.hex) {
+                  <button
+                    type="button"
+                    class="palette-swatch"
+                    [class.palette-swatch--selected]="palette.selected() === opt.hex"
+                    [style.background]="opt.hex"
+                    [attr.aria-label]="'Usar acento ' + opt.name"
+                    [attr.title]="opt.name"
+                    (click)="onSwatchClick(opt.hex)"
+                  ></button>
+                }
+              </div>
+            }
+
+            <button type="button" class="avatar-menu__item" role="menuitem" (click)="theme.toggle()">
+              @if (theme.mode() === 'dark') {
+                <!-- sol -->
+                <svg class="avatar-menu__icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="4" />
+                  <path
+                    stroke-linecap="round"
+                    d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+                  />
+                </svg>
+              } @else {
+                <!-- luna -->
+                <svg class="avatar-menu__icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"
+                  />
+                </svg>
+              }
+              <span class="avatar-menu__label">Modo Oscuro</span>
+            </button>
+
+            <button type="button" class="avatar-menu__item" role="menuitem" (click)="onLogout()">
+              <!-- salir -->
+              <svg class="avatar-menu__icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 17l5-5-5-5" />
+                <path stroke-linecap="round" d="M15 12H3" />
+              </svg>
+              <span class="avatar-menu__label">Cerrar sesión</span>
+            </button>
+          </div>
+        }
       </div>
     }
   </div>

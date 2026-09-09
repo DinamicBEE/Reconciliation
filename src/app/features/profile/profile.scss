@@ -1,0 +1,121 @@
+// `.text-muted` viene de `shared/styles/_data-table.scss` (partial ya
+// existente, ver MASTER.md) — no se duplica esa regla acá.
+@use '../../shared/styles/data-table';
+
+.profile {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+// Estructura "icono + etiqueta arriba, valor abajo" — mismo lenguaje visual
+// que `.info-fields`/`.info-field` de `user-detail`, definida localmente en
+// vez de con `@use 'shared/styles/info-fields'` porque, al escribir esto,
+// ese partial es trabajo sin commitear de otra sesión en paralelo sobre
+// este mismo repo (ver notas de commits anteriores en este módulo) — más
+// seguro no depender de un archivo que todavía puede cambiar o desaparecer.
+// Si ese partial ya es estable cuando alguien lea esto, promover Profile a
+// consumirlo y borrar este bloque duplicado.
+.info-fields {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px 20px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.info-field__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-muted-foreground);
+}
+
+.info-field__icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.info-field__label {
+  font-size: 12px;
+}
+
+.info-field__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-card__header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.profile-card__avatar {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+
+  // El host de nz-avatar ya trae `.ant-avatar` — se sobreescribe aquí en
+  // vez de con `::ng-deep` porque es el propio elemento, no uno interno.
+  &.ant-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  ::ng-deep img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+}
+
+.profile-card__name {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-foreground);
+  margin: 0 0 4px;
+}
+
+.profile-card__role {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+.profile-card__section-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+  margin: 0 0 16px;
+}
+
+.profile-empty {
+  text-align: center;
+  color: var(--color-muted-foreground);
+  margin-top: 48px;
+}

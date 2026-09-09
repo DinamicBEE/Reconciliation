@@ -2,14 +2,14 @@ export interface MockUser {
   username: string;
   password: string;
   displayName: string;
-  // Nombre real de la persona (nombre + apellidos) y su rol — distintos de
-  // `displayName`, que históricamente guarda un texto tipo-rol usado como
-  // `actorName` en la auditoría de user-management (ver AuthService). El
-  // card de usuario del Header necesita el nombre real de pila para mostrar
-  // "primer nombre + primer apellido", por eso viven separados en vez de
-  // forzar `displayName` a cumplir ambos papeles.
-  fullName: string;
-  role: string;
+  // Id del registro en `user-management` (`AppUser.id`, ver
+  // user-management-mock.data.ts) que representa a esta MISMA persona — así
+  // el Header/Perfil pueden mostrar su nombre real, foto y rol leyendo de
+  // esa única fuente de verdad en vez de duplicar los datos aquí. 'u0001'
+  // (admin@conciliacion.mx) y 'u0002' (analista@conciliacion.mx) son
+  // exactamente los mismos dos usuarios demo, solo que ese mock los tiene
+  // con el registro completo (nombre, foto, roles, organización...).
+  appUserId: string;
 }
 
 // Credenciales de demo — no hay backend todavía. El día que exista, esta
@@ -19,14 +19,12 @@ export const MOCK_USERS: MockUser[] = [
     username: 'admin',
     password: 'Conciliacion2026',
     displayName: 'Administrador',
-    fullName: 'Ana Martínez López',
-    role: 'Administrador',
+    appUserId: 'u0001',
   },
   {
     username: 'analista',
     password: 'Analista2026',
     displayName: 'Analista de Conciliación',
-    fullName: 'Carlos Gómez Ruiz',
-    role: 'Analista de Conciliación',
+    appUserId: 'u0002',
   },
 ];

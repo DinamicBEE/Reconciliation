@@ -6,8 +6,11 @@ const STORAGE_KEY = 'conciliation-auth';
 export interface AuthUser {
   username: string;
   displayName: string;
-  fullName: string;
-  role: string;
+  // Id del registro en `user-management` (`AppUser.id`) que representa a
+  // esta misma persona — ver el comentario en `auth-mock.data.ts`. Header y
+  // Perfil lo usan para leer nombre/foto/rol desde `UserManagementService`
+  // en vez de duplicarlos en `AuthUser`.
+  appUserId: string;
 }
 
 /**
@@ -36,8 +39,7 @@ export class AuthService {
     const authUser: AuthUser = {
       username: match.username,
       displayName: match.displayName,
-      fullName: match.fullName,
-      role: match.role,
+      appUserId: match.appUserId,
     };
     this.user.set(authUser);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
