@@ -106,20 +106,6 @@
   color: var(--color-muted-foreground);
 }
 
-// Afordancia de la última columna en filas accionables (`.clickable-row` de
-// arriba) — nunca depender solo del cursor:pointer de la fila para comunicar
-// que es interactiva. Movido aquí desde tender-detail.scss al retirarse ese
-// feature (ver MASTER.md) — genérico, no específico de un feature.
-.row-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-primary);
-  white-space: nowrap;
-}
-
 ::ng-deep .ant-pagination ol, .ant-pagination ul {
       margin: 0;
     padding: 0;

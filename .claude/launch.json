@@ -4,8 +4,8 @@
     {
       "name": "conciliation-dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["exec", "ng", "serve"],
-      "port": 4200
+      "runtimeArgs": ["exec", "ng", "serve", "--port", "4201"],
+      "port": 4201
     }
   ]
 }

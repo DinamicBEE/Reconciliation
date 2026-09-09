@@ -120,53 +120,76 @@
         <thead>
           <tr>
             <th>Fecha</th>
-            <th class="col-truncate" style="--col-max-width: 140px">Orden</th>
             <th class="col-truncate" style="--col-max-width: 130px">Medio de pago</th>
+            <th class="text-right">Transacciones</th>
             <th class="text-right">Monto vendido (POS)</th>
             <th class="text-right">Monto banco</th>
             <th class="text-right">Diferencia</th>
             <th>Estado</th>
-            <th></th>
+            <th class="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
-          @for (item of tbl.data; track item.orderId) {
+          @for (group of tbl.data; track group.date + '|' + group.tenderMedia) {
             <tr
-              [class.clickable-row]="isActionable(item)"
-              [routerLink]="isActionable(item) ? resolveLink(item) : null"
+              [class.clickable-row]="isActionable(group)"
+              [routerLink]="isActionable(group) ? resolveLink(group) : null"
             >
-              <td>{{ item.date | date: 'dd/MM/yyyy' }}</td>
-              <td class="col-truncate font-mono" style="--col-max-width: 140px" [attr.title]="item.orderId">
-                {{ item.orderId }}
-              </td>
-              <td class="col-truncate" style="--col-max-width: 130px">{{ tenderLabel(item.tenderMedia) }}</td>
+              <td>{{ group.date | date: 'dd/MM/yyyy' }}</td>
+              <td class="col-truncate" style="--col-max-width: 130px">{{ tenderLabel(group.tenderMedia) }}</td>
+              <td class="text-right font-mono">{{ group.soldCount }}</td>
               <td class="text-right font-mono">
-                @if (item.sale) {
-                  {{ item.sale.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                @if (group.soldAmount > 0) {
+                  {{ group.soldAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
                 } @else {
                   <span class="text-muted">—</span>
                 }
               </td>
               <td class="text-right font-mono">
-                @if (item.settlement) {
-                  {{ item.settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                @if (group.settledAmount > 0) {
+                  {{ group.settledAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
                 } @else {
                   <span class="text-muted">—</span>
                 }
               </td>
-              <td class="text-right font-mono" [class.text-destructive]="difference(item) !== 0">
-                {{ difference(item) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              <td class="text-right font-mono" [class.text-destructive]="group.difference !== 0">
+                {{ group.difference | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
               </td>
-              <td><app-match-status-tag [status]="item.status" /></td>
-              <td class="text-right">
-                @if (isActionable(item)) {
-                  <span class="row-action">
-                    Gestionar
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 18l6-6-6-6" />
-                    </svg>
-                  </span>
-                }
+              <td><app-match-status-tag [status]="group.status" /></td>
+              <td class="text-center" (click)="$event.stopPropagation()">
+                <div class="row-actions">
+                  @if (isActionable(group)) {
+                    <button
+                      nz-button
+                      nzType="text"
+                      type="button"
+                      [routerLink]="resolveLink(group)"
+                      nz-tooltip
+                      nzTooltipTitle="Gestionar"
+                      aria-label="Gestionar"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                    </button>
+                  }
+                  @if (isMatched(group)) {
+                    <button
+                      nz-button
+                      nzType="text"
+                      type="button"
+                      (click)="openDetails(group)"
+                      nz-tooltip
+                      nzTooltipTitle="Ver detalles"
+                      aria-label="Ver detalles"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2 12c1.3-3.6 5-7 10-7s8.7 3.4 10 7c-1.3 3.6-5 7-10 7s-8.7-3.4-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    </button>
+                  }
+                </div>
               </td>
             </tr>
           }
@@ -174,4 +197,56 @@
       </nz-table>
     </div>
   </nz-card>
+
+  <!-- "Ver detalles": solo grupos "Cruzado" — de solo lectura, no
+       gestionable, por eso es un modal y no una ruta propia (mismo criterio
+       que el Drawer de sales-dashboard, ver MASTER.md "Patrón: Drawer de
+       detalle al hacer click en una fila"). Título por medio de pago + fecha
+       (ya no por orden — la fila que lo abre es un total agrupado). -->
+  <nz-modal
+    [nzVisible]="selectedGroup() !== null"
+    [nzTitle]="modalTitle()"
+    [nzFooter]="null"
+    nzWidth="640px"
+    (nzOnCancel)="closeDetails()"
+  >
+    <ng-container *nzModalContent>
+      @if (selectedGroup(); as group) {
+        <!-- .table-bleed: mismo padding de 24px que trae .ant-modal-body de
+             fábrica, así el borde superior de la tabla toca los bordes del
+             modal en vez de quedar flotando dentro del padding (ver
+             MASTER.md, "Patrón: conciliación por tender media y fecha"). -->
+        <div class="table-bleed">
+          <nz-table [nzData]="group.settlements" [nzShowPagination]="false" nzSize="small">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Referencia</th>
+                <th>Lote</th>
+                <th class="col-truncate" style="--col-max-width: 220px">Descripción</th>
+                <th class="text-right">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (settlement of group.settlements; track settlement.id) {
+                <tr>
+                  <td>{{ settlement.date | date: 'dd/MM/yyyy' }}</td>
+                  <td class="font-mono">{{ settlement.id }}</td>
+                  <td class="font-mono">{{ settlement.batchId }}</td>
+                  <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="settlement.description">
+                    {{ settlement.description }}
+                  </td>
+                  <td class="text-right font-mono">{{ settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5" class="text-muted">Sin transacciones bancarias asociadas.</td>
+                </tr>
+              }
+            </tbody>
+          </nz-table>
+        </div>
+      }
+    </ng-container>
+  </nz-modal>
 </div>

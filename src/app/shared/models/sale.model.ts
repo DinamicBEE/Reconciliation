@@ -11,6 +11,12 @@ export interface SaleCustomer {
   name: string;
   email?: string;
   phone?: string;
+  // Información fiscal básica para facturación (CFDI) — opcional: un cliente
+  // de mostrador sin factura no trae ninguno de los dos (ver "Cliente" en el
+  // Drawer de sales-dashboard, que muestra el fallback "Sin RFC/razón social
+  // registrado(a)" cuando faltan).
+  rfc?: string;
+  businessName?: string;
 }
 
 // Un pago aplicado a la venta — normalmente uno solo, pero se modela como

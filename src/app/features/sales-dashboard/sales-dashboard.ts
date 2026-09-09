@@ -3,14 +3,15 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzTableModule } from 'ng-zorro-antd/table';
-import { NzRadioModule } from 'ng-zorro-antd/radio';
+import { NzSelectModule } from 'ng-zorro-antd/select';
+import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
+import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzDrawerModule } from 'ng-zorro-antd/drawer';
-import { Sparkline } from '../../shared/components/sparkline/sparkline';
 import { SaleStatusTag } from '../../shared/components/sale-status-tag/sale-status-tag';
 import { MatchStatusTag } from '../../shared/components/match-status-tag/match-status-tag';
 import { TENDER_MEDIA_LABEL } from '../../shared/models/reconciliation-item.model';
 import { Sale } from '../../shared/models/sale.model';
-import { SalesPeriod, SalesDashboardService } from './data/sales-dashboard.service';
+import { DateRangeFilter, SalesDashboardService, TenderMediaFilter } from './data/sales-dashboard.service';
 import { saleSubtotal, saleTaxAmount, saleTaxableBase, saleTotal as computeSaleTotal } from './data/sale.util';
 
 @Component({
@@ -20,9 +21,10 @@ import { saleSubtotal, saleTaxAmount, saleTaxableBase, saleTotal as computeSaleT
     FormsModule,
     NzCardModule,
     NzTableModule,
-    NzRadioModule,
+    NzSelectModule,
+    NzDatePickerModule,
+    NzInputModule,
     NzDrawerModule,
-    Sparkline,
     SaleStatusTag,
     MatchStatusTag,
   ],
@@ -35,9 +37,12 @@ export class SalesDashboard {
   protected readonly service = inject(SalesDashboardService);
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
 
-  protected readonly periodOptions: { value: SalesPeriod; label: string }[] = [
-    { value: 'day', label: 'Hoy' },
-    { value: 'month', label: 'Este mes' },
+  protected readonly tenderMediaOptions: { value: TenderMediaFilter; label: string }[] = [
+    { value: 'all', label: 'Todos los medios' },
+    { value: 'bbva', label: 'BBVA' },
+    { value: 'rappi', label: 'Rappi' },
+    { value: 'didi_food', label: 'DiDi Food' },
+    { value: 'efectivo', label: 'Efectivo' },
   ];
 
   // Desglose financiero completo de la venta abierta en el Drawer — un solo
@@ -53,8 +58,16 @@ export class SalesDashboard {
     };
   });
 
-  protected onPeriodChange(value: SalesPeriod): void {
-    this.service.setPeriod(value);
+  protected onSearchChange(value: string): void {
+    this.service.setSearch(value);
+  }
+
+  protected onTenderMediaFilterChange(value: TenderMediaFilter): void {
+    this.service.setTenderMediaFilter(value);
+  }
+
+  protected onDateRangeChange(value: [Date, Date] | null): void {
+    this.service.setDateRange(value as DateRangeFilter);
   }
 
   protected onRowClick(sale: Sale): void {

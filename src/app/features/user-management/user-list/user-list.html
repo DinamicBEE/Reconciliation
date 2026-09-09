@@ -64,7 +64,7 @@
             <th>Usuario</th>
             <th>Estatus</th>
             <th>Rol</th>
-            <th>ID</th>
+            <!-- <th>ID</th> -->
             <th>Teléfono</th>
             <th>Última conexión</th>
             <th class="text-center">Acciones</th>
@@ -115,7 +115,7 @@
                 </nz-select>
                 <ng-template #roleOverflowTpl let-omitted>+{{ omitted.length }}</ng-template>
               </td>
-              <td class="font-mono">{{ user.id }}</td>
+              <!-- <td class="font-mono">{{ user.id }}</td> -->
               <td class="font-mono">{{ user.phone }}</td>
               <td class="font-mono">
                 @if (user.lastAccessAt) {

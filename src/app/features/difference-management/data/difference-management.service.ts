@@ -40,14 +40,20 @@ export class DifferenceManagementService {
     const tenderMedia = this.tenderMediaSignal();
     if (!tenderMedia) return [];
 
-    const cleanlyMatchedIds = new Set(
+    // Filtra por `orderId`, no por el id de la fila representativa de
+    // `TransactionMatch.settlement` — una orden puede liquidarse en MÁS de
+    // un depósito (ver cross-match.util.ts), así que excluir solo esa fila
+    // dejaría las demás liquidaciones de esa misma orden "sueltas" en el
+    // pool, disponibles para robárselas a otra orden aunque ya estén
+    // cuadradas.
+    const cleanlyMatchedOrderIds = new Set(
       this.crossMatchFor(tenderMedia)
-        .filter((m) => m.status === 'matched' && m.settlement)
-        .map((m) => m.settlement!.id),
+        .filter((m) => m.status === 'matched')
+        .map((m) => m.orderId),
     );
 
     return [
-      ...MOCK_SETTLEMENTS[tenderMedia].filter((s) => !cleanlyMatchedIds.has(s.id)),
+      ...MOCK_SETTLEMENTS[tenderMedia].filter((s) => !cleanlyMatchedOrderIds.has(s.orderId)),
       ...this.importedSettlements(),
     ];
   });

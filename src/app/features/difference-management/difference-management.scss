@@ -50,6 +50,31 @@
   }
 }
 
+// --- Grid principal -------------------------------------------------------
+// 5 columnas: candidatos + nota ocupan 3, alerta + importación + resumen de
+// selección ocupan las 2 restantes, apiladas verticalmente en su columna.
+.diff-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--grid-gap);
+  align-items: start;
+}
+
+.diff-grid__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+  min-width: 0;
+}
+
+.diff-grid__col--candidates {
+  grid-column: span 3;
+}
+
+.diff-grid__col--side {
+  grid-column: span 2;
+}
+
 // --- Alerta del motor de cálculo ---------------------------------------
 .engine-alert {
   width: 100%;
@@ -104,9 +129,10 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  // La lista puede crecer bastante tras importar un CSV — se topa la altura
-  // y se deja scrollear en vez de alargar la pantalla indefinidamente.
-  max-height: 420px;
+  // Máximo 5 transacciones visibles a la vez (~72px cada una + gap de 8px)
+  // — con más candidatos (p.ej. tras importar un CSV) se scrollea en vez de
+  // alargar la pantalla indefinidamente.
+  max-height: calc(5 * 72px + 4 * 8px);
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -200,10 +226,8 @@
   justify-content: flex-end;
 }
 
-// Fila del botón de importación, debajo del Card de transacciones — ocupa
-// el mismo ancho que el Card (igual que cualquier otra sección de esta
-// pantalla), y dentro de ella la dropzone punteada solo toma la mitad de
-// ese ancho, centrada.
+// Dropzone de importación — dentro de .diff-grid__col--side, debajo de la
+// alerta del motor de cálculo, a todo el ancho de esa columna.
 .import-dropzone-row {
   display: flex;
   justify-content: center;
@@ -241,21 +265,9 @@
 
 // --- Nota obligatoria -----------------------------------------------------
 .note-section {
-  display: grid;
-  //height: 250px;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
-  max-width: 100%;
-
-  grid-template-columns: repeat(3, 1fr);
-
-  .note-item--wide {
-    grid-column: span 2;
-  }
-
-  .note-item--normal {
-    grid-column: span 1;
-    height: 100%;
-  }
 }
 
 .note-section__label {
@@ -272,17 +284,32 @@
   color: var(--color-destructive);
 }
 
-// --- Barra de guardado ------------------------------------------------
-.save-bar {
+// --- Resumen de selección + guardado --------------------------------------
+// Columna lateral: indicador de transacciones seleccionadas apilado sobre el
+// botón de guardar (ver .diff-grid__col--side).
+.selected-indicator {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-top: 4px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
 }
 
-.save-bar__hint {
+.selected-indicator__count {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  line-height: 1.1;
+}
+
+.selected-indicator__label {
   font-size: 12px;
   color: var(--color-muted-foreground);
+}
+
+.save-match-button {
+  width: 100%;
 }

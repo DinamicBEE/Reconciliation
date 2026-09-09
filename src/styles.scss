@@ -323,13 +323,60 @@ html body .ant-table-thead > tr > th {
   display: none !important;
 }
 
+// `border-radius`/`overflow` propios (Ant trae 2px, ver
+// ng-zorro-antd.min.css) — mismo radius que `.table-card` (12px lo usa esa
+// desviación puntual; los demás contenedores flotantes de la app usan 8px,
+// ver "Patrón: card base"). `overflow: hidden` para que el header y la
+// tabla de dentro (sin su propio radius) queden recortados por la esquina
+// redondeada en vez de sobresalir en las 4 puntas.
 .ant-modal-content {
   background: var(--color-card) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
 }
 
 .ant-modal-confirm-body .ant-modal-confirm-title,
 .ant-modal-confirm-body .ant-modal-confirm-content {
   color: var(--color-foreground) !important;
+}
+
+// Primer `nz-modal` declarativo con header/título propios (antes solo se
+// usaba `NzModalService.confirm()`, cubierto arriba) — "Ver detalles" en
+// reconciliation-dashboard. `.ant-modal-header`/`-title`/`-close` traen
+// fondo blanco y texto casi negro fijos (ver ng-zorro-antd.min.css), mismo
+// gotcha de siempre: revisar el CSS compilado antes de asumir "ya temeado".
+// Sin línea divisoria bajo el título (`border-bottom: none`) — el divisor
+// visual entre header y contenido lo da el propio `border-top` de la tabla
+// de dentro (ver bloque `.ant-modal-body .ant-table-thead` abajo, mismo
+// criterio que `.table-bleed` entre toolbar y tabla).
+.ant-modal-header {
+  background: var(--color-card) !important;
+  border-bottom: none !important;
+}
+
+.ant-modal-title {
+  color: var(--color-foreground) !important;
+}
+
+.ant-modal-close {
+  color: var(--color-muted-foreground) !important;
+}
+
+// Tabla dentro de un modal: mismos "estilos globales de tabla" que
+// `.table-card` (header SIN color propio, sin línea vertical entre
+// columnas) — un modal no es una `nz-card`, así que no hereda `.table-card`
+// solo por vivir dentro de uno; se puentea aquí para que CUALQUIER tabla
+// futura dentro de un `nz-modal` lo herede igual, sin repetir esto por
+// feature. El borde superior de la tabla "tocando los bordes del modal" lo
+// resuelve el propio `.html` envolviendo la tabla en `.table-bleed` (mismo
+// padding de 24px que trae `.ant-modal-body` de fábrica, ver
+// _data-table.scss) — nada que puentear aquí para eso.
+.ant-modal-body .ant-table-thead > tr > th {
+  background: transparent !important;
+}
+
+.ant-modal-body .ant-table-thead > tr > th::before {
+  display: none !important;
 }
 
 // ---------------------------------------------------------------------------

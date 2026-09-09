@@ -10,3 +10,12 @@
 .toolbar__filter {
   width: 200px;
 }
+
+// Input de texto libre (vs. los selects/date-picker de arriba, de ancho
+// fijo) — más ancho porque suele llevar placeholder largo ("Buscar por
+// nombre o correo"). Promovido aquí desde user-list.scss al aparecer
+// sales-dashboard como segundo consumidor (mismo criterio de siempre, ver
+// MASTER.md "Estructura de carpetas").
+.toolbar__filter--search {
+  width: 260px;
+}

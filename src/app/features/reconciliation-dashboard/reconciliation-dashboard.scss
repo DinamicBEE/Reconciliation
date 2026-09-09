@@ -2,6 +2,7 @@
 @use '../../shared/styles/toolbar';
 @use '../../shared/styles/data-table';
 @use '../../shared/styles/status-dot';
+@use '../../shared/styles/row-actions';
 
 .dashboard {
   display: flex;
