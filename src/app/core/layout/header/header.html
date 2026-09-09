@@ -92,10 +92,10 @@
     @if (auth.currentUser(); as user) {
       <div class="user-card" [attr.title]="user.fullName + ' — ' + user.role">
         <nz-avatar class="user-card__avatar" [nzText]="initials()" [ngStyle]="avatarStyle()" />
-        <div class="user-card__info">
+        <!-- <div class="user-card__info">
           <span class="user-card__name">{{ shortName() }}</span>
           <span class="user-card__role">{{ user.role }}</span>
-        </div>
+        </div> -->
       </div>
     }
   </div>
