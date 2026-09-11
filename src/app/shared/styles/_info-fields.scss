@@ -1,0 +1,123 @@
+// Estructura vertical "icono + etiqueta arriba, valor (o control) abajo" —
+// ver design-system/conciliation/MASTER.md. Nació en `user-detail.scss`
+// ("Información general"/"Organización"/"Seguridad y acceso") y se promovió
+// aquí al aparecer un segundo consumidor: el Drawer de detalle de venta de
+// `sales-dashboard` ("Resumen de la venta") la reutiliza para su propio
+// resumen — de solo lectura ahí, así que no necesita
+// `.info-field__input`/`.info-field__error`, pero sí el resto.
+//
+// A propósito DISTINTA de `.summary-field`/`.summary-columns`
+// (`_summary-columns.scss`, icono+etiqueta+valor en UNA sola fila
+// horizontal): ese partial sigue vivo para el formulario de creación de
+// usuario (`user-detail` en modo `isCreate()`), que es de una sola columna
+// angosta — no todo lo que muestra "campo + valor" usa esta estructura,
+// solo cuando el layout es un GRID de varias columnas por sección.
+.info-fields {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px 24px;
+  width: 100%;
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Variante de 4 columnas — hoy solo la usan los 7 campos de "Información
+// personal" de `user-detail` (para hacer lugar al avatar al costado), pero
+// vive aquí junto al resto de la estructura por si un futuro consumidor
+// necesita la misma densidad sin repetir el partial.
+.info-fields--cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px 20px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+// Encabezado de una sub-sección DENTRO de un `.info-fields` (p. ej.
+// "Dirección" en `user-detail`, "Cliente" en el resumen de venta de
+// `sales-dashboard`) — un `<h4>` normal, hermano de dos `.info-fields`
+// independientes, no una fila dentro del mismo grid.
+.info-fields__subsection-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  margin: 4px 0 0;
+}
+
+.info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.info-field__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-muted-foreground);
+}
+
+.info-field__icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.info-field__label {
+  font-size: 12px;
+}
+
+.info-field__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info-field__value--link {
+  color: var(--color-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// Para cuando el valor va acompañado de una acción rápida (Email
+// verificado → "Marcar como verificado", Sesiones activas → "Cerrar
+// sesiones") — el valor y el botón quedan en la misma fila, debajo del
+// icono+etiqueta, igual que un `.info-field__value` normal. También se usa
+// para envolver un `nz-tag`/`*StatusTag` SOLO: sin este wrapper, el tag
+// —hijo directo de `.info-field`, un flex column— hereda `align-items:
+// stretch` y se estira al ancho completo de la columna del grid; envuelto
+// en esta fila (flex, eje principal horizontal) el tag vuelve a medirse por
+// su contenido.
+.info-field__value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// Reemplaza el valor en modo edición — mismo ancho que el resto de un
+// campo del grid (a diferencia de `.summary-field__control`, pensado para
+// una fila horizontal, no una columna de grid). Sin consumidor todavía en
+// un `.info-fields` de solo lectura (como el de `sales-dashboard`) — vive
+// aquí de cualquier forma porque es parte de la MISMA estructura de campo,
+// no una variante aparte.
+.info-field__input {
+  width: 100%;
+}
+
+.info-field__error {
+  font-size: 12px;
+  color: var(--color-destructive);
+}

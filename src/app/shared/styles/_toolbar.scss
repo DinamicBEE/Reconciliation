@@ -10,3 +10,21 @@
 .toolbar__filter {
   width: 200px;
 }
+
+// Input de texto libre (vs. los selects/date-picker de arriba, de ancho
+// fijo) — más ancho porque suele llevar placeholder largo ("Buscar por
+// nombre o correo"). Promovido aquí desde user-list.scss al aparecer
+// sales-dashboard como segundo consumidor (mismo criterio de siempre, ver
+// MASTER.md "Estructura de carpetas").
+.toolbar__filter--search {
+  width: 260px;
+}
+
+// Empuja lo que venga después (p. ej. el botón "Exportar" de
+// sales-dashboard) al extremo derecho del toolbar, sin tocar el
+// alineado/gap de los filtros de la izquierda. `flex-wrap: wrap` en
+// `.toolbar` sigue funcionando igual: si no cabe, el spacer se colapsa y el
+// botón baja de línea como cualquier otro `.toolbar__filter`.
+.toolbar__spacer {
+  flex: 1 1 auto;
+}

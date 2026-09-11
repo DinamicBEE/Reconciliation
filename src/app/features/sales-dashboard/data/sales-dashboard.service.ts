@@ -1,63 +1,78 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { Sale } from '../../../shared/models/sale.model';
+import { ReconciliationStatus, TenderMedia } from '../../../shared/models/reconciliation-item.model';
+import { Sale, Store } from '../../../shared/models/sale.model';
 import { MOCK_SALES } from './sales-mock.data';
-import { saleTotal } from './sale.util';
+import { saleReconciliationStatus } from './sale.util';
 
-export type SalesPeriod = 'day' | 'month';
+export type TenderMediaFilter = TenderMedia | 'all';
+export type StoreFilter = Store | 'all';
+export type StatusFilter = ReconciliationStatus | 'all';
+export type DateRangeFilter = [Date, Date] | null;
 
-// Misma referencia de "hoy" que tender-detail (ver design-system MASTER.md,
-// "Convención: hoy sin backend") — cada feature define la suya, no hay una
-// global compartida todavía (solo 2 consumidores).
-export const APP_TODAY_ISO = '2026-08-27';
-const APP_TODAY_MONTH = APP_TODAY_ISO.slice(0, 7); // '2026-08'
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
 
+function endOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999).getTime();
+}
+
+/**
+ * Estado de "Resumen de venta". Sin KPIs ni toggle día/mes (retirados) — la
+ * tabla ahora es el catálogo completo de ventas, acotado por los 5 filtros
+ * de abajo (mismo criterio de filtros que `reconciliation.service.ts` y
+ * `user-management.service.ts`: `search` para texto libre, `signal` +
+ * `'all'` para selects, `[Date, Date] | null` para rango de fecha).
+ */
 @Injectable()
 export class SalesDashboardService {
   private readonly sales = signal<Sale[]>(MOCK_SALES);
-
-  readonly period = signal<SalesPeriod>('day');
   readonly selectedSale = signal<Sale | null>(null);
 
-  // La tabla siempre muestra las ventas de HOY, independiente del toggle de
-  // periodo de los KPI (ese toggle solo afecta las sumas de arriba).
-  readonly todaySales = computed(() => this.sales().filter((s) => s.date === APP_TODAY_ISO));
+  readonly dateRange = signal<DateRangeFilter>(null);
+  readonly storeFilter = signal<StoreFilter>('all');
+  readonly statusFilter = signal<StatusFilter>('all');
+  readonly tenderMediaFilter = signal<TenderMediaFilter>('all');
+  readonly search = signal('');
 
-  private readonly monthSales = computed(() =>
-    this.sales().filter((s) => s.date.startsWith(APP_TODAY_MONTH)),
-  );
+  readonly filteredSales = computed(() => {
+    const range = this.dateRange();
+    const store = this.storeFilter();
+    const status = this.statusFilter();
+    const tenderMedia = this.tenderMediaFilter();
+    const term = this.search().trim().toLowerCase();
 
-  private readonly scopedSales = computed(() =>
-    this.period() === 'day' ? this.todaySales() : this.monthSales(),
-  );
-
-  readonly summary = computed(() => {
-    const list = this.scopedSales().filter((s) => s.status === 'completada');
-    const totalAmount = list.reduce((sum, s) => sum + saleTotal(s), 0);
-    const count = list.length;
-    return {
-      totalAmount,
-      count,
-      avgTicket: count ? totalAmount / count : 0,
-    };
+    return this.sales().filter((sale) => {
+      if (store !== 'all' && sale.store !== store) return false;
+      if (status !== 'all' && saleReconciliationStatus(sale) !== status) return false;
+      if (tenderMedia !== 'all' && sale.tenderMedia !== tenderMedia) return false;
+      if (term && !sale.customer.name.toLowerCase().includes(term)) return false;
+      if (range) {
+        const saleTime = new Date(sale.date).getTime();
+        if (saleTime < startOfDay(range[0]) || saleTime > endOfDay(range[1])) return false;
+      }
+      return true;
+    });
   });
 
-  // Serie de 7 días (suma diaria, ventas completadas) para el sparkline del
-  // KPI de "Total vendido" — no depende del toggle día/mes, siempre es la
-  // tendencia reciente.
-  readonly dailyTrend = computed(() => {
-    const byDate = new Map<string, number>();
-    for (const sale of this.sales()) {
-      if (sale.status !== 'completada') continue;
-      byDate.set(sale.date, (byDate.get(sale.date) ?? 0) + saleTotal(sale));
-    }
-    return [...byDate.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-7)
-      .map(([, value]) => value);
-  });
+  setDateRange(range: DateRangeFilter): void {
+    this.dateRange.set(range);
+  }
 
-  setPeriod(period: SalesPeriod): void {
-    this.period.set(period);
+  setStoreFilter(filter: StoreFilter): void {
+    this.storeFilter.set(filter);
+  }
+
+  setStatusFilter(filter: StatusFilter): void {
+    this.statusFilter.set(filter);
+  }
+
+  setTenderMediaFilter(filter: TenderMediaFilter): void {
+    this.tenderMediaFilter.set(filter);
+  }
+
+  setSearch(value: string): void {
+    this.search.set(value);
   }
 
   openSale(sale: Sale): void {

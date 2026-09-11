@@ -44,8 +44,8 @@
         <div class="summary-strip__item">
           <span class="summary-strip__label">Monto liquidado</span>
           <span class="summary-strip__value">
-            @if (service.order()?.settlement; as settlement) {
-              {{ settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            @if (service.selectedCount() > 0) {
+              {{ service.selectedSettledAmount() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
             } @else {
               <span class="text-muted">—</span>
             }
@@ -53,157 +53,161 @@
         </div>
         <div class="summary-strip__item">
           <span class="summary-strip__label">Diferencia</span>
-          <span class="summary-strip__value" [class.text-destructive]="service.order()!.difference !== 0">
-            {{ service.order()?.difference | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          <span class="summary-strip__value" [class.text-destructive]="service.selectedDifference() !== 0">
+            {{ service.selectedDifference() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
           </span>
         </div>
       </div>
     </nz-card>
 
-    <nz-alert
-      class="engine-alert"
-      nzType="warning"
-      nzShowIcon
-      nzMessage="El motor de cálculo detectó estas transacciones como posibles coincidencias con el monto de la venta. Selecciona una o más para registrar el match manual."
-    />
+    <!-- Grid de 5 columnas: 3 para la lista de candidatos + nota, 2 para la
+         alerta del motor + importación + resumen de selección. -->
+    <div class="diff-grid">
+      <div class="diff-grid__col diff-grid__col--candidates">
+        <section class="candidates-section">
+          <nz-card class="candidates-card" [nzBodyStyle]="{ padding: '16px' }">
+            <div class="candidates-card__header">
+              <h2 class="candidates-section__title">Transacciones bancarias candidatas</h2>
+              <input
+                nz-input
+                type="text"
+                class="candidates-card__filter"
+                placeholder="Filtrar por referencia"
+                [ngModel]="referenceFilter()"
+                (ngModelChange)="onReferenceFilterChange($event)"
+              />
+            </div>
 
-    <section class="import-dropzone-row">
-      <input
-        #csvInput
-        type="file"
-        accept=".csv,text/csv"
-        hidden
-        (change)="onCsvSelected($event)"
-      />
-      <button type="button" class="import-dropzone" (click)="csvInput.click()">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-        </svg>
-        <span>Importar CSV</span>
-      </button>
-    </section>
+            @if (csvErrors().length > 0) {
+              <ul class="csv-errors">
+                @for (err of csvErrors(); track err) {
+                  <li>{{ err }}</li>
+                }
+              </ul>
+            }
 
-    <section class="candidates-section">
-      <nz-card class="candidates-card" [nzBodyStyle]="{ padding: '16px' }">
-        <div class="candidates-card__header">
-          <h2 class="candidates-section__title">Transacciones bancarias candidatas</h2>
-          <input
+            @if (service.candidates().length === 0) {
+              <p class="text-muted">No se encontraron transacciones candidatas. Importa un CSV para agregar más.</p>
+            } @else if (filteredCandidates().length === 0) {
+              <p class="text-muted">Ninguna transacción coincide con la referencia buscada.</p>
+            } @else {
+              <!-- Máximo 5 filas visibles — el resto se alcanza con scroll
+                   interno, ver .candidate-list en el scss. -->
+              <div class="candidate-list">
+                @for (c of filteredCandidates(); track c.settlement.id) {
+                  <nz-card
+                    class="candidate-card"
+                    [class.candidate-card--selected]="service.isSelected(c.settlement.id)"
+                    [nzBodyStyle]="{ padding: '12px 16px' }"
+                    role="checkbox"
+                    tabindex="0"
+                    [attr.aria-checked]="service.isSelected(c.settlement.id)"
+                    [attr.aria-label]="'Seleccionar transacción ' + c.settlement.orderId"
+                    (click)="toggleCandidate(c)"
+                    (keydown.enter)="toggleCandidate(c)"
+                    (keydown.space)="toggleCandidate(c); $event.preventDefault()"
+                  >
+                    <div class="candidate-card__body">
+                      <input type="checkbox" class="candidate-card__checkbox" tabindex="-1" [checked]="service.isSelected(c.settlement.id)" />
+
+                      <div class="candidate-card__field candidate-card__field--ref">
+                        <span class="candidate-card__label">Referencia</span>
+                        <span class="candidate-card__value font-mono" [attr.title]="c.settlement.orderId">
+                          {{ c.settlement.orderId }}
+                        </span>
+                      </div>
+
+                      <div class="candidate-card__field candidate-card__field--desc">
+                        <span class="candidate-card__label">Descripción</span>
+                        <span class="candidate-card__value" [attr.title]="c.settlement.description">
+                          {{ c.settlement.description }}
+                        </span>
+                        <span class="candidate-card__meta">
+                          {{ c.settlement.date | date: 'dd/MM/yyyy' }} · Lote {{ c.settlement.batchId }}
+                        </span>
+                      </div>
+
+                      <div class="candidate-card__field candidate-card__field--amount">
+                        <span class="candidate-card__label">Monto</span>
+                        <span class="candidate-card__value font-mono">
+                          {{ c.settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                        </span>
+                      </div>
+
+                      @if (service.originOf(c.settlement.id); as origin) {
+                        <div class="candidate-card__field candidate-card__field--origin">
+                          <span class="candidate-card__label">Origen</span>
+                          <nz-tag [nzColor]="origin === 'backend' ? 'blue' : 'purple'">
+                            {{ origin === 'backend' ? 'Motor de cálculo' : 'Match manual' }}
+                          </nz-tag>
+                        </div>
+                      }
+                    </div>
+                  </nz-card>
+                }
+              </div>
+            }
+          </nz-card>
+        </section>
+
+        <section class="note-section">
+          <label class="note-section__label" for="match-note">
+            Nota <span class="required-mark">*</span>
+          </label>
+          <textarea
+            id="match-note"
             nz-input
-            type="text"
-            class="candidates-card__filter"
-            placeholder="Filtrar por referencia"
-            [ngModel]="referenceFilter()"
-            (ngModelChange)="onReferenceFilterChange($event)"
+            rows="3"
+            placeholder="Explica por qué se hizo este match (obligatorio)"
+            [ngModel]="service.note()"
+            (ngModelChange)="onNoteChange($event)"
+            (blur)="onNoteBlur()"
+          ></textarea>
+          @if (noteTouched() && service.note().trim().length === 0) {
+            <span class="note-section__error">La nota es obligatoria para guardar el match.</span>
+          }
+        </section>
+      </div>
+
+      <div class="diff-grid__col diff-grid__col--side">
+        <nz-alert
+          class="engine-alert"
+          nzType="warning"
+          nzShowIcon
+          nzMessage="El motor de cálculo detectó estas transacciones como posibles coincidencias con el monto de la venta. Selecciona una o más para registrar el match manual."
+        />
+
+        <section class="import-dropzone-row">
+          <input
+            #csvInput
+            type="file"
+            accept=".csv,text/csv"
+            hidden
+            (change)="onCsvSelected($event)"
           />
+          <button type="button" class="import-dropzone" (click)="csvInput.click()">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+            </svg>
+            <span>Importar CSV</span>
+          </button>
+        </section>
+
+        <div class="selected-indicator">
+          <span class="selected-indicator__count">{{ service.selectedCount() }}</span>
+          <span class="selected-indicator__label">
+            transacción(es) seleccionada(s)
+            @if (service.selectedCount() === 0) {
+              — selecciona al menos una para poder guardar
+            }
+          </span>
         </div>
 
-        @if (csvErrors().length > 0) {
-          <ul class="csv-errors">
-            @for (err of csvErrors(); track err) {
-              <li>{{ err }}</li>
-            }
-          </ul>
-        }
-
-        @if (service.candidates().length === 0) {
-          <p class="text-muted">No se encontraron transacciones candidatas. Importa un CSV para agregar más.</p>
-        } @else if (filteredCandidates().length === 0) {
-          <p class="text-muted">Ninguna transacción coincide con la referencia buscada.</p>
-        } @else {
-          <div class="candidate-list">
-            @for (c of filteredCandidates(); track c.settlement.id) {
-              <nz-card
-                class="candidate-card"
-                [class.candidate-card--selected]="service.isSelected(c.settlement.id)"
-                [nzBodyStyle]="{ padding: '12px 16px' }"
-                role="checkbox"
-                tabindex="0"
-                [attr.aria-checked]="service.isSelected(c.settlement.id)"
-                [attr.aria-label]="'Seleccionar transacción ' + c.settlement.orderId"
-                (click)="toggleCandidate(c)"
-                (keydown.enter)="toggleCandidate(c)"
-                (keydown.space)="toggleCandidate(c); $event.preventDefault()"
-              >
-                <div class="candidate-card__body">
-                  <input type="checkbox" class="candidate-card__checkbox" tabindex="-1" [checked]="service.isSelected(c.settlement.id)" />
-
-                  <div class="candidate-card__field candidate-card__field--ref">
-                    <span class="candidate-card__label">Referencia</span>
-                    <span class="candidate-card__value font-mono" [attr.title]="c.settlement.orderId">
-                      {{ c.settlement.orderId }}
-                    </span>
-                  </div>
-
-                  <div class="candidate-card__field candidate-card__field--desc">
-                    <span class="candidate-card__label">Descripción</span>
-                    <span class="candidate-card__value" [attr.title]="c.settlement.description">
-                      {{ c.settlement.description }}
-                    </span>
-                    <span class="candidate-card__meta">
-                      {{ c.settlement.date | date: 'dd/MM/yyyy' }} · Lote {{ c.settlement.batchId }}
-                    </span>
-                  </div>
-
-                  <div class="candidate-card__field candidate-card__field--amount">
-                    <span class="candidate-card__label">Monto</span>
-                    <span class="candidate-card__value font-mono">
-                      {{ c.settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-                    </span>
-                  </div>
-
-                  <div class="candidate-card__origin">
-                    @if (service.originOf(c.settlement.id); as origin) {
-                      <nz-tag [nzColor]="origin === 'backend' ? 'blue' : 'purple'">
-                        {{ origin === 'backend' ? 'Motor de cálculo' : 'Match manual' }}
-                      </nz-tag>
-                    }
-                  </div>
-                </div>
-              </nz-card>
-            }
-          </div>
-        }
-      </nz-card>
-
-    </section>
-    
-    <section class="note-section">
-
-      <div class="note-item--wide">
-        <label class="note-section__label" for="match-note">
-          Nota <span class="required-mark">*</span>
-        </label>
-        <textarea
-          id="match-note"
-          nz-input
-          rows="3"
-          placeholder="Explica por qué se hizo este match (obligatorio)"
-          [ngModel]="service.note()"
-          (ngModelChange)="onNoteChange($event)"
-          (blur)="onNoteBlur()"
-        ></textarea>
-        @if (noteTouched() && service.note().trim().length === 0) {
-          <span class="note-section__error">La nota es obligatoria para guardar el match.</span>
-        }
-      </div>
-
-      <div class="save-bar note-item--normal">
-        <span class="save-bar__hint">
-          {{ service.selectedCount() }} transacción(es) seleccionada(s).
-          @if (service.selectedCount() === 0) {
-            Selecciona al menos una para poder guardar.
-          }
-        </span>
-        <button nz-button nzType="primary" type="button" [disabled]="!service.canSave()" (click)="onSave()">
+        <button nz-button nzType="primary" class="save-match-button" type="button" [disabled]="!service.canSave()" (click)="onSave()">
           Guardar match
         </button>
-
       </div>
-    </section>
-
-    <!-- <section class="save-bar">
-      
-    </section> -->
+    </div>
   </div>
 }

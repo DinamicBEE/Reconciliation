@@ -591,18 +591,47 @@ borraron junto con su ruta y su link de menú. `difference-management` (la
 `/detalle/:tenderMedia/diferencias/:orderId` — su lógica interna no cambió,
 solo su padre de ruta y sus links "Volver".
 
-## Patrón de layout: toggle de periodo para KPIs (día/mes)
+## Retirado: KPIs + toggle de periodo (día/mes) en sales-dashboard
 
-Usado en `features/sales-dashboard` — un `nz-radio-group` con
-`nzButtonStyle="solid"` y `nzSize="small"` arriba del `.kpi-grid`, dos
-opciones (`día`/`mes` como tipo unión, no boolean — un tercer periodo futuro
-como "año" no debería requerir invertir la lógica). El toggle recalcula
-SOLO las cards de KPI (`summary` en el service, `computed` que lee
-`period()`); la tabla debajo tiene su propio alcance fijo e independiente
-("hoy", sin importar el periodo elegido en los KPI) — dos conceptos
-distintos que no deben compartir una sola señal de filtro aunque ambos
-"filtran por fecha". Ver `sales-dashboard.service.ts`: `todaySales` (tabla,
-fijo) vs `scopedSales`/`summary` (KPIs, sigue a `period`).
+`sales-dashboard` tuvo, en una iteración anterior, 3 `kpi-card` (Total
+vendido con sparkline, Ticket promedio, Transacciones) y un `nz-radio-group`
+día/mes arriba de la tabla — se retiraron por completo (no solo se
+ocultaron): `SalesDashboardService` ya no tiene `period`/`summary`/
+`dailyTrend`/`scopedSales`/`monthSales`, y el `.scss` ya no `@use`a
+`kpi-card`. La tabla dejó de estar fija a "hoy" (`todaySales`) — ahora es
+`filteredSales`, el catálogo completo de ventas acotado por los 3 filtros de
+abajo. Si un futuro pedido resucita un resumen numérico arriba de esta
+tabla, revisar primero si encaja mejor como el patrón "resumen global" (una
+sola card, `_summary-strip.scss`) que como KPI cards independientes — ver
+MASTER.md más abajo.
+
+## Patrón: filtros de tabla (fecha, texto libre, select) — mismo criterio en toda la app
+
+Los 3 filtros de `sales-dashboard` (fecha, cliente, medio de pago) no
+inventan nada nuevo — replican exactamente lo que ya usaban
+`reconciliation-dashboard` (fecha + medio de pago) y `user-management`
+(texto libre + selects), dentro del mismo `.table-card` (ver "Patrón: card
+de tabla" abajo):
+
+- **Texto libre** (`cliente`, aquí; `nombre o correo` en `user-list`):
+  `<input nz-input class="toolbar__filter toolbar__filter--search">` +
+  `signal('')` en el service + `.trim().toLowerCase().includes(term)` sobre
+  el campo relevante. `.toolbar__filter--search` vive en
+  `shared/styles/_toolbar.scss` (promovida desde `user-list.scss` al
+  aparecer `sales-dashboard` como segundo consumidor — mismo criterio de
+  siempre).
+- **Select de un enum fijo** (`medio de pago`): `signal<X | 'all'>('all')` +
+  array `{ value, label }[]` en el componente + `nz-select`/`nz-option`. El
+  array de opciones de medio de pago (`tenderMediaOptions`) se repite
+  IDÉNTICO en `reconciliation-dashboard.ts` y `sales-dashboard.ts` — no vale
+  la pena una constante compartida por 4 líneas de literal hasta que aparezca
+  un tercer consumidor con la MISMA lista exacta.
+- **Rango de fecha**: `nz-range-picker` + `signal<[Date, Date] | null>(null)`
+  + `startOfDay`/`endOfDay` locales al service (ver
+  `reconciliation.service.ts`) para comparar contra el rango inclusive del
+  día completo, no solo la medianoche.
+- Los 3 combinados en un solo `computed` (`filteredSales`) que los aplica en
+  cascada con `return false` temprano — no 3 computeds encadenados.
 
 ## Patrón: Drawer de detalle al hacer click en una fila (sin navegar)
 
@@ -627,47 +656,154 @@ resolver una diferencia). Mismo criterio que siguió después `UserDetail`
   `.ant-drawer-title`) — mismo patrón de siempre: cualquier componente nuevo
   de ng-zorro, revisar si trae colores fijos antes de darlo por "ya
   temeado".
-- **Secciones fijas, en este orden**: Resumen de la venta (2 columnas, ver
-  abajo) → Productos (tabla de `items`, con fila `TOTAL` = suma de
-  subtotales únicamente, sin impuestos/propina) → Pagos (tabla de
-  `payments[]` — pago MIXTO real, ver `V-2007` en el mock: BBVA + Efectivo en
-  la misma venta; fila `TOTAL PAGADO` solo se muestra si hay más de un pago)
-  → Descuentos y propinas → Impuestos (base gravable + IVA 16%,
-  `SALE_TAX_RATE` en `sale.util.ts`) → Desglose financiero (el recap final:
-  subtotal, descuento, IVA, propina, total). Los montos de impuesto y total
-  son SIEMPRE derivados (`saleTaxAmount`/`saleTotal` en `sale.util.ts`),
-  nunca un campo guardado aparte que se pueda desincronizar. Excepción
-  deliberada: cuando una venta trae `payments` explícito (pago mixto), esos
-  montos NO se derivan de `saleTotal()` — el reparto entre métodos es un
+- **Secciones fijas, en este orden**: Resumen de la venta (estructura
+  `.info-fields`/`.info-field`, ver abajo — incluye una sub-sección
+  "Cliente" con datos de contacto + fiscales básicos) → Productos (tabla de
+  `items`, con fila `TOTAL` = suma de subtotales únicamente, sin
+  impuestos/propina) → Métodos de pago (tabla de `payments[]` — TODA venta
+  del mock trae ≥2 métodos, ver invariantes de `sales-mock.data.ts` más
+  abajo; fila `TOTAL PAGADO` solo se muestra si hay más de un pago) →
+  Descuentos y propinas + Impuestos **en la misma fila** (`.sale-drawer__row`,
+  ver abajo) → Desglose financiero (el recap final: subtotal, descuento, IVA,
+  propina, total). Los montos de impuesto y total son SIEMPRE derivados
+  (`saleTaxAmount`/`saleTotal` en `sale.util.ts`), nunca un campo guardado
+  aparte que se pueda desincronizar. Excepción deliberada: cuando una venta
+  trae `payments` explícito (pago mixto con reparto propio, ver `V-2007`),
+  esos montos NO se derivan de `saleTotal()` — el reparto entre métodos es un
   dato propio de esa venta que debe sumar el total, no algo calculable a
   partir de él (ver `withPayment()` en `sales-mock.data.ts`: respeta
-  `payments` si ya viene, solo deriva un pago único si no).
+  `payments` si ya viene, si no separa el total en un método principal +
+  uno secundario — ver invariantes abajo).
+- **Productos y Métodos de pago envueltos en `.table-bleed`**
+  (`shared/styles/_data-table.scss`): mismo mecanismo que usa `.table-card`
+  para que el borde superior de su tabla toque los bordes izquierdo/derecho
+  de la card (ver "Patrón: card de tabla" más abajo) — aquí, en vez de
+  cancelar el padding de una `nz-card`, cancela el padding de 24px que trae
+  `.ant-drawer-body` de fábrica (mismo valor exacto, así que el mismo
+  partial sirve sin necesitar una variante propia). Ambas tablas siguen
+  siendo `<table>` HTML plana con su propio `.sale-drawer__items` (no
+  `nz-table`) — mismo criterio que `.audit-table` en `user-detail`: una
+  tabla plana con la MISMA convención visual (header sin fondo, mayúsculas,
+  `.col-truncate` en la columna de texto libre — "Producto" y "Referencia"
+  de pagos) en vez de montar `nz-table` para un caso que no necesita sus
+  demás features (paginación, sort, etc.).
+
+### Patrón "icono + etiqueta arriba, valor abajo" (`.info-fields`)
+
+`shared/styles/_info-fields.scss` (`.info-fields`/`.info-field`/
+`.info-field__*`) — nació en `user-detail.scss` ("Información
+personal"/"Organización"/"Seguridad y acceso") y se promovió aquí al
+aparecer un segundo consumidor: "Resumen de la venta" en el Drawer de
+`sales-dashboard` la reutiliza tal cual (de solo lectura ahí, así que no usa
+`.info-field__input`/`.info-field__error`). Antes de esta iteración
+`sales-dashboard` usaba `.summary-columns`/`.summary-field`
+(`_summary-columns.scss`, icono+etiqueta+valor en una sola fila horizontal)
+para este mismo bloque — se cambió a `.info-fields` a pedido explícito, para
+que "Resumen de la venta" se presente con la MISMA estructura que
+Administración de usuarios. `_summary-columns.scss` sigue viva (no quedó
+huérfana): la usa el formulario de creación de usuario (`user-detail` en
+modo `isCreate()`), de una sola columna angosta con campos editables — ver
+"Patrón 'icono + etiqueta + valor' (2 columnas opcional)" más abajo para esa
+estructura horizontal, que es DISTINTA y sigue vigente para ese caso.
+
+- Grid de 3 columnas fijas por defecto (`.info-fields`, colapsa a 2 en
+  `max-width: 900px` y a 1 en `max-width: 560px`); `.info-fields--cols-4`
+  es la variante de 4 columnas que usa `user-detail` junto al avatar — sin
+  consumidor todavía en `sales-dashboard`.
+- Cada campo: `.info-field__head` (icono + `.info-field__label`, SIN "`:`"
+  al final — a diferencia de `.summary-field__label`) encima de
+  `.info-field__value` (o el control en modo edición, ver `user-detail`). Un
+  valor que es un `*StatusTag`/`nz-tag` suelto va envuelto en
+  `.info-field__value-row` (si no, hereda `align-items: stretch` del
+  `.info-field` flex-column y se estira al ancho completo de su celda del
+  grid — mismo gotcha ya documentado en `user-detail`, "Patrón: tab con card
+  general…").
+- **Sub-secciones dentro de un mismo `.info-fields`**: un `<h4
+  class="info-fields__subsection-title">` seguido de OTRO `.info-fields`
+  independiente (no un `grid-column: 1 / -1` dentro del mismo grid) — mismo
+  patrón que "Dirección" en `user-detail`. "Resumen de la venta" lo usa DOS
+  veces: separa los campos de la venta (Folio/Fecha/Medio de pago/
+  Referencia/Estado de venta/Estado de conciliación) de los del "Cliente"
+  (identidad + fiscales) y de los de "Documento electrónico" (la factura),
+  ver ambos abajo.
+- **Identificación fiscal del cliente (normativa colombiana, DIAN)**:
+  `SaleCustomer.personType`/`.taxRegime` (`shared/models/sale.model.ts`),
+  ambos opcionales — un cliente de mostrador sin registro no trae ninguno de
+  los dos y el campo cae al fallback `.text-muted` ("Sin tipo de persona/
+  régimen registrado"), mismo criterio que "Sin asignar" en `user-detail`.
+  `PersonType` (`natural`/`juridica`) y `TaxRegime`
+  (`responsable_iva`/`no_responsable` — terminología vigente de la DIAN tras
+  la Ley 2010 de 2019, reemplazó "Régimen común"/"simplificado") son enums
+  cerrados con su propio `Record<..., string>` de labels
+  (`PERSON_TYPE_LABEL`/`TAX_REGIME_LABEL`), mismo patrón que `TENDER_MEDIA_LABEL`/
+  `STORE_LABEL`. Reemplazó un primer intento con `rfc`/`businessName` (campos
+  mexicanos, CFDI) que no aplicaban al negocio real.
+- **"Documento electrónico" — la factura electrónica de la venta (DIAN)**:
+  sub-sección propia, DISTINTA de "Cliente" — no es un dato del cliente sino
+  del documento fiscal de la venta, obligatorio sin importar quién compre
+  (a diferencia de `personType`/`taxRegime`, que sí son opcionales). Modelo
+  `ElectronicInvoice` (`shared/models/sale.model.ts`, campo `Sale.invoice`,
+  NO opcional): `prefix` + `number` (consecutivo autorizado por la
+  resolución de facturación — distinto de `Sale.folio`, el folio interno del
+  POS sin validez ante la DIAN), `cufe` (Código Único de Facturación
+  Electrónica, el mismo que trae codificado el QR de una factura real) e
+  `issuedAt` (fecha/hora de expedición). Campos e icono:
+  - Prefijo: icono de tag/etiqueta (mismo path que "Código Postal" en
+    `user-detail`).
+  - Folio de factura: icono de recibo/ticket, DISTINTO del icono de
+    documento que ya usa "Folio" (el interno) arriba — mismo bloque
+    "Resumen de la venta", dos folios con significado distinto, no deben
+    compartir icono.
+  - CUFE: icono tipo "marco de escaneo" (evoca un código óptico/QR) — el
+    valor es un hex de 96 caracteres, se trunca con el mismo mecanismo de
+    `.info-field__value` (`overflow`/`ellipsis`) + `[attr.title]` con el
+    valor completo, sin necesitar `.col-truncate` (esa clase es para celdas
+    de tabla).
+  - Fecha de facturación: mismo icono de calendario que "Fecha" arriba
+    (cualquier campo de fecha reusa ese icono, ver "Patrón 'icono +
+    etiqueta + valor'" — mismo criterio ya establecido con las fechas de
+    `user-detail`). **Timezone fijo `-0500`** en el pipe
+    (`date: 'dd/MM/yyyy HH:mm' : '-0500'`) — Colombia no observa horario de
+    verano; sin el tercer argumento, Angular renderiza en la zona horaria
+    del NAVEGADOR y la hora mostrada aquí puede desalinearse de la hora
+    plana de `sale.time` que muestra "Fecha" arriba (mismo dato, sin
+    conversión) según dónde se abra la demo — bug real encontrado al
+    verificar en un entorno con otro huso horario.
+  - Consulta DIAN: icono de link externo, `.info-field__value-row` con un
+    `<a target="_blank" rel="noopener">` armado por `dianQueryUrl()`
+    (`sale.util.ts`) — el mismo enlace que trae codificado el QR de una
+    factura electrónica real
+    (`https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=<CUFE>`).
+
+### `.sale-drawer__row`: 2 secciones en la misma fila
+
+`sales-dashboard.scss` — "Descuentos y propinas" e "Impuestos" se muestran
+como si fueran 2 columnas de un mismo bloque, a pedido explícito. Grid de
+2 columnas (`1fr 1fr`, gap 24px, colapsa a 1 en `max-width: 560px`) que
+envuelve 2 `.sale-drawer__section` completos (cada uno con su propio
+heading) — a diferencia de `.summary-columns`, NO lleva separador vertical:
+son 2 secciones independientes compartiendo fila, no una sola lista de
+campos partida en 2.
 
 ### Patrón "icono + etiqueta + valor" (2 columnas opcional)
 
 `shared/styles/_summary-columns.scss` (`.summary-columns`/`.summary-col`/
-`.summary-field*`) — promovido desde `sales-dashboard.scss` ("Resumen de la
-venta" en el drawer) al aparecer un segundo consumidor: `user-detail` lo
-reutiliza para sus `<form>` de edición (datos personales/organización,
-dentro de "Información general" — ver "Patrón: tab con card general…"), con
-la diferencia de que ahí son EDITABLES (nz-input/nz-select dentro de
-`.summary-field__control`, con `.summary-field__error` para el mensaje de
-validación) en vez de solo texto — `sales-dashboard` sigue usando
-`.summary-field__value` (texto) porque su resumen es de solo lectura.
-`.summary-fields` es la variante SIN el divisor de 2 columnas, para una sola
-card con pocos campos que no necesita partirse. Nota: la vista de SOLO
-LECTURA de esos mismos campos en `user-detail` (fuera de modo edición) ya NO
-usa este partial — usa `.info-field` (vertical, feature-local, ver "Patrón:
-tab con card general…"), justo para no imponerle esa forma distinta a
-`sales-dashboard`.
+`.summary-field*`) — nació en `sales-dashboard.scss` ("Resumen de la venta"
+en el drawer, ver arriba: ya NO es su consumidor, migró a `.info-fields`) y
+sigue viva porque `user-detail` la reutiliza para su `<form>` de creación de
+usuario (`isCreate()`, una sola columna angosta) con campos EDITABLES
+(nz-input/nz-select dentro de `.summary-field__control`, con
+`.summary-field__error` para el mensaje de validación). `.summary-fields` es
+la variante SIN el divisor de 2 columnas, para una sola card con pocos
+campos que no necesita partirse.
 
 Para cuando un grupo de datos relacionados sí debe verse como dos bloques de
 igual jerarquía en vez de una sola lista larga (`.summary-columns`):
 
-- Grid de 2 columnas fijas (4 campos + 3 campos aquí, pero el layout no
-  asume ningún número concreto — el reparto es decisión de quien lo usa).
-  Colapsa a 1 columna en `max-width: 640px` (divisor pasa de `border-right`
-  a `border-bottom`).
+- Grid de 2 columnas fijas (el layout no asume ningún número concreto de
+  campos por columna — el reparto es decisión de quien lo usa). Colapsa a 1
+  columna en `max-width: 640px` (divisor pasa de `border-right` a
+  `border-bottom`).
 - El separador entre columnas usa `var(--color-primary)` — **no**
   `var(--color-border)` — es la única línea divisoria del proyecto con el
   acento de marca en vez del borde neutro de siempre; úsalo cuando el
@@ -684,6 +820,44 @@ igual jerarquía en vez de una sola lista larga (`.summary-columns`):
   Si un campo nuevo no tiene un icono obvio, es señal de que ese campo no
   pertenece a este patrón (úsalo para identidad/metadatos, no para
   cualquier lista de datos).
+
+### Invariantes del mock de ventas (`sales-mock.data.ts`)
+
+Pedidas explícitamente para que la demo del Drawer siempre se vea "rica",
+aplican a TODA venta del mock — las 7 de `TODAY_SALES` a mano y cualquiera
+generada por `buildDay()`:
+
+1. **Total > $1,000 MXN**: `buildDay()` no confía en que la mezcla de
+   productos del catálogo dé un subtotal alto por casualidad — calcula un
+   `qtyMultiplier` a partir de la suma a cantidad 1 de los productos
+   elegidos (`MIN_SEED_SUBTOTAL = 1150`, con margen para el descuento máximo
+   del 10% y el 16% de IVA) y lo aplica a la cantidad de cada línea, así que
+   el subtotal queda garantizado por arriba del piso sin importar qué tan
+   baratos hayan tocado esos productos en ese índice. 3 productos de ticket
+   alto (`Plato del día`, `Copa de vino`, `Postre de la casa`) se agregaron
+   al catálogo para que las ventas a mano no necesitaran cantidades poco
+   realistas.
+2. **≥5 productos**: `itemCount = 5 + (idx % 2)` en `buildDay()` (5 o 6);
+   las 7 de `TODAY_SALES` se expandieron a mano a 5-6 líneas cada una.
+3. **≥2 métodos de pago**: `withPayment()` ya NO deriva un solo pago del
+   total — separa el total en un método PRINCIPAL (`sale.tenderMedia`) y uno
+   SECUNDARIO (`SECONDARY_TENDER`, efectivo para los 3 medios electrónicos y
+   BBVA para efectivo), 80/20, salvo que la venta traiga `payments` explícito
+   (reparto propio, ver `V-2007`). Antes de esta iteración, un pago mixto
+   real (2+ métodos) era un caso especial que solo tenía `V-2007` — ahora es
+   la norma para cualquier venta del mock.
+4. **TODA venta trae una `ElectronicInvoice`**: `withInvoice()` la arma para
+   las 7 de `TODAY_SALES` y para cualquiera de `buildDay()` por igual — a
+   diferencia de `payments`, nunca se declara a mano en el mock (no hay
+   ningún caso especial tipo `V-2007` aquí). Un solo prefijo global
+   (`INVOICE_PREFIX = 'SETP'`) porque una sola resolución DIAN cubre las 4
+   sucursales; el consecutivo (`INVOICE_NUMBER_SEED + índice en
+   `RAW_SALES``) es único por venta. El CUFE se genera con `buildCufe()`
+   (FNV-1a + LCG sobre `sale.id`) para obtener un hex determinístico de 96
+   caracteres — MISMA longitud que un CUFE real (SHA-384) pero sin ser un
+   hash real, no hay backend que lo calcule; mismo criterio de "índice, no
+   `Math.random()`" que el resto del generador, para que el CUFE de una
+   venta no cambie entre builds.
 
 ### Gotcha de CSS: una utilidad compartida puede perder contra un selector
 ### local con más especificidad
@@ -964,14 +1138,16 @@ in-place, sin mover nada alrededor".
    CUALQUIER dato en esta pantalla (datos personales, organización, cuenta,
    seguridad de la cuenta) — a propósito DISTINTA de `.summary-field`
    (`_summary-columns.scss`, icono+etiqueta+valor en una sola fila
-   horizontal): ese partial es compartido con el drawer de venta de
-   `sales-dashboard`, que sigue de solo lectura en horizontal — convertirlo
-   a vertical ahí habría sido un cambio no pedido a un consumidor distinto.
-   `.info-field` vive local a `user-detail.scss` hasta que un segundo
-   consumidor la necesite (ver "Estructura de carpetas"). `.info-fields` las
-   acomoda en grid — **3 columnas fijas por defecto** (`repeat(3, 1fr)`,
-   ancho completo del `.tab-card__section` contenedor), **4 con
-   `.info-fields--cols-4`** (solo "Información personal", para hacer lugar
+   horizontal), que en su momento seguía siendo el patrón del drawer de
+   venta de `sales-dashboard`. Esa distinción ya no aplica: `sales-dashboard`
+   migró su "Resumen de la venta" a esta MISMA estructura vertical a pedido
+   explícito (ver "Patrón: Drawer de detalle…" más arriba), así que
+   `.info-field`/`.info-fields` se promovieron a
+   `shared/styles/_info-fields.scss` al aparecer ese segundo consumidor (ver
+   "Estructura de carpetas") — ya no viven local a `user-detail.scss`.
+   `.info-fields` las acomoda en grid — **3 columnas fijas por defecto**
+   (`repeat(3, 1fr)`, ancho completo del `.tab-card__section` contenedor),
+   **4 con `.info-fields--cols-4`** (solo "Información personal", para hacer lugar
    al avatar — ver punto 6). `.info-field__value--link` para valores que
    navegan (Administrador responsable → perfil del manager);
    `.info-field__value-row` para cuando el valor lleva una acción a un lado
@@ -1006,20 +1182,28 @@ in-place, sin mover nada alrededor".
    sigue siempre visible con su propio botón "Guardar permisos" — es una
    lista de checkboxes/multi-select, no datos con una representación de
    "solo lectura" natural, y no se pidió el mismo tratamiento ahí.
-6. **Avatar rectangular, 1ª columna de "Información personal"**: `<nz-avatar
-   nzShape="square" class="user-detail__avatar">` (mismo `[nzSrc]`/
-   `[nzText]`/`[ngStyle]` que `user-list`, ver `AppUser.avatarUrl` — foto
-   real con fallback a iniciales+color) dentro de un `.info-field--avatar`
-   con `grid-column: 1; grid-row: span 2;` — al ser el PRIMER elemento del
-   grid de 4 columnas, el resto de los campos fluye automáticamente
-   alrededor de ese hueco de 1 columna × 2 filas (nadie más necesita
-   `grid-row`/`grid-column` explícitos). `border-radius: 8px` en vez del
-   círculo que usa `user-list` — "rectangular", no un avatar de fila de
-   tabla. `.info-fields__subsection-title` (`grid-column: 1 / -1`) separa
-   "Dirección" (Ciudad/Estado/Código Postal/Calle 1/Calle 2, sub-objeto
-   `AppUserAddress`) del resto de "Información personal" sin necesitar un
-   grid/sección aparte — ocupa su propia fila completa y el auto-placement
-   del grid sigue fluyendo después de ella.
+6. **Avatar FUERA del grid, a la izquierda de "Información personal"**:
+   segunda iteración — el avatar empezó como la 1ª columna del grid
+   (`grid-column: 1; grid-row: span 2`, 1 columna × 2 filas), pero eso
+   ataba su alto al alto de 2 filas de campos (variable, y grande). Ahora
+   `.info-personal` (flex row) pone el avatar (`<nz-avatar nzShape="square"
+   class="user-detail__avatar">`, tamaño FIJO propio — 72×88px, ya no
+   `width/height: 100%` de una celda) y el grid de 7 campos
+   (`.info-fields--cols-4`, `flex: 1`) lado a lado — el avatar ya no
+   participa del grid en absoluto, así que su tamaño es independiente del
+   alto de fila de los campos. Mismo `[nzSrc]`/`[nzText]`/`[ngStyle]` que
+   `user-list` (ver `AppUser.avatarUrl` — foto real con fallback a
+   iniciales+color); `border-radius: 8px` en vez del círculo que usa
+   `user-list` — "rectangular", no un avatar de fila de tabla.
+   **"Dirección" ya NO comparte grid con estos 7 campos**: es un `<h4>`
+   normal (`.info-fields__subsection-title`, sin `grid-column`) seguido de
+   su PROPIO `.info-fields` (3 columnas, el default — no
+   `--cols-4`) — dos grids independientes, hermanos dentro del mismo
+   `<form>`, en vez de uno solo con un hueco de avatar que acomodar.
+   `.info-fields--cols-4` (4 columnas, gap más chico que el default — filas
+   más bajas ahora que ya no comparte alto con el avatar) es EXCLUSIVA de
+   los 7 campos personales; Dirección/Organización/Cuenta/Seguridad de la
+   cuenta siguen en 3 columnas.
 7. **Campos nuevos de "Información personal" (fecha de nacimiento, SSN,
    género, dirección) y "Organización" (ID empleado, fecha de contratación,
    fecha fin de contrato)**: agregados a `AppUser` — ver `AppUserAddress`
@@ -1057,6 +1241,27 @@ in-place, sin mover nada alrededor".
    en 4 aunque hoy solo existan 3 grupos (`PERMISSIONS` en el model) — las
    columnas sobrantes quedan vacías a propósito, para no tener que tocar
    este grid el día que se agregue un 4° grupo de permisos.
+10. **Icono + etiqueta, misma estructura en TODO el módulo**:
+    `features/user-management/_buttons.scss` (nuevo, feature-local — 3
+    consumidores del MISMO feature, no amerita `shared/styles/` todavía) —
+    `.user-list ::ng-deep .ant-btn, .user-detail ::ng-deep .ant-btn,
+    .user-audit ::ng-deep .ant-btn { display: inline-flex !important;
+    align-items: center; gap: 6px; }`. Envuelto con el contenedor raíz de
+    cada pantalla (no `.ant-btn` a secas) — SCOPED a este módulo, nunca se
+    pidió (ni se necesitó) en el resto de la app; un `::ng-deep` sin nada
+    antes se filtraría global. Con esto, cualquier botón nuevo con icono en
+    estas 3 pantallas hereda la alineación automáticamente. Se completaron
+    además los botones que tenían label pero NO icono (Eliminar usuario,
+    Guardar cambios ×2, Guardar permisos, Restablecer contraseña, Crear
+    usuario) reutilizando SVGs ya existentes en el módulo cuando aplicaba
+    (el candado de "Restablecer contraseña" es el mismo de la fila de
+    acciones en `user-list`; el "+" de "Crear usuario" es el mismo de
+    "Nuevo usuario") — un ícono nuevo (disco de guardar) para
+    "Guardar cambios"/"Guardar permisos", los 2 únicos casos sin un ícono
+    ya establecido en la app para reusar. Los links pequeños dentro de un
+    `.info-field__value-row` (Marcar como verificado, Cerrar sesiones, Ver
+    perfil de X) quedaron sin icono a propósito — son acciones inline
+    secundarias, no botones de la misma jerarquía visual que header/forms.
 10. **`.ant-tabs-nav` como "pill" propio**: bridge en `styles.scss` (`border`,
     `padding: 0 16px`, `border-radius: 12px`, `background: var(--color-card)`,
     todos `!important` — mismo gotcha de siempre) en vez del texto suelto de
@@ -1076,10 +1281,12 @@ construyas una pantalla con `nz-table` (o incluso una tabla HTML plana, ver
 (su "segunda iteración": toolbar de filtros y tabla pasaron de vivir en dos
 elementos sueltos — card de tabla + `<section class="toolbar">` encima — a
 compartir la MISMA `<nz-card>`) y se promovió a estándar global:
-`reconciliation-dashboard` y `user-audit` (historial de auditoría) ya se
-migraron al mismo patrón; `sales-dashboard` y el "Historial" de
-`user-detail` no tenían toolbar que mover, así que solo heredaron el look
-(radius, header sin fondo, sin línea vertical) por usar `.table-card`.
+`reconciliation-dashboard`, `user-audit` (historial de auditoría) y
+`sales-dashboard` (al agregarle sus 3 filtros — fecha, cliente, medio de
+pago — ya se migró al mismo patrón; antes de eso vivía sin filtros); el
+"Historial" de `user-detail` no tiene toolbar que mover, así que solo
+heredó el look (radius, header sin fondo, sin línea vertical) por usar
+`.table-card`.
 
 **Con filtros** (toolbar y tabla son conceptualmente una sola unidad — la
 vista es de administración/consulta de una lista): toolbar DENTRO de la
@@ -1091,7 +1298,7 @@ tabla ya toca los 4 bordes). En ambos casos, `.table-card` solo se aplica
 como clase en el `.html` — nada que declarar en el `.scss` del feature.
 
 ```html
-<!-- Con filtros (user-list, reconciliation-dashboard, user-audit) -->
+<!-- Con filtros (user-list, reconciliation-dashboard, user-audit, sales-dashboard) -->
 <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
   <section class="toolbar">...</section>
   <div class="table-bleed">
@@ -1099,7 +1306,7 @@ como clase en el `.html` — nada que declarar en el `.scss` del feature.
   </div>
 </nz-card>
 
-<!-- Sin filtros (sales-dashboard) -->
+<!-- Sin filtros (Historial de user-detail) -->
 <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
   <nz-table>...</nz-table>
 </nz-card>
@@ -1209,7 +1416,11 @@ como clase en el `.html` — nada que declarar en el `.scss` del feature.
     !important` los ata a la paleta activa (antes heredaban
     `--color-foreground` del bridge de `.ant-btn-text`); Eliminar
     (`.ant-btn-dangerous`) se excluye explícitamente y se queda en
-    `--color-destructive` — mismo "semáforo" de siempre.
+    `--color-destructive` — mismo "semáforo" de siempre. `.row-actions` se
+    promovió a `shared/styles/_row-actions.scss` al aparecer un segundo
+    consumidor (`reconciliation-dashboard`, ver "Patrón: columna Acciones
+    en tablas de cruce" más abajo) — mismo criterio de siempre, ver
+    "Estructura de carpetas".
 13. **Rol: ancho de la caja vs. ancho del panel de opciones son cosas
     distintas**: `.role-select` pasó de `width: 100%; max-width: 200px` a
     `width: auto` para que el label y la flecha de apertura queden pegados
@@ -1231,6 +1442,195 @@ como clase en el `.html` — nada que declarar en el `.scss` del feature.
     `MOCK_AUDIT_LOG` — igual que los 8 originales — para que su pestaña
     "Historial" no se vea vacía solo por ser relleno.
 
+## Patrón: conciliación por tender media y fecha (base POS)
+
+`reconciliation-dashboard` ("Conciliación") dejó de mostrar UNA fila por
+orden — ahora muestra TOTALES agrupados por `tender media + fecha` (un
+banco liquida por lote diario, no orden por orden; comparar sumas de un día
+es lo que de verdad se concilia contra el estado de cuenta). Motivo del
+cambio: la tabla también dejó de tener su propio dataset desconectado — la
+base de TODA conciliación es ahora el mismo mock de ventas que ya usa
+`sales-dashboard` ("Resumen de venta"), es decir, el sistema POS.
+
+### Fuente única: `sales-settlements.mock-data.ts` deriva de `sales-dashboard`
+
+Antes, `MOCK_SALES`/`MOCK_SETTLEMENTS` (`shared/mock-data/
+sales-settlements.mock-data.ts`) traían su propio dataset de `ORD-*`
+inventado, sin relación real con las ventas que se ven en `/dashboard` —
+fechas, folios y montos que no cuadraban entre pantallas, justo lo que este
+cambio corrige:
+
+- **`MOCK_SALES` (lado venta)** se arma mapeando el mock de POS completo
+  (`features/sales-dashboard/data/sales-mock.data.ts`, mismo array que pinta
+  la tabla de `sales-dashboard`) a `SaleTransaction`: `orderId =
+  sale.reference` (la MISMA referencia que ya se ve en su columna
+  "Referencia" — usar un id distinto rompía la trazabilidad entre las dos
+  pantallas), `amount = saleTotal(sale)` (nunca un monto recalculado a
+  mano). Ninguna venta se excluye por estar `cancelada` — el cruce usa
+  `sale.reconciliationStatus` tal cual, el MISMO campo que ya pinta
+  "Estado de conciliación" en `sales-dashboard`, así que una fila "Cruzado"
+  ahí SIEMPRE trae su liquidación aquí y una "Por liquidar" ahí NUNCA la
+  trae (excluir canceladas habría dejado el estado "Monto distinto" sin un
+  solo caso real de demostración — hoy V-2005, cancelada, es la única venta
+  `amount_mismatch` de todo el mock).
+- **`MOCK_SETTLEMENTS` (lado banco)** se DERIVA de ese mismo
+  `reconciliationStatus`, no se hand-authorea aparte: `matched` → una
+  liquidación por el monto exacto; `amount_mismatch` → una liquidación al
+  88% del monto (`MISMATCH_RATIO`, determinístico — nunca un delta
+  hardcodeado por venta, así sigue siendo válido si el total de la venta
+  cambia); `sale_only` → ninguna. Se completa con 4 liquidaciones huérfanas
+  (`ORPHAN_SETTLEMENTS`) fechadas el 16 y 23 de agosto — los DOS únicos días
+  del rango sin ninguna venta generada (`buildDay` los salta) — para que la
+  anomalía "Sin venta" quede limpia, sin mezclarse con una venta `sale_only`
+  real de ese mismo día+medio en una sola fila "Monto distinto" confusa.
+- **Import cruzado de feature (`sales-dashboard`) hacia `shared/`** —
+  única excepción documentada a la regla dura de "shared nunca importa de
+  features" (ver "Estructura de carpetas"): mover el mock de ventas
+  completo a `shared/` es el cierre correcto (`MOCK_SALES`/`saleTotal` ya
+  tienen dos consumidores reales), pero se dejó pendiente porque otra
+  sesión tenía esos archivos de `sales-dashboard` en vuelo al escribir esto
+  — limpieza futura, no una decisión definitiva.
+- **Una orden puede liquidarse en más de un depósito**: `V-2007` (venta de
+  "pago mixto", ver `sales-mock.data.ts`) se liquida en 3 abonos parciales
+  en vez de 1 — caso real (SPEI puede llegar por abonos) y de paso deja
+  ≥3 transacciones bancarias bajo un mismo día+medio para demostrar "Ver
+  detalles" con más de una fila. Esto obligó a corregir
+  `cross-match.util.ts`: `crossMatchTransactions` ahora SUMA todas las
+  liquidaciones de una misma orden para status/`difference` (antes tomaba
+  "la última" del `Map`, lo que habría reportado esa orden como
+  `amount_mismatch` con solo 1/3 de su monto real) — `TransactionMatch.
+  settlement` se queda como una sola fila representativa (compat con lo que
+  ya consumía `difference-management`), pero el monto ya no depende de cuál
+  fila sea. `DifferenceManagementService.candidatePool` también se corrigió
+  para excluir del pool por `orderId` (no por el id de esa fila
+  representativa) — si no, las otras liquidaciones de una orden ya
+  "cuadrada" quedaban sueltas, disponibles para robárselas a otra orden.
+
+### `group-by-tender-day.util.ts` — agregación para la tabla de página
+
+Función pura nueva (`reconciliation-dashboard/data/`, mismo criterio que
+`cross-match.util.ts`: sin estado, testeable aislada) que agrupa
+`SaleTransaction[]`/`SettlementTransaction[]` (ya separados por tender
+media, mismo shape que el mock) por `date + tenderMedia`, sumando montos.
+`ReconciliationService.filteredItems` filtra sobre este resultado
+(`TenderDaySummary[]`), no sobre `TransactionMatch[]` — el cruce por orden
+(`crossMatchTransactions`) se sigue calculando ahí (`orderMatches`,
+privado) pero SOLO como insumo para encontrar la orden puntual de
+"Gestionar" dentro de un grupo, nunca para pintar los totales.
+
+- **Status del grupo, misma regla que antes pero a nivel de suma**:
+  `soldAmount`/`settledAmount` en 0-y-0 no ocurre (el grupo no existiría);
+  vendido>0 y banco=0 → `sale_only`; banco>0 y vendido=0 → `settlement_only`;
+  iguales → `matched`; distintos → `amount_mismatch`. Exactamente la misma
+  fórmula que usaba `crossMatchTransactions` por orden, solo que ahora
+  compara sumas de un día en vez de un solo par venta/liquidación.
+- **"Gestionar" sigue siendo por ORDEN**, aunque la fila que lo dispara sea
+  un total agrupado: `TenderDaySummary.actionableOrder` guarda la primera
+  orden `sale_only`/`amount_mismatch` de `orderMatches` que cae en ese
+  `date + tenderMedia` (`null` si el grupo ya está "Cruzado" o es
+  `settlement_only` — esos dos no tienen nada que gestionar a mano, mismo
+  criterio de siempre). `isActionable(group)` exige AMBOS: el status del
+  grupo Y que exista `actionableOrder` — un grupo con errores que se
+  cancelan entre sí (una venta sin liquidar + una liquidación huérfana que
+  compensan el total) podría verse "Cruzado" en la suma sin que ninguna
+  orden individual esté realmente resuelta; ese edge case queda sin botón
+  antes que mostrar un "Gestionar" que aterrice en la orden equivocada.
+- **Columna "Transacciones"** (`group.soldCount`): cuántas ventas POS entran
+  en `soldAmount` ese día — la señal visual de que la fila es un total
+  agrupado, no una orden suelta (antes existía una columna "Orden", ya no
+  aplica al agruparse).
+
+### Modal "Ver detalles" — título por medio de pago + fecha, tabla `.table-bleed`
+
+El modal ya no se abre "por orden" (no tiene una sola orden que nombrar en
+el título) — `modalTitle` (computed en `reconciliation-dashboard.ts`) arma
+`"Transacciones bancarias — {medio} · {fecha}"` con formateo manual de la
+fecha ISO (evita depender de un pipe dentro de un binding `[nzTitle]`). El
+contenido sigue siendo SIEMPRE una tabla (`group.settlements`, ya no
+necesita una función `bankTransactionsFor` — el grupo ya trae la lista).
+
+- **Primer `nz-modal` declarativo con header propio** (antes solo se usaba
+  `NzModalService.confirm()`, que ya tenía su bridge — ver "Puente
+  ng-zorro-antd ↔ tokens"): `.ant-modal-header`/`-title`/`-close` traen
+  fondo blanco y texto casi negro fijos en el CSS compilado de Ant, mismo
+  gotcha de siempre — se agregaron sus propias entradas en `styles.scss`.
+- **`border-radius: 8px !important` + `overflow: hidden`** en
+  `.ant-modal-content` (Ant trae `2px` fijo, sin recorte) — mismo radius que
+  el resto de contenedores flotantes de la app (ver "Patrón: card base");
+  `overflow: hidden` para que el header y la tabla de dentro (sin su propio
+  radius) queden recortados por la esquina en vez de sobresalir en las 4
+  puntas.
+- **Header SIN línea divisoria** (`.ant-modal-header { border-bottom: none
+  !important }`) — el divisor visual entre título y contenido lo da el
+  propio borde superior de la tabla de dentro, no una línea aparte del
+  header.
+- **Tabla del modal — "estilos globales de tabla", sin color en su header,
+  borde superior tocando los bordes del modal**: un `nz-modal` no es una
+  `nz-card`, así que no hereda `.table-card` (ver "Patrón: card de tabla")
+  solo por vivir dentro de uno. Se puenteó `.ant-modal-body .ant-table-thead
+  > tr > th` en `styles.scss` (fondo transparente + sin línea vertical,
+  mismo tratamiento que `.table-card`) para que CUALQUIER tabla futura
+  dentro de un modal lo herede igual, sin repetir esto por feature. El
+  borde superior tocando los bordes del modal lo resuelve el `.html`
+  envolviendo la tabla en `.table-bleed` (`shared/styles/_data-table.scss`)
+  — el mismo padding de 24px que trae `.ant-modal-body` de fábrica es
+  exactamente lo que ese partial ya asume, así que se reutiliza tal cual,
+  sin una variante nueva.
+
+### Simplificación a 3 estados + "Desconciliar"
+
+La tabla de "Conciliación" pasó de mostrar los 4 valores de `MatchStatus` a
+solo 3, con su propio tipo — `ReconciliationStatus` (`'conciliado' |
+'desconciliado' | 'por_conciliar'`, `shared/models/reconciliation-item.model.ts`)
+y su propio tag — `ReconciliationStatusTag`
+(`shared/components/reconciliation-status-tag/`, mismo patrón que
+`MatchStatusTag`/`SaleStatusTag`: un enum de estado nuevo no se resuelve
+reutilizando el tag de otro dominio aunque coincidan en color). **`MatchStatus`
+no desaparece** — sigue siendo el tipo real a nivel de ORDEN
+(`cross-match.util.ts`, `difference-management`, `sale.reconciliationStatus`
+en `sales-dashboard`); `ReconciliationStatus` es solo la vista agrupada por
+día + medio de pago de *este* feature.
+
+- **`desconciliado` cubre DOS causas de `MatchStatus`**: `amount_mismatch`
+  (monto distinto) y `settlement_only` (liquidación bancaria sin venta) — a
+  nivel de día+medio ambas son "esto no cuadra, hay que revisarlo", ver
+  `statusFor()` en `group-by-tender-day.util.ts` (ya no compara contra 4
+  casos, solo 3: vendido>0 y banco=0 → `por_conciliar`; iguales →
+  `conciliado`; cualquier otro caso (banco>0 y vendido=0, o montos
+  distintos) → `desconciliado`).
+- **Acciones por estado** (columna "Acciones", mismo patrón de iconos +
+  tooltip de siempre): `conciliado` → "Ver detalles" (ojo, sin cambios) +
+  **"Desconciliar"** (icono círculo-tachado, `nzDanger` — mismo "semáforo"
+  que Eliminar en `user-list`). `desconciliado`/`por_conciliar` →
+  "Gestionar" (lápiz, sin cambios). `isActionable(group)` ahora depende
+  SOLO del status (antes también exigía `group.actionableOrder !== null`) —
+  un grupo "Desconciliado" a mano no tiene una orden con discrepancia real
+  detrás, y aun así debe mostrar "Gestionar" según lo pedido.
+- **`ReconciliationOverridesStore`** (`shared/data/reconciliation-overrides.store.ts`,
+  `providedIn: 'root'`, mismo motivo que `ResolvedMatchesStore`: sobrevive
+  la navegación aunque `ReconciliationService` sea por-ruta) — un Set de
+  claves `tenderMedia|date` marcadas "Desconciliar" a mano. Se aplica en
+  `ReconciliationService.dayGroups` DESPUÉS de aplicar `ResolvedMatchesStore`
+  (dos pasadas de `.map()` encadenadas): primero un match confirmado en
+  "Gestión de diferencias" puede volver `conciliado` a un grupo, y solo
+  entonces se evalúa si ese grupo (conciliado por mock o por resolución
+  manual, da igual) fue desconciliado a mano. No hay "volver a conciliar"
+  todavía — no se pidió, y agregar un `resolve()` simétrico es directo si
+  hace falta (mismo archivo, mismo patrón).
+- **`resolveLink` con fallback, ya no depende de `actionableOrder`**: antes
+  el link a "Gestión de diferencias" solo existía si `group.actionableOrder`
+  no era null. Ahora, cuando es null (grupo "Desconciliado" a mano, o una
+  anomalía `settlement_only` pura sin `sale_only`/`amount_mismatch` real en
+  el grupo), cae a `group.settlements[0]?.orderId` — sigue siendo un
+  `orderId` válido para la ruta, aunque `difference-management` no tenga
+  nada accionable que ofrecerle. **Limitación conocida, deliberada**: en ese
+  caso `difference-management` muestra su estado vacío existente ("Esta
+  orden no requiere gestión de diferencias, o no existe") en vez de una
+  pantalla de resolución funcional — extender `difference-management` para
+  soportar "resolver una orden ya matched pero desconciliada a mano" (o una
+  anomalía `settlement_only` sin venta) es trabajo pendiente, no se hizo
+  aquí para no tocar a fondo ese feature de paso.
+
 ## Pendientes / deuda conocida al cerrar este módulo
 
 1. Borde de `nz-range-picker` no refleja `--color-border` (ver arriba).
@@ -1250,3 +1650,19 @@ como clase en el `.html` — nada que declarar en el `.scss` del feature.
    drawer/overlay como sería lo esperado en móvil. Mismo criterio que el
    punto anterior: pendiente de la misma pasada de responsive general,
    fuera del alcance de agregar el Menu en sí.
+5. "Gestionar" sobre un grupo "Desconciliado" sin una orden `sale_only`/
+   `amount_mismatch` real detrás (desconciliado a mano, o una anomalía
+   `settlement_only` pura) aterriza en el estado vacío de
+   `difference-management`, no en una pantalla de resolución funcional — ver
+   "Simplificación a 3 estados" arriba.
+6. **`sales-dashboard` mezcla normativa mexicana y colombiana**: el "Resumen
+   de la venta" ahora identifica al cliente y factura ante la DIAN
+   (Colombia), pero `SALE_TAX_RATE` (`sale.util.ts`) sigue en 16% ("IVA
+   estándar México" en su comentario — el IVA general colombiano es 19%) y
+   TODOS los montos de la pantalla siguen formateados con `currency: 'MXN'`
+   (4 archivos de la app, no solo `sales-dashboard`). No se tocó al agregar
+   la identificación fiscal/factura electrónica porque cambiar la tasa y la
+   moneda es un cambio transversal bastante más grande (recalcular los
+   montos ya afinados de `sales-mock.data.ts` para seguir cumpliendo las
+   invariantes de arriba, revisar los 4 archivos con `'MXN'`) que no se pidió
+   explícitamente — pendiente si el negocio real es 100% colombiano.

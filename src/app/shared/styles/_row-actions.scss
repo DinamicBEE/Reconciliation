@@ -1,0 +1,35 @@
+// Columna "Acciones" de una tabla — botones de icono únicamente (sin
+// palabras), cada uno con su propio tooltip nativo de ng-zorro
+// (`nz-tooltip`/`nzTooltipTitle`) y `aria-label`. Nació en `user-list`
+// (Administración de usuarios) y se promovió aquí al aparecer un segundo
+// consumidor (`reconciliation-dashboard`) — mismo criterio que
+// `_summary-strip.scss`/`_back-link.scss`/`_status-dot.scss`, ver MASTER.md.
+//
+// Botones circulares (radio 50%, no el 8px global de `.ant-btn` — ver
+// "Botones" en styles.scss) y un poco más grandes que `nzSize="small"`
+// (34px) para que el resalte de :hover se lea como un círculo completo, no
+// un cuadrado con esquinas redondeadas. Color primario de la paleta activa
+// (no --color-foreground, el default de `.ant-btn-text`) salvo un botón
+// `nzDanger`, que se queda en --color-destructive vía `.ant-btn-dangerous`
+// — "semáforo" de siempre, ver MASTER.md.
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  ::ng-deep .ant-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 50% !important;
+    color: var(--color-primary) !important;
+
+    &.ant-btn-dangerous {
+      color: var(--color-destructive) !important;
+    }
+  }
+}

@@ -1,6 +1,8 @@
 @use '../../../shared/styles/back-link';
 @use '../../../shared/styles/data-table';
 @use '../../../shared/styles/summary-columns';
+@use '../../../shared/styles/info-fields';
+@use '../../../shared/styles/buttons';
 
 // Sin max-width: las tabs y sus cards deben usar todo el ancho disponible
 // de la pantalla (a diferencia del formulario angosto de un solo campo que
@@ -145,72 +147,38 @@ nz-tabs,
   font-weight: 600;
 }
 
-// Estructura vertical "icono + etiqueta / valor" — a propósito DISTINTA de
-// `.summary-field` (shared/styles/_summary-columns.scss, icono+etiqueta+
-// valor en UNA sola fila horizontal): ese partial es compartido con el
-// drawer de venta de sales-dashboard, que sigue siendo de solo lectura en
-// horizontal — cambiarlo ahí habría roto ese consumidor. Esta es feature-
-// local hasta que un segundo consumidor la necesite (ver MASTER.md
-// "Estructura de carpetas"). Grid de 3 columnas fijas por defecto (ancho
-// total del `.tab-card__section` contenedor) — "Información personal" pisa
-// esto a 4 con `.info-fields--cols-4` (ver abajo) para hacer lugar al
-// avatar.
-.info-fields {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px 24px;
-  width: 100%;
+// Estructura vertical "icono + etiqueta / valor" (`.info-field`/
+// `.info-fields`, incluida la variante de 4 columnas y el encabezado de
+// sub-sección) — promovida a `shared/styles/_info-fields.scss` al aparecer
+// un segundo consumidor (el resumen de venta de `sales-dashboard`, de solo
+// lectura); ver ese partial y MASTER.md. Lo que sigue siendo local a esta
+// pantalla es el layout del AVATAR junto al grid, no la estructura de campo
+// en sí.
 
-  @media (max-width: 900px) {
-    grid-template-columns: repeat(2, 1fr);
+// Avatar + grid de 7 campos lado a lado — el avatar SALIÓ del grid (antes
+// ocupaba 1 columna × 2 filas dentro de él, `grid-row: span 2`) para poder
+// reducir su tamaño sin heredar el alto de 2 filas de campos; ahora es un
+// tamaño fijo propio y el grid de campos ocupa el resto del ancho
+// (`flex: 1`), sin huecos que acomodar en el auto-placement.
+.info-personal {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+
+  .info-fields--cols-4 {
+    flex: 1;
+    min-width: 0;
   }
 
   @media (max-width: 560px) {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
-}
-
-.info-fields--cols-4 {
-  grid-template-columns: repeat(4, 1fr);
-
-  @media (max-width: 900px) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-// Encabezado de una subsección DENTRO del mismo grid (p. ej. "Dirección"
-// dentro de "Información personal") — ocupa la fila completa
-// (`grid-column: 1 / -1`) para separar visualmente el grupo de campos que
-// sigue, sin necesitar un grid/card aparte.
-.info-fields__subsection-title {
-  grid-column: 1 / -1;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-muted-foreground);
-  margin: 4px 0 0;
-}
-
-.info-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-// Primera columna de "Información personal" — la imagen del usuario, no un
-// icono+etiqueta+valor como el resto. `grid-row: span 2` reserva 2 filas de
-// alto (la celda no es cuadrada: 1 columna × 2 filas, de ahí "rectangular").
-// Al ser el primer elemento del grid, el resto de los campos fluye
-// automáticamente alrededor de este hueco (ver user-detail.html).
-.info-field--avatar {
-  grid-column: 1;
-  grid-row: span 2;
 }
 
 .user-detail__avatar {
-  width: 100%;
-  height: 100%;
-  min-height: 96px;
+  flex-shrink: 0;
+  width: 125px;
+  height: 125px;
   border-radius: 8px;
 
   // El host de nz-avatar ya trae la clase `.ant-avatar` — se sobreescribe
@@ -218,9 +186,10 @@ nz-tabs,
   // interno. La imagen SÍ es un nodo interno (`<img>`, ver avatar.component
   // de ng-zorro) — ese sí necesita `::ng-deep`.
   &.ant-avatar {
-    width: 100%;
-    height: 100%;
+    width: 125px;
+    height: 125px;
     border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3) !important;
   }
 
   ::ng-deep img {
@@ -229,68 +198,6 @@ nz-tabs,
     object-fit: cover;
     border-radius: 8px;
   }
-}
-
-.info-field__head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-muted-foreground);
-}
-
-.info-field__icon {
-  flex-shrink: 0;
-  color: var(--color-primary);
-}
-
-.info-field__label {
-  font-size: 12px;
-}
-
-.info-field__value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.info-field__value--link {
-  color: var(--color-primary);
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
-// Para cuando el valor va acompañado de una acción rápida (Email
-// verificado → "Marcar como verificado", Sesiones activas → "Cerrar
-// sesiones") — el valor y el botón quedan en la misma fila, debajo del
-// icono+etiqueta, igual que un `.info-field__value` normal. También se usa
-// para envolver un `nz-tag` SOLO (Estado de la cuenta, 2FA en "Seguridad de
-// la cuenta"): sin este wrapper, el tag —hijo directo de `.info-field`, un
-// flex column— hereda `align-items: stretch` y se estira al ancho completo
-// de la columna del grid; envuelto en esta fila (flex, eje principal
-// horizontal) el tag vuelve a medirse por su contenido, igual que "Email
-// verificado".
-.info-field__value-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-// Reemplaza el valor en modo edición — mismo ancho que el resto de un
-// campo del grid (a diferencia de `.summary-field__control`, pensado para
-// una fila horizontal, no una columna de grid).
-.info-field__input {
-  width: 100%;
-}
-
-.info-field__error {
-  font-size: 12px;
-  color: var(--color-destructive);
 }
 
 .role-field {

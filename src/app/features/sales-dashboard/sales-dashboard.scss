@@ -1,6 +1,7 @@
-@use '../../shared/styles/kpi-card';
+@use '../../shared/styles/toolbar';
 @use '../../shared/styles/data-table';
-@use '../../shared/styles/summary-columns';
+@use '../../shared/styles/info-fields';
+@use '../../shared/styles/row-actions';
 
 .sales-dashboard {
   display: flex;
@@ -24,14 +25,6 @@
   margin: 0;
 }
 
-.sales-dashboard__subtitle {
-  font-family: var(--font-heading);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  margin: 0;
-}
-
 // --- Drawer de detalle de venta --------------------------------------------
 .sale-drawer {
   display: flex;
@@ -46,11 +39,11 @@
 }
 
 .sale-drawer__heading {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: var(--color-muted-foreground);
+  color: var(--color-foreground);
   margin: 0;
 }
 
@@ -81,6 +74,21 @@
 .sale-drawer__total-value {
   font-weight: 700;
   font-size: 15px;
+}
+
+// "Descuentos y propinas" + "Impuestos" en la misma fila, como si fueran 2
+// columnas de un solo bloque — mismo criterio de colapso que
+// `.summary-columns` (1 columna en móvil), pero sin el divisor central: son
+// 2 secciones independientes (cada una con su propio heading) compartiendo
+// fila, no una sola lista de campos partida en 2.
+.sale-drawer__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .sale-drawer__items {
@@ -125,6 +133,10 @@
   }
 }
 
-// Resumen de la venta: 2 columnas, icono + etiqueta + valor — clases
-// promovidas a shared/styles/_summary-columns.scss al aparecer un segundo
-// consumidor (user-detail). Ver ese partial y MASTER.md.
+// Resumen de la venta: usa `.info-fields`/`.info-field`
+// (`shared/styles/_info-fields.scss`, @use arriba) — la MISMA estructura
+// vertical "icono+etiqueta arriba, valor abajo" que Administración de
+// usuarios, a pedido explícito. `.summary-columns`/`.summary-field`
+// (`_summary-columns.scss`) ya NO es consumida por esta pantalla — sigue
+// viva solo para el form de creación de usuario en `user-detail`, ver
+// MASTER.md "Patrón: Drawer de detalle...".

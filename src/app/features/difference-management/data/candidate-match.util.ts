@@ -1,7 +1,13 @@
 import { SaleTransaction, SettlementTransaction } from '../../../shared/models/reconciliation-item.model';
 import { MatchCandidate } from './difference-management.model';
 
-const MAX_CANDIDATES = 5;
+// Antes topado a 5 — la sección "Transacciones bancarias candidatas" ahora
+// tiene su propio scroll interno (máx. 5 filas visibles, ver
+// difference-management.scss), así que ya no hace falta cortar la lista tan
+// corto para que la pantalla no se vea larga; 20 deja margen sobre las 15
+// liquidaciones "sueltas" de RAPPI del mock (ver sales-settlements.mock-data.ts)
+// sin truncarlas.
+const MAX_CANDIDATES = 20;
 
 function daysBetween(isoA: string, isoB: string): number {
   const msPerDay = 1000 * 60 * 60 * 24;

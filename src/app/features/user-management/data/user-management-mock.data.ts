@@ -612,8 +612,10 @@ function extraProfileFields(
     city: addr.city,
     state: addr.state,
     zipCode: addr.zipCode,
-    street1: `${street} ${100 + index * 3}`,
-    street2: index % 3 === 0 ? `Depto ${1 + (index % 12)}` : null,
+    street1: street,
+    street2: null,
+    exteriorNumber: `${100 + index * 3}`,
+    interiorNumber: index % 3 === 0 ? `${1 + (index % 12)}` : null,
   };
 
   return {

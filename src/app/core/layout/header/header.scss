@@ -53,20 +53,38 @@
   }
 }
 
-// --- Card de usuario logeado --------------------------------------------
-// Rectángulo con el largo (ancho) al doble del alto, fondo blanco
-// (--color-card, blanco en modo claro) y esquinas a 8px — la única
-// superficie con fondo propio dentro del Header.
+// --- Card de usuario logeado (abre el menú del avatar) -------------------
+// Círculo apenas más grande que el avatar — la distancia angosta entre
+// ambos (`padding`) más una sombra interna en el card y una sombra externa
+// en el avatar generan el efecto de profundidad: el avatar "flota" sobre
+// el card en vez de quedar pegado a su borde. Único elemento con fondo
+// propio dentro del Header.
+.app-header__avatar-menu {
+  position: relative;
+}
+
 .user-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 56px;
-  padding: 0px 12px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 4px;
+  // Reset de <button> nativo — el card es clickeable (abre el menú), no un
+  // <div> decorativo.
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 50%;
   background: var(--color-on-primary);
-  overflow: hidden;
+  font: inherit;
+  cursor: pointer;
+  // Sombra hacia adentro: el card se lee como un "hueco" del que el
+  // avatar sobresale, no como una superficie plana detrás de él.
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
 }
 
 .user-card__avatar {
@@ -75,32 +93,98 @@
   height: 28px !important;
   line-height: 28px !important;
   font-size: 12px !important;
+  // Sombra hacia afuera: eleva visualmente el avatar por encima del card.
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3) !important;
 }
 
-.user-card__info {
+// --- Menú del avatar (Perfil / paleta / tema / logout) -------------------
+// Mismo look que `.search-box__results` (fondo card, borde, radio 12px,
+// sombra) — un solo lenguaje visual para "panel flotante del Header".
+.avatar-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 20;
+}
+
+// Icono + label CENTRADOS horizontalmente como un bloque (no alineados a
+// la izquierda como un menú convencional) — pedido explícito.
+.avatar-menu__item {
   display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 4px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-foreground);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+
+  &:hover {
+    background: var(--color-muted);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+  }
 }
 
-.user-card__name {
-  font-family: var(--font-body);
-  font-weight: 700;
-  font-size: 12px;
-  color: var(--color-card-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.avatar-menu__icon {
+  flex: 0 0 auto;
+  color: var(--color-primary);
 }
 
-.user-card__role {
+.avatar-menu__label {
   font-family: var(--font-body);
-  font-size: 11px;
-  color: var(--color-muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+// Grid de acentos — se despliega debajo de "Paleta de colores" dentro del
+// mismo panel (sin popover anidado: más simple y sin conflictos de cierre
+// entre dos overlays superpuestos).
+.avatar-menu__palette {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.palette-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--color-card);
+  outline: 1px solid var(--color-border);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 120ms ease;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+.palette-swatch--selected {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: 1px;
 }
 
 // --- Búsqueda de pantallas ------------------------------------------------

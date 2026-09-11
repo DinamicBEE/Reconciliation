@@ -37,17 +37,19 @@ export interface RoleDef {
   defaultPermissions: PermissionKey[];
 }
 
-// Dirección postal — sub-objeto propio (no 5 campos sueltos en AppUser)
+// Dirección postal — sub-objeto propio (no 7 campos sueltos en AppUser)
 // porque siempre se edita/muestra como una unidad ("la dirección"), nunca un
-// campo aislado de los demás. `street2` es el único opcional de verdad
-// (depto/interior) — el resto son requeridos en la práctica aunque el tipo
-// no los valide todavía (ver AppUser.address).
+// campo aislado de los demás. `street2` y `interiorNumber` son los únicos
+// opcionales de verdad — el resto son requeridos en la práctica aunque el
+// tipo no los valide todavía (ver AppUser.address).
 export interface AppUserAddress {
   city: string; // Ciudad
   state: string; // Estado
   zipCode: string; // Código Postal
   street1: string; // Calle 1
-  street2: string | null; // Calle 2 — depto/interior, opcional
+  street2: string | null; // Calle 2 — opcional (calle secundaria o referencia)
+  exteriorNumber: string; // Número exterior
+  interiorNumber: string | null; // Número interior — opcional
 }
 
 export interface AppUser {
@@ -100,6 +102,11 @@ export interface AppUser {
 // Género — lista cerrada (mismo criterio que STATUS_OPTIONS/ROLE_OPTIONS):
 // un `<nz-select>`, no texto libre.
 export const GENDER_OPTIONS: string[] = ['Femenino', 'Masculino', 'Otro', 'Prefiero no decir'];
+
+// Validación de teléfono — compartida entre cualquier formulario del
+// dominio que pida "Teléfono" (user-detail, profile) para no divergir de
+// criterio entre pantallas.
+export const PHONE_PATTERN = /^[+]?[0-9()\-\s]{7,20}$/;
 
 export function fullName(user: Pick<AppUser, 'firstName' | 'lastName'>): string {
   return `${user.firstName} ${user.lastName}`.trim();

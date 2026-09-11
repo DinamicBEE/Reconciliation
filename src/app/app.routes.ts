@@ -30,6 +30,10 @@ export const routes: Routes = [
           import('./features/difference-management/difference-management').then((m) => m.DifferenceManagement),
       },
       {
+        path: 'perfil',
+        loadComponent: () => import('./features/profile/profile').then((m) => m.Profile),
+      },
+      {
         path: 'usuarios',
         loadComponent: () => import('./features/user-management/user-list/user-list').then((m) => m.UserList),
       },

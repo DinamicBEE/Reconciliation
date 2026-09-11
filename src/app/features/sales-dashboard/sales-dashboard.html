@@ -1,90 +1,130 @@
 <div class="sales-dashboard">
   <div class="sales-dashboard__header">
     <h1 class="sales-dashboard__title">Resumen de venta</h1>
-
-    <nz-radio-group
-      class="period-toggle"
-      [ngModel]="service.period()"
-      (ngModelChange)="onPeriodChange($event)"
-      nzButtonStyle="solid"
-      nzSize="small"
-    >
-      @for (opt of periodOptions; track opt.value) {
-        <label nz-radio-button [nzValue]="opt.value">{{ opt.label }}</label>
-      }
-    </nz-radio-group>
   </div>
 
-  <!-- 3 KPIs, ≤22vh (ver kpi-card partial / design-system MASTER.md) -->
-  <section class="kpi-grid">
-    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
-      <span class="kpi-card__title">Total vendido</span>
-      <div class="kpi-card__body kpi-card__body--stacked">
-        <div class="kpi-card__stat">
-          <span class="kpi-card__value">
-            {{ service.summary().totalAmount | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
-          </span>
-          <span class="kpi-card__delta text-muted">{{ service.summary().count }} transacciones</span>
-        </div>
-        <app-sparkline class="kpi-card__sparkline" [values]="service.dailyTrend()" color="var(--color-chart-donut)" />
-      </div>
-    </nz-card>
+  <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
+       tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
+    <section class="toolbar">
+      <nz-range-picker
+        class="toolbar__filter"
+        [ngModel]="service.dateRange()"
+        (ngModelChange)="onDateRangeChange($event)"
+        nzFormat="dd/MM/yyyy"
+      />
 
-    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
-      <span class="kpi-card__title">Ticket promedio</span>
-      <div class="kpi-card__body kpi-card__body--stat">
-        <div class="kpi-card__stat">
-          <span class="kpi-card__value">
-            {{ service.summary().avgTicket | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
-          </span>
-        </div>
-      </div>
-    </nz-card>
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.storeFilter()"
+        (ngModelChange)="onStoreFilterChange($event)"
+      >
+        @for (opt of storeOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
 
-    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
-      <span class="kpi-card__title">Transacciones</span>
-      <div class="kpi-card__body kpi-card__body--stat">
-        <div class="kpi-card__stat">
-          <span class="kpi-card__value">{{ service.summary().count }}</span>
-        </div>
-      </div>
-    </nz-card>
-  </section>
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.statusFilter()"
+        (ngModelChange)="onStatusFilterChange($event)"
+      >
+        @for (opt of statusOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
 
-  <!-- <h2 class="sales-dashboard__subtitle">Ventas de hoy</h2> -->
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.tenderMediaFilter()"
+        (ngModelChange)="onTenderMediaFilterChange($event)"
+      >
+        @for (opt of tenderMediaOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
 
-  <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
-    <div style="padding: 0 24px;">
-      <nz-table #tbl [nzData]="service.todaySales()" [nzPageSize]="10" nzSize="middle" >
+      <input
+        nz-input
+        type="text"
+        class="toolbar__filter toolbar__filter--search"
+        placeholder="Buscar por cliente"
+        [ngModel]="service.search()"
+        (ngModelChange)="onSearchChange($event)"
+      />
+
+      <span class="toolbar__spacer"></span>
+
+      <button
+        nz-button
+        type="button"
+        (click)="exportCsv()"
+        nz-tooltip
+        nzTooltipTitle="Descarga la información de la tabla (según los filtros actuales) en un archivo .csv"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0-4-4m4 4 4-4" />
+          <path stroke-linecap="round" d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        </svg>
+        Exportar
+      </button>
+    </section>
+
+    <!-- Bleed: se sale del padding de la card (margin negativo, ver
+         _data-table.scss) para que el borde superior toque los bordes
+         izquierdo/derecho de la card, como divisor entre filtros y tabla. -->
+    <div class="table-bleed">
+      <nz-table #tbl [nzData]="service.filteredSales()" [nzPageSize]="10" nzSize="middle">
         <thead>
           <tr>
             <th>Fecha</th>
-            <th class="col-truncate" style="--col-max-width: 130px">Folio</th>
+            <th>Tienda</th>
             <th class="col-truncate" style="--col-max-width: 180px">Cliente</th>
             <th>Medio de pago</th>
+            <th>Estado</th>
+            <th class="text-right">Subtotal</th>
+            <th class="text-right">Impuestos</th>
             <th class="text-right">Total</th>
-            <th class="col-truncate font-mono" style="--col-max-width: 150px">Referencia</th>
-            <th>Estado de conciliación</th>
+            <th class="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
           @for (sale of tbl.data; track sale.id) {
             <tr class="clickable-row" (click)="onRowClick(sale)">
               <td>{{ sale.date | date: 'dd/MM/yyyy' }}</td>
-              <td class="col-truncate font-mono" style="--col-max-width: 130px" [attr.title]="sale.folio">
-                {{ sale.folio }}
-              </td>
+              <td>{{ storeLabel[sale.store] }}</td>
               <td class="col-truncate" style="--col-max-width: 180px" [attr.title]="sale.customer.name">
                 {{ sale.customer.name }}
               </td>
               <td>{{ tenderMediaLabel[sale.tenderMedia] }}</td>
+              <td><app-reconciliation-status-tag [status]="saleStatus(sale)" /></td>
+              <td class="text-right font-mono">
+                {{ saleSubtotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </td>
+              <td class="text-right font-mono">
+                {{ saleTaxAmount(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </td>
               <td class="text-right font-mono">
                 {{ saleTotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
               </td>
-              <td class="col-truncate font-mono" style="--col-max-width: 150px" [attr.title]="sale.reference">
-                {{ sale.reference }}
+              <td class="text-center" (click)="$event.stopPropagation()">
+                <div class="row-actions">
+                  <button
+                    nz-button
+                    nzType="text"
+                    type="button"
+                    (click)="onRowClick(sale)"
+                    nz-tooltip
+                    nzTooltipTitle="Ver detalles"
+                    aria-label="Ver detalles"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2 12c1.3-3.6 5-7 10-7s8.7 3.4 10 7c-1.3 3.6-5 7-10 7s-8.7-3.4-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
               </td>
-              <td><app-match-status-tag [status]="sale.reconciliationStatus" /></td>
             </tr>
           }
         </tbody>
@@ -102,192 +142,361 @@
   <ng-container *nzDrawerContent>
     @if (service.selectedSale(); as sale) {
       <div class="sale-drawer">
-        <!-- 1. Resumen de la venta — 2 columnas (4 + 3 campos), separador
-             vertical en --color-primary, cada campo "icono + etiqueta + valor" -->
+        <!-- 1. Resumen de la venta — misma estructura "icono+etiqueta arriba,
+             valor abajo" que Administración de usuarios (`.info-fields`/
+             `.info-field`, shared/styles/_info-fields.scss) — no las 2
+             columnas horizontales de `.summary-columns` (esa sigue viva,
+             pero solo para el form de creación de usuario, ver MASTER.md).
+             "Cliente" y "Documento electrónico" son sub-secciones propias
+             (mismo criterio que "Dirección" en user-detail): identificación
+             fiscal básica del cliente ante la DIAN (tipo de persona +
+             régimen) y los datos de la factura electrónica de la venta. -->
         <section class="sale-drawer__section">
           <h3 class="sale-drawer__heading">Resumen de la venta</h3>
-          <div class="summary-columns">
-            <div class="summary-col">
-              <div class="summary-field">
-                <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <div class="info-fields">
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6 3h9l3 3v15H6z" />
                   <path stroke-linecap="round" d="M9 9h6M9 13h6M9 17h3" />
                 </svg>
-                <span class="summary-field__label">Folio:</span>
-                <span class="summary-field__value font-mono">{{ sale.folio }}</span>
-              </div>
-              <div class="summary-field">
-                <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <span class="info-field__label">Folio</span>
+              </span>
+              <span class="info-field__value font-mono">{{ sale.folio }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="3" y="4" width="18" height="17" rx="2" />
                   <path stroke-linecap="round" d="M16 2v4M8 2v4M3 9h18" />
                 </svg>
-                <span class="summary-field__label">Fecha:</span>
-                <span class="summary-field__value">{{ sale.date | date: 'dd/MM/yyyy' }} · {{ sale.time }}</span>
-              </div>
-              <div class="summary-field">
-                <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="8" r="4" />
-                  <path stroke-linecap="round" d="M4 21c0-4.5 3.5-7 8-7s8 2.5 8 7" />
-                </svg>
-                <span class="summary-field__label">Cliente:</span>
-                <span class="summary-field__value">
-                  {{ sale.customer.name }}
-                  @if (sale.customer.email || sale.customer.phone) {
-                    <span class="text-muted">· {{ sale.customer.email || sale.customer.phone }}</span>
-                  }
-                </span>
-              </div>
-              <div class="summary-field">
-                <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <span class="info-field__label">Fecha</span>
+              </span>
+              <span class="info-field__value">{{ sale.date | date: 'dd/MM/yyyy' }} · {{ sale.time }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="2" y="5" width="20" height="14" rx="2" />
                   <path d="M2 10h20" />
                 </svg>
-                <span class="summary-field__label">Medio de pago:</span>
-                <span class="summary-field__value">{{ tenderMediaLabel[sale.tenderMedia] }}</span>
-              </div>
+                <span class="info-field__label">Medio de pago</span>
+              </span>
+              <span class="info-field__value">{{ tenderMediaLabel[sale.tenderMedia] }}</span>
             </div>
 
-            <div class="summary-col">
-              <div class="summary-field">
-                <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" d="M5 9h14M5 15h14M10 3 8 21M16 3l-2 18" />
                 </svg>
-                <span class="summary-field__label">Referencia:</span>
-                <span class="summary-field__value font-mono">{{ sale.reference }}</span>
-              </div>
-              <div class="summary-field">
-                <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <span class="info-field__label">Referencia</span>
+              </span>
+              <span class="info-field__value font-mono">{{ sale.reference }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="9" />
                   <path stroke-linecap="round" stroke-linejoin="round" d="M8.5 12.5l2.5 2.5 5-5" />
                 </svg>
-                <span class="summary-field__label">Estado de la venta:</span>
+                <span class="info-field__label">Estado de la venta</span>
+              </span>
+              <div class="info-field__value-row">
                 <app-sale-status-tag [status]="sale.status" />
               </div>
-              <div class="summary-field">
-                <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" d="M9 17H7a5 5 0 0 1 0-10h2" />
                   <path stroke-linecap="round" d="M15 7h2a5 5 0 0 1 0 10h-2" />
                   <path stroke-linecap="round" d="M8 12h8" />
                 </svg>
-                <span class="summary-field__label">Estado de conciliación:</span>
+                <span class="info-field__label">Estado de conciliación</span>
+              </span>
+              <div class="info-field__value-row">
                 <app-match-status-tag [status]="sale.reconciliationStatus" />
+              </div>
+            </div>
+          </div>
+
+          <h4 class="info-fields__subsection-title">Cliente</h4>
+          <div class="info-fields">
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="8" r="4" />
+                  <path stroke-linecap="round" d="M4 21c0-4.5 3.5-7 8-7s8 2.5 8 7" />
+                </svg>
+                <span class="info-field__label">Nombre</span>
+              </span>
+              <span class="info-field__value">{{ sale.customer.name }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m3 7 9 6 9-6" />
+                </svg>
+                <span class="info-field__label">Correo electrónico</span>
+              </span>
+              @if (sale.customer.email) {
+                <span class="info-field__value">{{ sale.customer.email }}</span>
+              } @else {
+                <span class="info-field__value text-muted">Sin correo registrado</span>
+              }
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 2 .7 3a2 2 0 0 1-.4 2.1L8 10.2a16 16 0 0 0 6 6l1.4-1.4a2 2 0 0 1 2-.4c1 .3 2 .5 3 .7a2 2 0 0 1 1.6 2Z" />
+                </svg>
+                <span class="info-field__label">Teléfono</span>
+              </span>
+              @if (sale.customer.phone) {
+                <span class="info-field__value font-mono">{{ sale.customer.phone }}</span>
+              } @else {
+                <span class="info-field__value text-muted">Sin teléfono registrado</span>
+              }
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="3" width="16" height="18" rx="2" />
+                  <circle cx="12" cy="9" r="2.5" />
+                  <path stroke-linecap="round" d="M8 17c0-1.8 1.8-3 4-3s4 1.2 4 3" />
+                </svg>
+                <span class="info-field__label">Tipo de persona</span>
+              </span>
+              @if (sale.customer.personType) {
+                <span class="info-field__value">{{ personTypeLabel[sale.customer.personType] }}</span>
+              } @else {
+                <span class="info-field__value text-muted">Sin tipo de persona registrado</span>
+              }
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="7" cy="7" r="2" />
+                  <circle cx="17" cy="17" r="2" />
+                  <path stroke-linecap="round" d="M18 6 6 18" />
+                </svg>
+                <span class="info-field__label">Régimen tributario</span>
+              </span>
+              @if (sale.customer.taxRegime) {
+                <span class="info-field__value">{{ taxRegimeLabel[sale.customer.taxRegime] }}</span>
+              } @else {
+                <span class="info-field__value text-muted">Sin régimen registrado</span>
+              }
+            </div>
+          </div>
+
+          <h4 class="info-fields__subsection-title">Documento electrónico</h4>
+          <div class="info-fields">
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 2 3 11v2l9 9 9-9V4a2 2 0 0 0-2-2h-7Z" />
+                  <circle cx="15.5" cy="7.5" r="1.5" />
+                </svg>
+                <span class="info-field__label">Prefijo</span>
+              </span>
+              <span class="info-field__value font-mono">{{ sale.invoice.prefix }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 2h12v20l-3-2-3 2-3-2-3 2Z" />
+                  <path stroke-linecap="round" d="M9 7h6M9 11h6M9 15h4" />
+                </svg>
+                <span class="info-field__label">Folio de factura</span>
+              </span>
+              <span class="info-field__value font-mono">{{ sale.invoice.number }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 9V7a3 3 0 0 1 3-3h2M4 15v2a3 3 0 0 0 3 3h2M20 9V7a3 3 0 0 0-3-3h-2M20 15v2a3 3 0 0 1-3 3h-2" />
+                  <path stroke-linecap="round" d="M9 9v6M12 9v6M15 9v6" />
+                </svg>
+                <span class="info-field__label">CUFE</span>
+              </span>
+              <span class="info-field__value font-mono" [attr.title]="sale.invoice.cufe">{{ sale.invoice.cufe }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="17" rx="2" />
+                  <path stroke-linecap="round" d="M16 2v4M8 2v4M3 9h18" />
+                </svg>
+                <span class="info-field__label">Fecha de facturación</span>
+              </span>
+              <!-- Timezone fijo -0500 (Colombia, sin horario de verano): sin
+                   esto, el pipe la muestra en la zona horaria del navegador
+                   y puede desalinearse de la hora plana de "Fecha" arriba
+                   (mismo `sale.time`, sin conversión) según dónde se abra. -->
+              <span class="info-field__value font-mono">{{ sale.invoice.issuedAt | date: 'dd/MM/yyyy HH:mm' : '-0500' }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 3h6v6M10 14 21 3" />
+                </svg>
+                <span class="info-field__label">Consulta DIAN</span>
+              </span>
+              <div class="info-field__value-row">
+                <a class="info-field__value--link" [href]="dianQueryUrl(sale)" target="_blank" rel="noopener">
+                  Ver documento en la DIAN
+                </a>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- 2. Productos -->
+        <!-- 2. Productos — convenciones globales de tabla (.col-truncate en
+             la columna de texto libre, .text-right/.font-mono en las
+             numéricas, ver MASTER.md "Densidad y layout"/"Patrón: card de
+             tabla") envueltas en `.table-bleed` para que el borde superior
+             toque los bordes izquierdo/derecho del drawer, igual que hace
+             esa misma clase con los bordes de `.table-card` en el resto de
+             la app. -->
         <section class="sale-drawer__section">
           <h3 class="sale-drawer__heading">Productos</h3>
-          <table class="sale-drawer__items">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th class="text-right">Cant.</th>
-                <th class="text-right">P. unitario</th>
-                <th class="text-right">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (item of sale.items; track item.id) {
+          <div class="table-bleed">
+            <table class="sale-drawer__items">
+              <thead>
                 <tr>
-                  <td>{{ item.productName }}</td>
-                  <td class="text-right font-mono">{{ item.quantity }}</td>
-                  <td class="text-right font-mono">
-                    {{ item.unitPrice | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-                  </td>
-                  <td class="text-right font-mono">
-                    {{ itemSubtotal(item.quantity, item.unitPrice) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-                  </td>
+                  <th class="col-truncate" style="--col-max-width: 220px">Producto</th>
+                  <th class="text-right">Cant.</th>
+                  <th class="text-right">P. unitario</th>
+                  <th class="text-right">Subtotal</th>
                 </tr>
-              }
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colspan="3" class="text-right">TOTAL</td>
-                <td class="text-right font-mono">
-                  {{ selectedSaleBreakdown()!.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </section>
-
-        <!-- 3. Pagos -->
-        <section class="sale-drawer__section">
-          <h3 class="sale-drawer__heading">Pagos</h3>
-          <table class="sale-drawer__items">
-            <thead>
-              <tr>
-                <th>Método</th>
-                <th>Referencia</th>
-                <th class="text-right">Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (payment of sale.payments; track payment.id) {
-                <tr>
-                  <td>{{ tenderMediaLabel[payment.method] }}</td>
-                  <td class="font-mono">
-                    {{ payment.reference }}{{ payment.authCode ? ' · ' + payment.authCode : '' }}
-                  </td>
-                  <td class="text-right font-mono">
-                    {{ payment.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-                  </td>
-                </tr>
-              }
-            </tbody>
-            @if (sale.payments.length > 1) {
+              </thead>
+              <tbody>
+                @for (item of sale.items; track item.id) {
+                  <tr>
+                    <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="item.productName">
+                      {{ item.productName }}
+                    </td>
+                    <td class="text-right font-mono">{{ item.quantity }}</td>
+                    <td class="text-right font-mono">
+                      {{ item.unitPrice | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                    </td>
+                    <td class="text-right font-mono">
+                      {{ itemSubtotal(item.quantity, item.unitPrice) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
               <tfoot>
                 <tr>
-                  <td colspan="2" class="text-right">TOTAL PAGADO</td>
+                  <td colspan="3" class="text-right">TOTAL</td>
                   <td class="text-right font-mono">
-                    {{ paymentsTotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                    {{ selectedSaleBreakdown()!.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
                   </td>
                 </tr>
               </tfoot>
-            }
-          </table>
+            </table>
+          </div>
         </section>
 
-        <!-- 4. Descuentos y Propinas -->
+        <!-- 3. Pagos — mismas convenciones/`.table-bleed` que Productos. -->
         <section class="sale-drawer__section">
-          <h3 class="sale-drawer__heading">Descuentos y propinas</h3>
-          <dl class="sale-drawer__facts">
-            @if (sale.discountAmount > 0) {
-              <dt>Descuento{{ sale.discountReason ? ' — ' + sale.discountReason : '' }}</dt>
-              <dd class="font-mono text-destructive">
-                -{{ sale.discountAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-              </dd>
-            } @else {
-              <dt>Descuento</dt>
-              <dd class="font-mono text-muted">Sin descuento</dd>
-            }
-            <dt>Propina</dt>
-            <dd class="font-mono">
-              @if (sale.tipAmount > 0) {
-                {{ sale.tipAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-              } @else {
-                <span class="text-muted">Sin propina</span>
+          <h3 class="sale-drawer__heading">Métodos de pago</h3>
+          <div class="table-bleed">
+            <table class="sale-drawer__items">
+              <thead>
+                <tr>
+                  <th>Método</th>
+                  <th class="col-truncate" style="--col-max-width: 220px">Referencia</th>
+                  <th class="text-right">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (payment of sale.payments; track payment.id) {
+                  <tr>
+                    <td>{{ tenderMediaLabel[payment.method] }}</td>
+                    <td
+                      class="font-mono col-truncate"
+                      style="--col-max-width: 220px"
+                      [attr.title]="payment.reference + (payment.authCode ? ' · ' + payment.authCode : '')"
+                    >
+                      {{ payment.reference }}{{ payment.authCode ? ' · ' + payment.authCode : '' }}
+                    </td>
+                    <td class="text-right font-mono">
+                      {{ payment.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+              @if (sale.payments.length > 1) {
+                <tfoot>
+                  <tr>
+                    <td colspan="2" class="text-right">TOTAL PAGADO</td>
+                    <td class="text-right font-mono">
+                      {{ paymentsTotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                    </td>
+                  </tr>
+                </tfoot>
               }
-            </dd>
-          </dl>
+            </table>
+          </div>
         </section>
 
-        <!-- 5. Impuestos -->
-        <section class="sale-drawer__section">
-          <h3 class="sale-drawer__heading">Impuestos</h3>
-          <dl class="sale-drawer__facts">
-            <dt>Base gravable</dt>
-            <dd class="font-mono">
-              {{ selectedSaleBreakdown()!.taxableBase | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-            </dd>
-            <dt>IVA (16%)</dt>
-            <dd class="font-mono">
-              {{ selectedSaleBreakdown()!.taxAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-            </dd>
-          </dl>
-        </section>
+        <!-- 4. Descuentos y propinas + 5. Impuestos — misma fila, como si
+             fueran 2 columnas de un solo bloque (`.sale-drawer__row`). -->
+        <div class="sale-drawer__row">
+          <section class="sale-drawer__section">
+            <h3 class="sale-drawer__heading">Descuentos y propinas</h3>
+            <dl class="sale-drawer__facts">
+              @if (sale.discountAmount > 0) {
+                <dt>Descuento{{ sale.discountReason ? ' — ' + sale.discountReason : '' }}</dt>
+                <dd class="font-mono text-destructive">
+                  -{{ sale.discountAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                </dd>
+              } @else {
+                <dt>Descuento</dt>
+                <dd class="font-mono text-muted">Sin descuento</dd>
+              }
+              <dt>Propina</dt>
+              <dd class="font-mono">
+                @if (sale.tipAmount > 0) {
+                  {{ sale.tipAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                } @else {
+                  <span class="text-muted">Sin propina</span>
+                }
+              </dd>
+            </dl>
+          </section>
+
+          <section class="sale-drawer__section">
+            <h3 class="sale-drawer__heading">Impuestos</h3>
+            <dl class="sale-drawer__facts">
+              <dt>Base gravable</dt>
+              <dd class="font-mono">
+                {{ selectedSaleBreakdown()!.taxableBase | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </dd>
+              <dt>IVA (16%)</dt>
+              <dd class="font-mono">
+                {{ selectedSaleBreakdown()!.taxAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </dd>
+            </dl>
+          </section>
+        </div>
 
         <!-- 6. Desglose financiero -->
         <section class="sale-drawer__section">

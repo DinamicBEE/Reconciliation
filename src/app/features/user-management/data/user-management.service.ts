@@ -228,7 +228,7 @@ export class UserManagementService {
       birthDate: '',
       ssn: '',
       gender: '',
-      address: { city: '', state: '', zipCode: '', street1: '', street2: null },
+      address: { city: '', state: '', zipCode: '', street1: '', street2: null, exteriorNumber: '', interiorNumber: null },
       department: '',
       area: '',
       jobTitle: '',
@@ -262,6 +262,8 @@ export class UserManagementService {
         zipCode: input.address.zipCode.trim(),
         street1: input.address.street1.trim(),
         street2: input.address.street2?.trim() || null,
+        exteriorNumber: input.address.exteriorNumber.trim(),
+        interiorNumber: input.address.interiorNumber?.trim() || null,
       },
     };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));

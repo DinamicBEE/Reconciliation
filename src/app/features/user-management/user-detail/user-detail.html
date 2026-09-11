@@ -31,7 +31,12 @@
                 Editar
               }
             </button>
-            <button nz-button nzDanger type="button" (click)="onDeleteClick()">Eliminar usuario</button>
+            <button nz-button nzDanger type="button" (click)="onDeleteClick()">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m3 0-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7h14Z" />
+              </svg>
+              Eliminar usuario
+            </button>
           </div>
         }
       </div>
@@ -151,7 +156,12 @@
             Departamento, área, puesto y responsable se completan después, desde la pestaña "Organización".
           </p>
 
-          <button nz-button nzType="primary" type="submit" class="user-form__submit">Crear usuario</button>
+          <button nz-button nzType="primary" type="submit" class="user-form__submit">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+            </svg>
+            Crear usuario
+          </button>
         </form>
       </nz-card>
     } @else if (user(); as u) {
@@ -165,17 +175,16 @@
               <div class="tab-card__section">
                 <h3 class="tab-card__section-title">Información personal</h3>
                 <form [formGroup]="infoForm" (ngSubmit)="onSaveInfo()">
-                  <div class="info-fields info-fields--cols-4">
-                    <div class="info-field info-field--avatar">
-                      <nz-avatar
-                        nzShape="square"
-                        class="user-detail__avatar"
-                        [nzSrc]="u.avatarUrl ?? undefined"
-                        [nzText]="initials(u)"
-                        [ngStyle]="avatarStyle(u)"
-                      />
-                    </div>
+                  <div class="info-personal">
+                    <nz-avatar
+                      nzShape="square"
+                      class="user-detail__avatar"
+                      [nzSrc]="u.avatarUrl ?? undefined"
+                      [nzText]="initials(u)"
+                      [ngStyle]="avatarStyle(u)"
+                    />
 
+                    <div class="info-fields info-fields--cols-4">
                     <div class="info-field">
                       <span class="info-field__head">
                         <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -332,9 +341,12 @@
                         }
                       }
                     </div>
+                    </div>
+                  </div>
 
-                    <h4 class="info-fields__subsection-title">Dirección</h4>
+                  <h4 class="info-fields__subsection-title">Dirección</h4>
 
+                  <div class="info-fields">
                     <div class="info-field" [formGroup]="infoForm.controls.address">
                       <span class="info-field__head">
                         <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -419,7 +431,7 @@
                         <span class="info-field__label">Calle 2</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" formControlName="street2" placeholder="Depto., interior (opcional)" />
+                        <input nz-input class="info-field__input" formControlName="street2" placeholder="Calle secundaria o referencia (opcional)" />
                       } @else {
                         @if (u.address.street2) {
                           <span class="info-field__value">{{ u.address.street2 }}</span>
@@ -428,10 +440,54 @@
                         }
                       }
                     </div>
+
+                    <div class="info-field" [formGroup]="infoForm.controls.address">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10.5 12 3l9 7.5" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M5 9v11h5v-6h4v6h5V9" />
+                        </svg>
+                        <span class="info-field__label">Número interior</span>
+                      </span>
+                      @if (isEditing()) {
+                        <input nz-input class="info-field__input" formControlName="interiorNumber" placeholder="Interior, depto. (opcional)" />
+                      } @else {
+                        @if (u.address.interiorNumber) {
+                          <span class="info-field__value">{{ u.address.interiorNumber }}</span>
+                        } @else {
+                          <span class="info-field__value text-muted">Sin asignar</span>
+                        }
+                      }
+                    </div>
+
+                    <div class="info-field" [formGroup]="infoForm.controls.address">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="7" y="3" width="10" height="18" rx="1" />
+                          <circle cx="13" cy="12" r="1" />
+                        </svg>
+                        <span class="info-field__label">Número exterior</span>
+                      </span>
+                      @if (isEditing()) {
+                        <input nz-input class="info-field__input" formControlName="exteriorNumber" placeholder="Número exterior" />
+                      } @else {
+                        @if (u.address.exteriorNumber) {
+                          <span class="info-field__value">{{ u.address.exteriorNumber }}</span>
+                        } @else {
+                          <span class="info-field__value text-muted">Sin asignar</span>
+                        }
+                      }
+                    </div>
                   </div>
 
                   @if (isEditing()) {
-                    <button nz-button nzType="primary" type="submit" class="tab-card__section-submit">Guardar cambios</button>
+                    <button nz-button nzType="primary" type="submit" class="tab-card__section-submit">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-8H7v8M7 3v5h8" />
+                      </svg>
+                      Guardar cambios
+                    </button>
                   }
                 </form>
               </div>
@@ -598,7 +654,13 @@
                   </div>
 
                   @if (isEditing()) {
-                    <button nz-button nzType="primary" type="submit" class="tab-card__section-submit">Guardar cambios</button>
+                    <button nz-button nzType="primary" type="submit" class="tab-card__section-submit">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-8H7v8M7 3v5h8" />
+                      </svg>
+                      Guardar cambios
+                    </button>
                   }
                 </form>
               </div>
@@ -696,9 +758,17 @@
 
                 <div class="user-form__actions">
                   <button nz-button nzType="primary" type="button" (click)="onSaveRolesAndPermissions()">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-8H7v8M7 3v5h8" />
+                    </svg>
                     Guardar permisos
                   </button>
                   <button nz-button nzType="default" type="button" (click)="onResetPasswordClick()">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="5" y="11" width="14" height="9" rx="2" />
+                      <path stroke-linecap="round" d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
                     Restablecer contraseña
                   </button>
                 </div>

@@ -7,6 +7,7 @@ import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzMessageService } from 'ng-zorro-antd/message';
+import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { MatchStatusTag } from '../../shared/components/match-status-tag/match-status-tag';
 import { MatchCandidate } from './data/difference-management.model';
@@ -26,6 +27,7 @@ const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
     NzButtonModule,
     NzCardModule,
     NzInputModule,
+    NzModalModule,
     NzTagModule,
     MatchStatusTag,
   ],
@@ -42,6 +44,7 @@ export class DifferenceManagement {
 
   protected readonly service = inject(DifferenceManagementService);
   private readonly message = inject(NzMessageService);
+  private readonly modal = inject(NzModalService);
   private readonly router = inject(Router);
 
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
@@ -128,12 +131,33 @@ export class DifferenceManagement {
     input.value = '';
   }
 
+  // El guardado en sí (service.save()) es irreversible — reasigna las
+  // liquidaciones elegidas a esta orden en `ResolvedMatchesStore` — así que
+  // se confirma antes, mismo patrón que onDeleteClick/onStatusChangeRequest
+  // en user-list.ts.
   protected onSave(): void {
     this.noteTouched.set(true);
-    const result = this.service.save();
-    if (!result) return;
+    if (!this.service.canSave()) return;
 
-    this.message.success(`Match guardado para la orden ${result.orderId}.`);
-    this.router.navigateByUrl('/conciliacion');
+    const order = this.service.order();
+    const amount = this.formatCurrency(this.service.selectedSettledAmount());
+    const count = this.service.selectedCount();
+
+    this.modal.confirm({
+      nzTitle: 'Confirmar match',
+      nzContent: `¿Confirmas el match de <b>${count}</b> transacción(es) por <b>${amount}</b> contra la orden <b>${order?.orderId}</b>? Esta acción no se puede deshacer.`,
+      nzOkText: 'Confirmar',
+      nzOnOk: () => {
+        const result = this.service.save();
+        if (!result) return;
+
+        this.message.success(`Match guardado para la orden ${result.orderId}.`);
+        this.router.navigateByUrl('/conciliacion');
+      },
+    });
+  }
+
+  private formatCurrency(amount: number): string {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
   }
 }

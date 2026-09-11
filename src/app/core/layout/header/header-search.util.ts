@@ -18,6 +18,7 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Usuarios', path: '/usuarios', keywords: ['administración', 'administracion', 'cuentas'] },
   { label: 'Nuevo usuario', path: '/usuarios/nuevo', keywords: ['crear', 'alta'] },
   { label: 'Auditoría de usuarios', path: '/usuarios/auditoria', keywords: ['historial', 'log'] },
+  { label: 'Perfil', path: '/perfil', keywords: ['cuenta', 'yo', 'información general'] },
 ];
 
 // Función pura y testeable — sin estado, sin DI (ver MASTER.md, criterio de

@@ -1,5 +1,7 @@
 @use '../../../shared/styles/toolbar';
 @use '../../../shared/styles/data-table';
+@use '../../../shared/styles/row-actions';
+@use '../../../shared/styles/buttons';
 
 .user-list {
   display: flex;
@@ -61,10 +63,9 @@
 // compartido de toda la app (ver shared/styles/_data-table.scss y MASTER.md
 // "Patrón: card de tabla") — esta pantalla ya no necesita su propio radius,
 // fondo de header ni línea vertical: los hereda solo con usar esas dos
-// clases en el .html.
-.toolbar__filter--search {
-  width: 260px;
-}
+// clases en el .html. `.toolbar__filter--search` se promovió a
+// shared/styles/_toolbar.scss al aparecer sales-dashboard como segundo
+// consumidor.
 
 .checkbox-col {
   width: 44px;
@@ -137,34 +138,9 @@
   }
 }
 
-// Botones de acción: circulares (radio 50%, no el 8px global de .ant-btn —
-// ver "Botones" en styles.scss) y un poco más grandes que nzSize="small"
-// (24px) para que el resalte de :hover se lea como un círculo completo, no
-// un cuadrado con esquinas redondeadas. Color primario de la paleta activa
-// (no --color-foreground, el default de .ant-btn-text) salvo Eliminar, que
-// se queda en --color-destructive vía .ant-btn-dangerous — "semáforo" de
-// siempre, ver MASTER.md.
-.row-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-
-  ::ng-deep .ant-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    border-radius: 50% !important;
-    color: var(--color-primary) !important;
-
-    &.ant-btn-dangerous {
-      color: var(--color-destructive) !important;
-    }
-  }
-}
+// `.row-actions` (botones de icono circulares de la columna "Acciones") se
+// promovió a shared/styles/_row-actions.scss al aparecer un segundo
+// consumidor (reconciliation-dashboard) — ver MASTER.md.
 
 .user-list__empty {
   text-align: center;

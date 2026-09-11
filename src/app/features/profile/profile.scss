@@ -1,0 +1,108 @@
+// `.text-muted` viene de `shared/styles/_data-table.scss` (partial ya
+// existente, ver MASTER.md) — no se duplica esa regla acá. `.info-fields`/
+// `.info-field` (icono+etiqueta arriba, valor o control abajo) y el
+// icono+etiqueta alineados de cualquier `.ant-btn` con icono vienen de
+// `shared/styles/_info-fields.scss` / `_buttons.scss` — ambos partials
+// nacieron en `user-management` (`user-detail`/`user-list`/`user-audit`) y
+// se promovieron a `shared/` al aparecer este segundo feature como
+// consumidor (ver MASTER.md "Estructura de carpetas").
+@use '../../shared/styles/data-table';
+@use '../../shared/styles/info-fields';
+@use '../../shared/styles/buttons';
+
+.profile {
+  margin: 0 auto;
+}
+
+.profile-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.profile-card__header-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.profile-card__avatar {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+
+  // El host de nz-avatar ya trae `.ant-avatar` — se sobreescribe aquí en
+  // vez de con `::ng-deep` porque es el propio elemento, no uno interno.
+  &.ant-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  ::ng-deep img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+}
+
+.profile-card__name {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-foreground);
+  margin: 0 0 4px;
+}
+
+.profile-card__role {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+// "Información general" + "Dirección" — mismo criterio que
+// `.tab-card__section` de `user-detail.scss`: `<div>`s simples apiladas,
+// separadas por un hairline (`border-bottom: 1px solid var(--color-border)`,
+// "la única línea divisoria del proyecto", ver MASTER.md) en vez del borde
+// de una card propia. Local a Profile (no `.tab-card__section`) porque esta
+// pantalla no comparte el resto del layout de tabs de `user-detail`.
+.profile-card__section {
+  padding: 20px 0;
+
+  &:first-child {
+    padding-top: 0;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+.profile-card__section-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+  margin: 0 0 16px;
+}
+
+.profile-card__submit {
+  margin-top: 20px;
+}
+
+.profile-empty {
+  text-align: center;
+  color: var(--color-muted-foreground);
+  margin-top: 48px;
+}
