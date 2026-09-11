@@ -44,8 +44,8 @@
         <div class="summary-strip__item">
           <span class="summary-strip__label">Monto liquidado</span>
           <span class="summary-strip__value">
-            @if (service.order()?.settlement; as settlement) {
-              {{ settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            @if (service.selectedCount() > 0) {
+              {{ service.selectedSettledAmount() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
             } @else {
               <span class="text-muted">—</span>
             }
@@ -53,8 +53,8 @@
         </div>
         <div class="summary-strip__item">
           <span class="summary-strip__label">Diferencia</span>
-          <span class="summary-strip__value" [class.text-destructive]="service.order()!.difference !== 0">
-            {{ service.order()?.difference | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          <span class="summary-strip__value" [class.text-destructive]="service.selectedDifference() !== 0">
+            {{ service.selectedDifference() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
           </span>
         </div>
       </div>
@@ -134,13 +134,14 @@
                         </span>
                       </div>
 
-                      <div class="candidate-card__origin">
-                        @if (service.originOf(c.settlement.id); as origin) {
+                      @if (service.originOf(c.settlement.id); as origin) {
+                        <div class="candidate-card__field candidate-card__field--origin">
+                          <span class="candidate-card__label">Origen</span>
                           <nz-tag [nzColor]="origin === 'backend' ? 'blue' : 'purple'">
                             {{ origin === 'backend' ? 'Motor de cálculo' : 'Match manual' }}
                           </nz-tag>
-                        }
-                      </div>
+                        </div>
+                      }
                     </div>
                   </nz-card>
                 }

@@ -158,11 +158,8 @@
 .candidate-card__body {
   display: flex;
   align-items: center;
-  gap: 16px;
-
-  @media (max-width: 720px) {
-    flex-wrap: wrap;
-  }
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 
 .candidate-card__checkbox {
@@ -219,11 +216,15 @@
   white-space: nowrap;
 }
 
-.candidate-card__origin {
-  flex: 0 0 auto;
-  min-width: 90px;
-  display: flex;
-  justify-content: flex-end;
+// Label arriba, tag abajo — mismo patrón de columna que el resto de los
+// campos (.candidate-card__field), en vez del tag suelto de antes: con la
+// nz-tag en fila junto a ref/desc/monto, "Motor de cálculo" se salía del
+// ancho del card en la columna angosta de 3/5 (.diff-grid__col--candidates).
+// Con flex-basis propio, si no cabe en la fila cae en su propia línea
+// (.candidate-card__body ya tiene flex-wrap) en vez de desbordar o cortarse.
+.candidate-card__field--origin {
+  flex: 0 1 130px;
+  align-items: flex-start;
 }
 
 // Dropzone de importación — dentro de .diff-grid__col--side, debajo de la

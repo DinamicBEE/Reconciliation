@@ -2,7 +2,7 @@
 @use '../../../shared/styles/data-table';
 @use '../../../shared/styles/summary-columns';
 @use '../../../shared/styles/info-fields';
-@use '../buttons';
+@use '../../../shared/styles/buttons';
 
 // Sin max-width: las tabs y sus cards deben usar todo el ancho disponible
 // de la pantalla (a diferencia del formulario angosto de un solo campo que

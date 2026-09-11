@@ -60,3 +60,18 @@ export interface TransactionMatch {
   status: MatchStatus;
   difference: number; // (sale?.amount ?? 0) - (settlement?.amount ?? 0)
 }
+
+// --- Estado simplificado de la tabla de "Conciliación" (totales por tender
+// media + fecha) ---
+// Vista de 3 estados, distinta de `MatchStatus` (4 estados, a nivel de
+// ORDEN — sigue usándola `difference-management`/`sales-dashboard`, ver
+// MASTER.md "Patrón: conciliación por tender media y fecha"). Un grupo
+// "desconciliado" cubre DOS causas a nivel de orden (monto distinto, o una
+// liquidación bancaria sin venta) — a nivel de día+medio de pago ambas son
+// "esto no cuadra, hay que revisarlo", no ameritan distinguirse en la tabla
+// agrupada.
+//
+// conciliado: lo vendido y lo liquidado ese día, para ese medio, coinciden.
+// desconciliado: no coinciden (o el banco liquidó algo sin venta asociada).
+// por_conciliar: hay venta pero el proveedor aún no liquida nada ese día.
+export type ReconciliationStatus = 'conciliado' | 'desconciliado' | 'por_conciliar';

@@ -21,6 +21,7 @@ import {
   PERMISSIONS,
   PermissionDef,
   PermissionKey,
+  PHONE_PATTERN,
   ROLE_LABEL,
   ROLE_OPTIONS,
   RoleId,
@@ -45,8 +46,6 @@ const PERMISSION_GROUPS: { group: string; items: PermissionDef[] }[] = (() => {
   }
   return [...byGroup.entries()].map(([group, items]) => ({ group, items }));
 })();
-
-const PHONE_PATTERN = /^[+]?[0-9()\-\s]{7,20}$/;
 
 // `nz-date-picker` trabaja con `Date | null` — el model guarda fecha (sin
 // hora) como ISO string (`'yyyy-MM-dd'`) o `null`. Estas 2 funciones son las
@@ -176,6 +175,8 @@ export class UserDetail {
       zipCode: this.fb.control(''),
       street1: this.fb.control(''),
       street2: this.fb.control<string | null>(null),
+      exteriorNumber: this.fb.control(''),
+      interiorNumber: this.fb.control<string | null>(null),
     }),
   });
 
@@ -250,7 +251,7 @@ export class UserDetail {
           birthDate: null,
           ssn: '',
           gender: '',
-          address: { city: '', state: '', zipCode: '', street1: '', street2: null },
+          address: { city: '', state: '', zipCode: '', street1: '', street2: null, exteriorNumber: '', interiorNumber: null },
         });
         this.orgForm.reset({ department: '', area: '', jobTitle: '', managerId: null, employeeId: '', hireDate: null, contractEndDate: null });
         this.createRoleIds.set([]);

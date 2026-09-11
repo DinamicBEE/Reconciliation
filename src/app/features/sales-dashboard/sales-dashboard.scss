@@ -1,6 +1,7 @@
 @use '../../shared/styles/toolbar';
 @use '../../shared/styles/data-table';
 @use '../../shared/styles/info-fields';
+@use '../../shared/styles/row-actions';
 
 .sales-dashboard {
   display: flex;
@@ -132,9 +133,10 @@
   }
 }
 
-// Resumen de la venta: ya NO usa `.summary-columns`/`.summary-field`
-// (`_summary-columns.scss`) — usa la misma estructura vertical
-// "icono+etiqueta arriba, valor abajo" que `user-detail` (Administración de
-// usuarios), vía `.info-fields`/`.info-field` (`shared/styles/_info-fields.scss`,
-// promovido desde `user-detail.scss` al aparecer este segundo consumidor).
-// Ver ese partial y MASTER.md, "Patrón: Drawer de detalle...".
+// Resumen de la venta: usa `.info-fields`/`.info-field`
+// (`shared/styles/_info-fields.scss`, @use arriba) — la MISMA estructura
+// vertical "icono+etiqueta arriba, valor abajo" que Administración de
+// usuarios, a pedido explícito. `.summary-columns`/`.summary-field`
+// (`_summary-columns.scss`) ya NO es consumida por esta pantalla — sigue
+// viva solo para el form de creación de usuario en `user-detail`, ver
+// MASTER.md "Patrón: Drawer de detalle...".

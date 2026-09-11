@@ -7,14 +7,32 @@
        tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
     <section class="toolbar">
-      <input
-        nz-input
-        type="text"
-        class="toolbar__filter toolbar__filter--search"
-        placeholder="Buscar por cliente"
-        [ngModel]="service.search()"
-        (ngModelChange)="onSearchChange($event)"
+      <nz-range-picker
+        class="toolbar__filter"
+        [ngModel]="service.dateRange()"
+        (ngModelChange)="onDateRangeChange($event)"
+        nzFormat="dd/MM/yyyy"
       />
+
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.storeFilter()"
+        (ngModelChange)="onStoreFilterChange($event)"
+      >
+        @for (opt of storeOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
+
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.statusFilter()"
+        (ngModelChange)="onStatusFilterChange($event)"
+      >
+        @for (opt of statusOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
 
       <nz-select
         class="toolbar__filter"
@@ -26,12 +44,30 @@
         }
       </nz-select>
 
-      <nz-range-picker
-        class="toolbar__filter"
-        [ngModel]="service.dateRange()"
-        (ngModelChange)="onDateRangeChange($event)"
-        nzFormat="dd/MM/yyyy"
+      <input
+        nz-input
+        type="text"
+        class="toolbar__filter toolbar__filter--search"
+        placeholder="Buscar por cliente"
+        [ngModel]="service.search()"
+        (ngModelChange)="onSearchChange($event)"
       />
+
+      <span class="toolbar__spacer"></span>
+
+      <button
+        nz-button
+        type="button"
+        (click)="exportCsv()"
+        nz-tooltip
+        nzTooltipTitle="Descarga la información de la tabla (según los filtros actuales) en un archivo .csv"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0-4-4m4 4 4-4" />
+          <path stroke-linecap="round" d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        </svg>
+        Exportar
+      </button>
     </section>
 
     <!-- Bleed: se sale del padding de la card (margin negativo, ver
@@ -42,32 +78,53 @@
         <thead>
           <tr>
             <th>Fecha</th>
-            <th class="col-truncate" style="--col-max-width: 130px">Folio</th>
+            <th>Tienda</th>
             <th class="col-truncate" style="--col-max-width: 180px">Cliente</th>
             <th>Medio de pago</th>
+            <th>Estado</th>
+            <th class="text-right">Subtotal</th>
+            <th class="text-right">Impuestos</th>
             <th class="text-right">Total</th>
-            <th class="col-truncate font-mono" style="--col-max-width: 150px">Referencia</th>
-            <th>Estado de conciliación</th>
+            <th class="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
           @for (sale of tbl.data; track sale.id) {
             <tr class="clickable-row" (click)="onRowClick(sale)">
               <td>{{ sale.date | date: 'dd/MM/yyyy' }}</td>
-              <td class="col-truncate font-mono" style="--col-max-width: 130px" [attr.title]="sale.folio">
-                {{ sale.folio }}
-              </td>
+              <td>{{ storeLabel[sale.store] }}</td>
               <td class="col-truncate" style="--col-max-width: 180px" [attr.title]="sale.customer.name">
                 {{ sale.customer.name }}
               </td>
               <td>{{ tenderMediaLabel[sale.tenderMedia] }}</td>
+              <td><app-reconciliation-status-tag [status]="saleStatus(sale)" /></td>
+              <td class="text-right font-mono">
+                {{ saleSubtotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </td>
+              <td class="text-right font-mono">
+                {{ saleTaxAmount(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              </td>
               <td class="text-right font-mono">
                 {{ saleTotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
               </td>
-              <td class="col-truncate font-mono" style="--col-max-width: 150px" [attr.title]="sale.reference">
-                {{ sale.reference }}
+              <td class="text-center" (click)="$event.stopPropagation()">
+                <div class="row-actions">
+                  <button
+                    nz-button
+                    nzType="text"
+                    type="button"
+                    (click)="onRowClick(sale)"
+                    nz-tooltip
+                    nzTooltipTitle="Ver detalles"
+                    aria-label="Ver detalles"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2 12c1.3-3.6 5-7 10-7s8.7 3.4 10 7c-1.3 3.6-5 7-10 7s-8.7-3.4-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
               </td>
-              <td><app-match-status-tag [status]="sale.reconciliationStatus" /></td>
             </tr>
           }
         </tbody>
@@ -87,10 +144,13 @@
       <div class="sale-drawer">
         <!-- 1. Resumen de la venta — misma estructura "icono+etiqueta arriba,
              valor abajo" que Administración de usuarios (`.info-fields`/
-             `.info-field`, shared/styles/_info-fields.scss), no las 2
-             columnas horizontales de `.summary-columns` que tenía antes.
-             "Cliente" es su propia sub-sección (mismo criterio que
-             "Dirección" en user-detail) e incluye datos fiscales básicos. -->
+             `.info-field`, shared/styles/_info-fields.scss) — no las 2
+             columnas horizontales de `.summary-columns` (esa sigue viva,
+             pero solo para el form de creación de usuario, ver MASTER.md).
+             "Cliente" y "Documento electrónico" son sub-secciones propias
+             (mismo criterio que "Dirección" en user-detail): identificación
+             fiscal básica del cliente ante la DIAN (tipo de persona +
+             régimen) y los datos de la factura electrónica de la venta. -->
         <section class="sale-drawer__section">
           <h3 class="sale-drawer__heading">Resumen de la venta</h3>
           <div class="info-fields">
@@ -210,32 +270,99 @@
             <div class="info-field">
               <span class="info-field__head">
                 <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="2" y="5" width="20" height="14" rx="2" />
-                  <circle cx="8" cy="10" r="1.5" />
-                  <path stroke-linecap="round" d="M6 15h4M13 9h5M13 12h5M13 15h5" />
+                  <rect x="4" y="3" width="16" height="18" rx="2" />
+                  <circle cx="12" cy="9" r="2.5" />
+                  <path stroke-linecap="round" d="M8 17c0-1.8 1.8-3 4-3s4 1.2 4 3" />
                 </svg>
-                <span class="info-field__label">RFC</span>
+                <span class="info-field__label">Tipo de persona</span>
               </span>
-              @if (sale.customer.rfc) {
-                <span class="info-field__value font-mono">{{ sale.customer.rfc }}</span>
+              @if (sale.customer.personType) {
+                <span class="info-field__value">{{ personTypeLabel[sale.customer.personType] }}</span>
               } @else {
-                <span class="info-field__value text-muted">Sin RFC registrado</span>
+                <span class="info-field__value text-muted">Sin tipo de persona registrado</span>
               }
             </div>
 
             <div class="info-field">
               <span class="info-field__head">
                 <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="4" y="3" width="16" height="18" rx="1" />
-                  <path stroke-linecap="round" d="M9 21v-4h6v4M9 8h1M14 8h1M9 12h1M14 12h1M9 16h1M14 16h1" />
+                  <circle cx="7" cy="7" r="2" />
+                  <circle cx="17" cy="17" r="2" />
+                  <path stroke-linecap="round" d="M18 6 6 18" />
                 </svg>
-                <span class="info-field__label">Razón social</span>
+                <span class="info-field__label">Régimen tributario</span>
               </span>
-              @if (sale.customer.businessName) {
-                <span class="info-field__value">{{ sale.customer.businessName }}</span>
+              @if (sale.customer.taxRegime) {
+                <span class="info-field__value">{{ taxRegimeLabel[sale.customer.taxRegime] }}</span>
               } @else {
-                <span class="info-field__value text-muted">Sin razón social registrada</span>
+                <span class="info-field__value text-muted">Sin régimen registrado</span>
               }
+            </div>
+          </div>
+
+          <h4 class="info-fields__subsection-title">Documento electrónico</h4>
+          <div class="info-fields">
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 2 3 11v2l9 9 9-9V4a2 2 0 0 0-2-2h-7Z" />
+                  <circle cx="15.5" cy="7.5" r="1.5" />
+                </svg>
+                <span class="info-field__label">Prefijo</span>
+              </span>
+              <span class="info-field__value font-mono">{{ sale.invoice.prefix }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 2h12v20l-3-2-3 2-3-2-3 2Z" />
+                  <path stroke-linecap="round" d="M9 7h6M9 11h6M9 15h4" />
+                </svg>
+                <span class="info-field__label">Folio de factura</span>
+              </span>
+              <span class="info-field__value font-mono">{{ sale.invoice.number }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 9V7a3 3 0 0 1 3-3h2M4 15v2a3 3 0 0 0 3 3h2M20 9V7a3 3 0 0 0-3-3h-2M20 15v2a3 3 0 0 1-3 3h-2" />
+                  <path stroke-linecap="round" d="M9 9v6M12 9v6M15 9v6" />
+                </svg>
+                <span class="info-field__label">CUFE</span>
+              </span>
+              <span class="info-field__value font-mono" [attr.title]="sale.invoice.cufe">{{ sale.invoice.cufe }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="17" rx="2" />
+                  <path stroke-linecap="round" d="M16 2v4M8 2v4M3 9h18" />
+                </svg>
+                <span class="info-field__label">Fecha de facturación</span>
+              </span>
+              <!-- Timezone fijo -0500 (Colombia, sin horario de verano): sin
+                   esto, el pipe la muestra en la zona horaria del navegador
+                   y puede desalinearse de la hora plana de "Fecha" arriba
+                   (mismo `sale.time`, sin conversión) según dónde se abra. -->
+              <span class="info-field__value font-mono">{{ sale.invoice.issuedAt | date: 'dd/MM/yyyy HH:mm' : '-0500' }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 3h6v6M10 14 21 3" />
+                </svg>
+                <span class="info-field__label">Consulta DIAN</span>
+              </span>
+              <div class="info-field__value-row">
+                <a class="info-field__value--link" [href]="dianQueryUrl(sale)" target="_blank" rel="noopener">
+                  Ver documento en la DIAN
+                </a>
+              </div>
             </div>
           </div>
         </section>

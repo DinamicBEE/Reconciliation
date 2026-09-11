@@ -1,0 +1,18 @@
+// Icono + etiqueta alineados horizontalmente y centrados entre sí, en
+// CUALQUIER botón con icono — sin esto, un `.ant-btn` con un SVG + texto
+// dentro puede quedar desalineado verticalmente (Ant no fuerza flex por
+// defecto). Envuelto con el contenedor raíz de cada pantalla (nunca
+// `.ant-btn` a secas, que sería global) — cada consumidor agrega su propia
+// clase raíz a la lista de selectores de abajo. Promovido desde
+// `features/user-management/_buttons.scss` (nació ahí con 3 consumidores
+// del mismo feature: user-list, user-detail, user-audit) al aparecer un
+// consumidor de OTRO feature (`features/profile`) — ver MASTER.md
+// "Estructura de carpetas".
+.user-list ::ng-deep .ant-btn,
+.user-detail ::ng-deep .ant-btn,
+.user-audit ::ng-deep .ant-btn,
+.profile ::ng-deep .ant-btn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+}

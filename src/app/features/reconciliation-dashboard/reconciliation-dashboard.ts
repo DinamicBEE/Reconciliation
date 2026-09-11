@@ -8,19 +8,20 @@ import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
-import { NzModalModule } from 'ng-zorro-antd/modal';
-import { MatchStatusTag } from '../../shared/components/match-status-tag/match-status-tag';
+import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
+import { NzMessageService } from 'ng-zorro-antd/message';
+import { ReconciliationStatusTag } from '../../shared/components/reconciliation-status-tag/reconciliation-status-tag';
 import { Sparkline } from '../../shared/components/sparkline/sparkline';
 import { RadialProgress } from '../../shared/components/radial-progress/radial-progress';
-import { MatchStatus, TENDER_MEDIA_LABEL, TenderMedia } from '../../shared/models/reconciliation-item.model';
+import { ReconciliationStatus, TENDER_MEDIA_LABEL, TenderMedia } from '../../shared/models/reconciliation-item.model';
 import { DateRangeFilter, ReconciliationService, StatusFilter, TenderMediaFilter } from './data/reconciliation.service';
 import { TenderDaySummary } from './data/group-by-tender-day.util';
 
-// Solo estas dos requieren intervención manual (existe un lado, pero no hay
-// certeza de cruce) — "Sin venta" es una anomalía del lado del banco sin una
-// orden propia que gestionar, y "Cruzado" ya está resuelto. Mismo criterio
-// que usaba tender-detail (retirado, ver MASTER.md).
-const ACTIONABLE_STATUSES = new Set<MatchStatus>(['sale_only', 'amount_mismatch']);
+// "Gestionar" en ambos — un mismo día+medio "no cuadra" ya sea porque el
+// proveedor aún no liquida nada (`por_conciliar`) o porque lo liquidado no
+// coincide con lo vendido (`desconciliado`, incluye el "Desconciliar"
+// manual). "conciliado" ya está resuelto, no tiene nada que gestionar.
+const ACTIONABLE_STATUSES = new Set<ReconciliationStatus>(['desconciliado', 'por_conciliar']);
 
 @Component({
   selector: 'app-reconciliation-dashboard',
@@ -35,7 +36,7 @@ const ACTIONABLE_STATUSES = new Set<MatchStatus>(['sale_only', 'amount_mismatch'
     NzButtonModule,
     NzTooltipModule,
     NzModalModule,
-    MatchStatusTag,
+    ReconciliationStatusTag,
     Sparkline,
     RadialProgress,
   ],
@@ -46,14 +47,15 @@ const ACTIONABLE_STATUSES = new Set<MatchStatus>(['sale_only', 'amount_mismatch'
 })
 export class ReconciliationDashboard {
   protected readonly service = inject(ReconciliationService);
+  private readonly modal = inject(NzModalService);
+  private readonly message = inject(NzMessageService);
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
 
   protected readonly statusOptions: { value: StatusFilter; label: string }[] = [
     { value: 'all', label: 'Todos los estados' },
-    { value: 'matched', label: 'Cruzado' },
-    { value: 'sale_only', label: 'Por liquidar' },
-    { value: 'amount_mismatch', label: 'Monto distinto' },
-    { value: 'settlement_only', label: 'Sin venta' },
+    { value: 'conciliado', label: 'Conciliado' },
+    { value: 'desconciliado', label: 'Desconciliado' },
+    { value: 'por_conciliar', label: 'Por conciliar' },
   ];
 
   protected readonly tenderMediaOptions: { value: TenderMediaFilter; label: string }[] = [
@@ -96,28 +98,63 @@ export class ReconciliationDashboard {
     return TENDER_MEDIA_LABEL[tenderMedia];
   }
 
-  // Solo "Por liquidar"/"Monto distinto" abren "Gestión de diferencias" — ahí
-  // se resuelve manualmente contra candidatos bancarios, siempre por orden
-  // puntual (`group.actionableOrder`), aunque la fila que se ve en esta
-  // tabla ya sea un total agrupado por día + medio de pago.
+  // "Desconciliado"/"Por conciliar" abren "Gestión de diferencias" — ahí se
+  // resuelve manualmente contra candidatos bancarios, siempre por orden
+  // puntual, aunque la fila que se ve en esta tabla ya sea un total
+  // agrupado por día + medio de pago. Solo el status decide si se muestra
+  // (no `actionableOrder !== null`, a diferencia de antes): un grupo
+  // "Desconciliado" a mano (ver `onDesconciliarClick`) no tiene una orden
+  // con discrepancia real que ofrecer, y aun así debe mostrar "Gestionar"
+  // — `resolveLink` ya trae su propio fallback para ese caso.
   protected isActionable(group: TenderDaySummary): boolean {
-    return ACTIONABLE_STATUSES.has(group.status) && group.actionableOrder !== null;
+    return ACTIONABLE_STATUSES.has(group.status);
   }
 
+  // `actionableOrder` es la orden CON discrepancia real (ver
+  // group-by-tender-day.util.ts) — cuando no existe (grupo "Desconciliado" a
+  // mano, o una anomalía `settlement_only` pura), se cae a la referencia de
+  // la primera transacción bancaria del grupo, que sigue siendo un `orderId`
+  // válido para la ruta aunque `difference-management` no tenga nada
+  // accionable que ofrecerle (ver su propio `isUsable` — muestra un estado
+  // vacío, no un error). Null solo si el grupo no tiene ninguna referencia
+  // (no debería ocurrir: todo grupo tiene al menos una venta o liquidación).
   protected resolveLink(group: TenderDaySummary): unknown[] | null {
-    if (!group.actionableOrder) return null;
-    return ['/conciliacion', group.tenderMedia, 'diferencias', group.actionableOrder.orderId];
+    const orderId = group.actionableOrder?.orderId ?? group.settlements[0]?.orderId ?? null;
+    if (!orderId) return null;
+    return ['/conciliacion', group.tenderMedia, 'diferencias', orderId];
   }
 
-  // --- "Ver detalles": solo para filas "Cruzado" (matched) — modal de solo
-  // lectura con las transacciones bancarias que componen el total liquidado
-  // ese día para ese medio de pago (`group.settlements`, puede ser más de
-  // una: un lote puede llegar en varios abonos, ver
-  // sales-settlements.mock-data.ts).
+  // --- "Ver detalles"/"Desconciliar": solo para filas "Conciliado" ---
+  // "Ver detalles" abre un modal de solo lectura con las transacciones
+  // bancarias que componen el total liquidado ese día para ese medio de
+  // pago (`group.settlements`, puede ser más de una: un lote puede llegar en
+  // varios abonos, ver sales-settlements.mock-data.ts).
   protected readonly selectedGroup = signal<TenderDaySummary | null>(null);
 
-  protected isMatched(group: TenderDaySummary): boolean {
-    return group.status === 'matched';
+  protected isConciliado(group: TenderDaySummary): boolean {
+    return group.status === 'conciliado';
+  }
+
+  // "Desconciliar": manual, irreversible en esta sesión (no hay "volver a
+  // conciliar" todavía, ver ReconciliationOverridesStore) — se confirma
+  // antes, mismo patrón que onDeleteClick/onStatusChangeRequest en
+  // user-list.ts.
+  protected onDesconciliarClick(group: TenderDaySummary): void {
+    this.modal.confirm({
+      nzTitle: 'Desconciliar',
+      nzContent: `¿Desconciliar <b>${this.tenderLabel(group.tenderMedia)}</b> del <b>${this.formatDate(group.date)}</b>? Pasará a la lista de pendientes por gestionar.`,
+      nzOkText: 'Desconciliar',
+      nzOkDanger: true,
+      nzOnOk: () => {
+        this.service.markDesconciliado(group);
+        this.message.success(`${this.tenderLabel(group.tenderMedia)} del ${this.formatDate(group.date)} se marcó como desconciliado.`);
+      },
+    });
+  }
+
+  private formatDate(isoDate: string): string {
+    const [year, month, day] = isoDate.split('-');
+    return `${day}/${month}/${year}`;
   }
 
   // Título del modal — por medio de pago + fecha (ya no por orden, la fila
@@ -127,8 +164,7 @@ export class ReconciliationDashboard {
   protected readonly modalTitle = computed(() => {
     const group = this.selectedGroup();
     if (!group) return '';
-    const [year, month, day] = group.date.split('-');
-    return `Transacciones bancarias — ${TENDER_MEDIA_LABEL[group.tenderMedia]} · ${day}/${month}/${year}`;
+    return `Transacciones bancarias — ${TENDER_MEDIA_LABEL[group.tenderMedia]} · ${this.formatDate(group.date)}`;
   });
 
   protected openDetails(group: TenderDaySummary): void {

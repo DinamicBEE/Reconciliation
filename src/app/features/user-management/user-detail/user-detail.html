@@ -431,10 +431,48 @@
                         <span class="info-field__label">Calle 2</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" formControlName="street2" placeholder="Depto., interior (opcional)" />
+                        <input nz-input class="info-field__input" formControlName="street2" placeholder="Calle secundaria o referencia (opcional)" />
                       } @else {
                         @if (u.address.street2) {
                           <span class="info-field__value">{{ u.address.street2 }}</span>
+                        } @else {
+                          <span class="info-field__value text-muted">Sin asignar</span>
+                        }
+                      }
+                    </div>
+
+                    <div class="info-field" [formGroup]="infoForm.controls.address">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10.5 12 3l9 7.5" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M5 9v11h5v-6h4v6h5V9" />
+                        </svg>
+                        <span class="info-field__label">Número interior</span>
+                      </span>
+                      @if (isEditing()) {
+                        <input nz-input class="info-field__input" formControlName="interiorNumber" placeholder="Interior, depto. (opcional)" />
+                      } @else {
+                        @if (u.address.interiorNumber) {
+                          <span class="info-field__value">{{ u.address.interiorNumber }}</span>
+                        } @else {
+                          <span class="info-field__value text-muted">Sin asignar</span>
+                        }
+                      }
+                    </div>
+
+                    <div class="info-field" [formGroup]="infoForm.controls.address">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="7" y="3" width="10" height="18" rx="1" />
+                          <circle cx="13" cy="12" r="1" />
+                        </svg>
+                        <span class="info-field__label">Número exterior</span>
+                      </span>
+                      @if (isEditing()) {
+                        <input nz-input class="info-field__input" formControlName="exteriorNumber" placeholder="Número exterior" />
+                      } @else {
+                        @if (u.address.exteriorNumber) {
+                          <span class="info-field__value">{{ u.address.exteriorNumber }}</span>
                         } @else {
                           <span class="info-field__value text-muted">Sin asignar</span>
                         }

@@ -721,19 +721,59 @@ estructura horizontal, que es DISTINTA y sigue vigente para ese caso.
 - **Sub-secciones dentro de un mismo `.info-fields`**: un `<h4
   class="info-fields__subsection-title">` seguido de OTRO `.info-fields`
   independiente (no un `grid-column: 1 / -1` dentro del mismo grid) — mismo
-  patrón que "Dirección" en `user-detail`. "Resumen de la venta" lo usa para
-  separar los campos de la venta (Folio/Fecha/Medio de pago/Referencia/
-  Estado de venta/Estado de conciliación) de los del "Cliente" (Nombre,
-  Correo, Teléfono, RFC, Razón social).
-- **Datos fiscales básicos del cliente**: `SaleCustomer.rfc`/
-  `.businessName` (`shared/models/sale.model.ts`), ambos opcionales — un
-  cliente de mostrador sin factura no trae ninguno de los dos y el campo cae
-  al fallback `.text-muted` ("Sin RFC registrado"/"Sin razón social
-  registrada"), mismo criterio que "Sin asignar" en `user-detail`. Icono de
-  RFC reutilizado del de SSN en `user-detail` (identificador oficial); icono
-  de Razón social reutilizado del de "Departamento" (edificio/organización)
-  — mismo criterio de "reutilizar el icono ya establecido" que "Ver
-  detalles" en `reconciliation-dashboard`.
+  patrón que "Dirección" en `user-detail`. "Resumen de la venta" lo usa DOS
+  veces: separa los campos de la venta (Folio/Fecha/Medio de pago/
+  Referencia/Estado de venta/Estado de conciliación) de los del "Cliente"
+  (identidad + fiscales) y de los de "Documento electrónico" (la factura),
+  ver ambos abajo.
+- **Identificación fiscal del cliente (normativa colombiana, DIAN)**:
+  `SaleCustomer.personType`/`.taxRegime` (`shared/models/sale.model.ts`),
+  ambos opcionales — un cliente de mostrador sin registro no trae ninguno de
+  los dos y el campo cae al fallback `.text-muted` ("Sin tipo de persona/
+  régimen registrado"), mismo criterio que "Sin asignar" en `user-detail`.
+  `PersonType` (`natural`/`juridica`) y `TaxRegime`
+  (`responsable_iva`/`no_responsable` — terminología vigente de la DIAN tras
+  la Ley 2010 de 2019, reemplazó "Régimen común"/"simplificado") son enums
+  cerrados con su propio `Record<..., string>` de labels
+  (`PERSON_TYPE_LABEL`/`TAX_REGIME_LABEL`), mismo patrón que `TENDER_MEDIA_LABEL`/
+  `STORE_LABEL`. Reemplazó un primer intento con `rfc`/`businessName` (campos
+  mexicanos, CFDI) que no aplicaban al negocio real.
+- **"Documento electrónico" — la factura electrónica de la venta (DIAN)**:
+  sub-sección propia, DISTINTA de "Cliente" — no es un dato del cliente sino
+  del documento fiscal de la venta, obligatorio sin importar quién compre
+  (a diferencia de `personType`/`taxRegime`, que sí son opcionales). Modelo
+  `ElectronicInvoice` (`shared/models/sale.model.ts`, campo `Sale.invoice`,
+  NO opcional): `prefix` + `number` (consecutivo autorizado por la
+  resolución de facturación — distinto de `Sale.folio`, el folio interno del
+  POS sin validez ante la DIAN), `cufe` (Código Único de Facturación
+  Electrónica, el mismo que trae codificado el QR de una factura real) e
+  `issuedAt` (fecha/hora de expedición). Campos e icono:
+  - Prefijo: icono de tag/etiqueta (mismo path que "Código Postal" en
+    `user-detail`).
+  - Folio de factura: icono de recibo/ticket, DISTINTO del icono de
+    documento que ya usa "Folio" (el interno) arriba — mismo bloque
+    "Resumen de la venta", dos folios con significado distinto, no deben
+    compartir icono.
+  - CUFE: icono tipo "marco de escaneo" (evoca un código óptico/QR) — el
+    valor es un hex de 96 caracteres, se trunca con el mismo mecanismo de
+    `.info-field__value` (`overflow`/`ellipsis`) + `[attr.title]` con el
+    valor completo, sin necesitar `.col-truncate` (esa clase es para celdas
+    de tabla).
+  - Fecha de facturación: mismo icono de calendario que "Fecha" arriba
+    (cualquier campo de fecha reusa ese icono, ver "Patrón 'icono +
+    etiqueta + valor'" — mismo criterio ya establecido con las fechas de
+    `user-detail`). **Timezone fijo `-0500`** en el pipe
+    (`date: 'dd/MM/yyyy HH:mm' : '-0500'`) — Colombia no observa horario de
+    verano; sin el tercer argumento, Angular renderiza en la zona horaria
+    del NAVEGADOR y la hora mostrada aquí puede desalinearse de la hora
+    plana de `sale.time` que muestra "Fecha" arriba (mismo dato, sin
+    conversión) según dónde se abra la demo — bug real encontrado al
+    verificar en un entorno con otro huso horario.
+  - Consulta DIAN: icono de link externo, `.info-field__value-row` con un
+    `<a target="_blank" rel="noopener">` armado por `dianQueryUrl()`
+    (`sale.util.ts`) — el mismo enlace que trae codificado el QR de una
+    factura electrónica real
+    (`https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=<CUFE>`).
 
 ### `.sale-drawer__row`: 2 secciones en la misma fila
 
@@ -806,6 +846,18 @@ generada por `buildDay()`:
    (reparto propio, ver `V-2007`). Antes de esta iteración, un pago mixto
    real (2+ métodos) era un caso especial que solo tenía `V-2007` — ahora es
    la norma para cualquier venta del mock.
+4. **TODA venta trae una `ElectronicInvoice`**: `withInvoice()` la arma para
+   las 7 de `TODAY_SALES` y para cualquiera de `buildDay()` por igual — a
+   diferencia de `payments`, nunca se declara a mano en el mock (no hay
+   ningún caso especial tipo `V-2007` aquí). Un solo prefijo global
+   (`INVOICE_PREFIX = 'SETP'`) porque una sola resolución DIAN cubre las 4
+   sucursales; el consecutivo (`INVOICE_NUMBER_SEED + índice en
+   `RAW_SALES``) es único por venta. El CUFE se genera con `buildCufe()`
+   (FNV-1a + LCG sobre `sale.id`) para obtener un hex determinístico de 96
+   caracteres — MISMA longitud que un CUFE real (SHA-384) pero sin ser un
+   hash real, no hay backend que lo calcule; mismo criterio de "índice, no
+   `Math.random()`" que el resto del generador, para que el CUFE de una
+   venta no cambie entre builds.
 
 ### Gotcha de CSS: una utilidad compartida puede perder contra un selector
 ### local con más especificidad
@@ -1525,6 +1577,60 @@ necesita una función `bankTransactionsFor` — el grupo ya trae la lista).
   exactamente lo que ese partial ya asume, así que se reutiliza tal cual,
   sin una variante nueva.
 
+### Simplificación a 3 estados + "Desconciliar"
+
+La tabla de "Conciliación" pasó de mostrar los 4 valores de `MatchStatus` a
+solo 3, con su propio tipo — `ReconciliationStatus` (`'conciliado' |
+'desconciliado' | 'por_conciliar'`, `shared/models/reconciliation-item.model.ts`)
+y su propio tag — `ReconciliationStatusTag`
+(`shared/components/reconciliation-status-tag/`, mismo patrón que
+`MatchStatusTag`/`SaleStatusTag`: un enum de estado nuevo no se resuelve
+reutilizando el tag de otro dominio aunque coincidan en color). **`MatchStatus`
+no desaparece** — sigue siendo el tipo real a nivel de ORDEN
+(`cross-match.util.ts`, `difference-management`, `sale.reconciliationStatus`
+en `sales-dashboard`); `ReconciliationStatus` es solo la vista agrupada por
+día + medio de pago de *este* feature.
+
+- **`desconciliado` cubre DOS causas de `MatchStatus`**: `amount_mismatch`
+  (monto distinto) y `settlement_only` (liquidación bancaria sin venta) — a
+  nivel de día+medio ambas son "esto no cuadra, hay que revisarlo", ver
+  `statusFor()` en `group-by-tender-day.util.ts` (ya no compara contra 4
+  casos, solo 3: vendido>0 y banco=0 → `por_conciliar`; iguales →
+  `conciliado`; cualquier otro caso (banco>0 y vendido=0, o montos
+  distintos) → `desconciliado`).
+- **Acciones por estado** (columna "Acciones", mismo patrón de iconos +
+  tooltip de siempre): `conciliado` → "Ver detalles" (ojo, sin cambios) +
+  **"Desconciliar"** (icono círculo-tachado, `nzDanger` — mismo "semáforo"
+  que Eliminar en `user-list`). `desconciliado`/`por_conciliar` →
+  "Gestionar" (lápiz, sin cambios). `isActionable(group)` ahora depende
+  SOLO del status (antes también exigía `group.actionableOrder !== null`) —
+  un grupo "Desconciliado" a mano no tiene una orden con discrepancia real
+  detrás, y aun así debe mostrar "Gestionar" según lo pedido.
+- **`ReconciliationOverridesStore`** (`shared/data/reconciliation-overrides.store.ts`,
+  `providedIn: 'root'`, mismo motivo que `ResolvedMatchesStore`: sobrevive
+  la navegación aunque `ReconciliationService` sea por-ruta) — un Set de
+  claves `tenderMedia|date` marcadas "Desconciliar" a mano. Se aplica en
+  `ReconciliationService.dayGroups` DESPUÉS de aplicar `ResolvedMatchesStore`
+  (dos pasadas de `.map()` encadenadas): primero un match confirmado en
+  "Gestión de diferencias" puede volver `conciliado` a un grupo, y solo
+  entonces se evalúa si ese grupo (conciliado por mock o por resolución
+  manual, da igual) fue desconciliado a mano. No hay "volver a conciliar"
+  todavía — no se pidió, y agregar un `resolve()` simétrico es directo si
+  hace falta (mismo archivo, mismo patrón).
+- **`resolveLink` con fallback, ya no depende de `actionableOrder`**: antes
+  el link a "Gestión de diferencias" solo existía si `group.actionableOrder`
+  no era null. Ahora, cuando es null (grupo "Desconciliado" a mano, o una
+  anomalía `settlement_only` pura sin `sale_only`/`amount_mismatch` real en
+  el grupo), cae a `group.settlements[0]?.orderId` — sigue siendo un
+  `orderId` válido para la ruta, aunque `difference-management` no tenga
+  nada accionable que ofrecerle. **Limitación conocida, deliberada**: en ese
+  caso `difference-management` muestra su estado vacío existente ("Esta
+  orden no requiere gestión de diferencias, o no existe") en vez de una
+  pantalla de resolución funcional — extender `difference-management` para
+  soportar "resolver una orden ya matched pero desconciliada a mano" (o una
+  anomalía `settlement_only` sin venta) es trabajo pendiente, no se hizo
+  aquí para no tocar a fondo ese feature de paso.
+
 ## Pendientes / deuda conocida al cerrar este módulo
 
 1. Borde de `nz-range-picker` no refleja `--color-border` (ver arriba).
@@ -1544,3 +1650,19 @@ necesita una función `bankTransactionsFor` — el grupo ya trae la lista).
    drawer/overlay como sería lo esperado en móvil. Mismo criterio que el
    punto anterior: pendiente de la misma pasada de responsive general,
    fuera del alcance de agregar el Menu en sí.
+5. "Gestionar" sobre un grupo "Desconciliado" sin una orden `sale_only`/
+   `amount_mismatch` real detrás (desconciliado a mano, o una anomalía
+   `settlement_only` pura) aterriza en el estado vacío de
+   `difference-management`, no en una pantalla de resolución funcional — ver
+   "Simplificación a 3 estados" arriba.
+6. **`sales-dashboard` mezcla normativa mexicana y colombiana**: el "Resumen
+   de la venta" ahora identifica al cliente y factura ante la DIAN
+   (Colombia), pero `SALE_TAX_RATE` (`sale.util.ts`) sigue en 16% ("IVA
+   estándar México" en su comentario — el IVA general colombiano es 19%) y
+   TODOS los montos de la pantalla siguen formateados con `currency: 'MXN'`
+   (4 archivos de la app, no solo `sales-dashboard`). No se tocó al agregar
+   la identificación fiscal/factura electrónica porque cambiar la tasa y la
+   moneda es un cambio transversal bastante más grande (recalcular los
+   montos ya afinados de `sales-mock.data.ts` para seguir cumpliendo las
+   invariantes de arriba, revisar los 4 archivos con `'MXN'`) que no se pidió
+   explícitamente — pendiente si el negocio real es 100% colombiano.

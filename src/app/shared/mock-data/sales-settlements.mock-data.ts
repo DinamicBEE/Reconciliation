@@ -196,6 +196,34 @@ const ORPHAN_SETTLEMENTS: SettlementTransaction[] = [
   },
 ];
 
+// 14 liquidaciones extra de RAPPI, sueltas (mismo criterio que
+// ORPHAN_SETTLEMENTS: sin venta que las respalde), fechadas el mismo 23 de
+// agosto sin ventas para no desalinear ningún otro grupo día+medio de pago.
+// Junto con `L-ORPHAN-RAPPI-01` de arriba suman 15 candidatas sueltas de
+// RAPPI — para que "Gestión de diferencias" tenga un caso de demostración
+// real con 15 filas en "Transacciones bancarias candidatas" (scroll interno
+// + filtro por referencia, ver difference-management.scss). Montos
+// generados determinísticamente (mismo criterio que `buildDay` en
+// sales-mock.data.ts — no Math.random()), escalonados dentro de un rango de
+// ticket real.
+const LOOSE_RAPPI_COUNT = 14;
+
+function buildLooseRappiSettlements(count: number): SettlementTransaction[] {
+  const date = '2026-08-23';
+  const batchId = batchIdFor('rappi', date);
+  return Array.from({ length: count }, (_, i) => ({
+    id: `L-ORPHAN-RAPPI-${String(i + 2).padStart(2, '0')}`,
+    date,
+    orderId: `RAPPI-LIQ-9${50 + i}`,
+    tenderMedia: 'rappi' as const,
+    amount: round2(320 + i * 67.5),
+    batchId,
+    description: `Liquidación Rappi sin folio de orden — depósito ${i + 2}/${count + 1}`,
+  }));
+}
+
+const LOOSE_RAPPI_SETTLEMENTS = buildLooseRappiSettlements(LOOSE_RAPPI_COUNT);
+
 const derivedSettlements: SettlementTransaction[] = POS_SALES.flatMap((sale) => {
   const saleTx = toSaleTransaction(sale);
   return settlementsForSale(sale, saleTx);
@@ -204,4 +232,5 @@ const derivedSettlements: SettlementTransaction[] = POS_SALES.flatMap((sale) => 
 export const MOCK_SETTLEMENTS: Record<TenderMedia, SettlementTransaction[]> = groupByTenderMedia([
   ...derivedSettlements,
   ...ORPHAN_SETTLEMENTS,
+  ...LOOSE_RAPPI_SETTLEMENTS,
 ]);

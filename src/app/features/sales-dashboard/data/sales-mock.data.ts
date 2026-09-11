@@ -1,5 +1,5 @@
 import { MatchStatus, TenderMedia } from '../../../shared/models/reconciliation-item.model';
-import { Sale } from '../../../shared/models/sale.model';
+import { ElectronicInvoice, Sale, Store } from '../../../shared/models/sale.model';
 import { saleTotal } from './sale.util';
 
 // Ventas "en bruto" — `payments` es opcional aquí: si no se especifica,
@@ -9,8 +9,10 @@ import { saleTotal } from './sale.util';
 // mantener números a mano por separado. Una venta puede declarar `payments`
 // explícito cuando el reparto entre métodos es una decisión propia de esa
 // venta y no un simple split derivado — ver V-2007 (tarjeta cubre cuenta+IVA,
-// efectivo cubre la propina).
-type RawSale = Omit<Sale, 'payments'> & { payments?: Sale['payments'] };
+// efectivo cubre la propina). `invoice` tampoco se declara a mano: la arma
+// `withInvoice()` (abajo) para TODA venta, a mano o generada — ver ese
+// helper.
+type RawSale = Omit<Sale, 'payments' | 'invoice'> & { payments?: Sale['payments'] };
 
 // Invariantes de negocio de TODA venta del mock (a mano o generada, ver
 // `buildDay` abajo) — pedidas explícitamente para la demo del Drawer de
@@ -21,13 +23,17 @@ type RawSale = Omit<Sale, 'payments'> & { payments?: Sale['payments'] };
 // separa el total en 2 métodos para CUALQUIER venta sin `payments` explícito,
 // y tanto `TODAY_SALES` como `buildDay()` arman siempre 5-6 líneas de
 // producto con un subtotal que deja el total muy por encima de $1,000 tras
-// el 16% de IVA.
+// el 16% de IVA. Una 4ª invariante, agregada al facturar bajo normativa
+// colombiana: TODA venta trae una `ElectronicInvoice` (`withInvoice()`,
+// abajo) — a diferencia de la identificación fiscal del cliente
+// (`personType`/`taxRegime`, opcional), la factura electrónica es
+// obligatoria sin importar quién compre.
 //
 // 7 ventas de "hoy" (27 ago) con detalle a mano — ricas a propósito, para la
-// demo del Drawer (cliente con contacto + datos fiscales, descuento, pago
-// mixto en V-2007). El resto del mes (`buildDay`, abajo) es generado: existe
-// para tener volumen real con el que probar paginación y los filtros de
-// fecha/cliente/medio de pago, no para ver el detalle de cada una en el
+// demo del Drawer (cliente con contacto + identificación fiscal, descuento,
+// pago mixto en V-2007). El resto del mes (`buildDay`, abajo) es generado:
+// existe para tener volumen real con el que probar paginación y los filtros
+// de fecha/cliente/medio de pago, no para ver el detalle de cada una en el
 // Drawer.
 const TODAY_SALES: RawSale[] = [
   {
@@ -36,6 +42,7 @@ const TODAY_SALES: RawSale[] = [
     reference: 'CORTE-0827-01',
     date: '2026-08-27',
     time: '08:12',
+    store: 'polanco',
     tenderMedia: 'efectivo',
     reconciliationStatus: 'matched',
     customer: { name: 'Cliente mostrador' },
@@ -58,13 +65,14 @@ const TODAY_SALES: RawSale[] = [
     reference: 'RAPPI-LIQ-901',
     date: '2026-08-27',
     time: '09:04',
+    store: 'condesa',
     tenderMedia: 'rappi',
     reconciliationStatus: 'sale_only',
     customer: {
       name: 'Diego Salinas',
       phone: '55 1234 8890',
-      rfc: 'SAGD850312AB1',
-      businessName: 'Diego Salinas Gómez',
+      personType: 'natural',
+      taxRegime: 'no_responsable',
     },
     items: [
       { id: 'I-1', productName: 'Sándwich club', quantity: 3, unitPrice: 95 },
@@ -85,13 +93,14 @@ const TODAY_SALES: RawSale[] = [
     reference: 'SPEI0000129981',
     date: '2026-08-27',
     time: '10:47',
+    store: 'roma',
     tenderMedia: 'bbva',
     reconciliationStatus: 'matched',
     customer: {
       name: 'María Fernanda Ruiz',
       email: 'mf.ruiz@correo.com',
-      rfc: 'RUFM900125CD2',
-      businessName: 'María Fernanda Ruiz Ortega',
+      personType: 'natural',
+      taxRegime: 'responsable_iva',
     },
     items: [
       { id: 'I-1', productName: 'Ensalada césar', quantity: 3, unitPrice: 110 },
@@ -111,13 +120,14 @@ const TODAY_SALES: RawSale[] = [
     reference: 'DIDI-041',
     date: '2026-08-27',
     time: '11:20',
+    store: 'centro',
     tenderMedia: 'didi_food',
     reconciliationStatus: 'sale_only',
     customer: {
       name: 'Jorge Ibáñez',
       phone: '55 9902 1147',
-      rfc: 'IBJO880714EF3',
-      businessName: 'Jorge Ibáñez Contreras',
+      personType: 'natural',
+      taxRegime: 'no_responsable',
     },
     items: [
       { id: 'I-1', productName: 'Latte', quantity: 4, unitPrice: 52 },
@@ -138,6 +148,7 @@ const TODAY_SALES: RawSale[] = [
     reference: 'CORTE-0827-02',
     date: '2026-08-27',
     time: '12:35',
+    store: 'polanco',
     tenderMedia: 'efectivo',
     reconciliationStatus: 'amount_mismatch',
     customer: { name: 'Cliente mostrador' },
@@ -160,13 +171,14 @@ const TODAY_SALES: RawSale[] = [
     reference: 'RAPPI-LIQ-902',
     date: '2026-08-27',
     time: '13:10',
+    store: 'condesa',
     tenderMedia: 'rappi',
     reconciliationStatus: 'sale_only',
     customer: {
       name: 'Ana Paola Cortés',
       phone: '55 4471 0032',
-      rfc: 'COAP930528GH4',
-      businessName: 'Comercializadora Cortés SA de CV',
+      personType: 'juridica',
+      taxRegime: 'responsable_iva',
     },
     items: [
       { id: 'I-1', productName: 'Ensalada césar', quantity: 3, unitPrice: 110 },
@@ -186,13 +198,14 @@ const TODAY_SALES: RawSale[] = [
     reference: 'SPEI0000129990',
     date: '2026-08-27',
     time: '14:02',
+    store: 'roma',
     tenderMedia: 'bbva', // método "principal" para la tabla/filtros — la cuenta se pagó mixto
     reconciliationStatus: 'matched',
     customer: {
       name: 'Roberto Nieto',
       email: 'r.nieto@correo.com',
-      rfc: 'NIRO870903IJ5',
-      businessName: 'Roberto Nieto Delgado',
+      personType: 'natural',
+      taxRegime: 'responsable_iva',
     },
     items: [
       { id: 'I-1', productName: 'Café americano', quantity: 4, unitPrice: 45 },
@@ -270,6 +283,11 @@ const CUSTOMER_POOL: string[] = [
 
 const TENDER_CYCLE: TenderMedia[] = ['bbva', 'rappi', 'efectivo', 'didi_food'];
 
+// Ciclo de sucursales para las ventas generadas — mismo criterio que
+// TENDER_CYCLE (índice, no random) para que el filtro "Tienda" tenga
+// variedad real y determinística entre builds.
+const STORE_CYCLE: Store[] = ['polanco', 'condesa', 'roma', 'centro'];
+
 // Método de pago SECUNDARIO por cada método principal — usado por
 // `withPayment()` para separar el total en 2 métodos cuando la venta no trae
 // `payments` explícito (ver invariante "≥2 métodos de pago" arriba). Efectivo
@@ -346,6 +364,7 @@ function buildDay(date: string, count: number): RawSale[] {
       reference: `${REFERENCE_PREFIX[tenderMedia]}-${date.replace(/-/g, '')}${i}`,
       date,
       time: `${8 + ((idx % 5) * 2)}:${idx % 2 === 0 ? '00' : '30'}`,
+      store: STORE_CYCLE[idx % STORE_CYCLE.length],
       tenderMedia,
       reconciliationStatus: RECONCILIATION_CYCLE[idx % RECONCILIATION_CYCLE.length],
       customer: { name: CUSTOMER_POOL[idx % CUSTOMER_POOL.length] },
@@ -376,7 +395,58 @@ const RAW_SALES: RawSale[] = [
   ...buildDay('2026-08-14', 4),
 ];
 
-export const MOCK_SALES: Sale[] = RAW_SALES.map(withPayment);
+// Prefijo de facturación electrónica — una sola resolución DIAN cubre las 4
+// sucursales (`Store`), así que el prefijo es global en vez de uno por
+// tienda; el consecutivo (`number`) sí es único por venta, ver
+// `INVOICE_NUMBER_SEED` abajo.
+const INVOICE_PREFIX = 'SETP';
+
+// Arranca en un consecutivo "ya usado" (no en 1) — una resolución de
+// facturación real nunca empieza una demo desde cero. Se suma el índice de
+// la venta dentro de `RAW_SALES` para que cada una tenga su propio número,
+// sin mantener un contador mutable aparte.
+const INVOICE_NUMBER_SEED = 84210;
+
+// CUFE real = SHA-384 hex (96 caracteres) de los datos del documento + la
+// clave técnica de la resolución DIAN — no hay backend aquí que calcule un
+// hash real, así que se genera un string hex determinístico de la MISMA
+// longitud a partir del id de la venta (FNV-1a + un LCG para estirarlo a 96
+// caracteres) — mismo criterio de "índice, no `Math.random()`" que el resto
+// de este generador, para que el CUFE de una venta no cambie entre builds.
+function buildCufe(seed: string): string {
+  let hash = 2166136261; // FNV-1a offset basis
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  let hex = '';
+  let x = (hash >>> 0) || 1;
+  while (hex.length < 96) {
+    x = (Math.imul(x, 1103515245) + 12345) >>> 0;
+    hex += x.toString(16).padStart(8, '0');
+  }
+  return hex.slice(0, 96);
+}
+
+// Arma la factura electrónica de la venta — a diferencia de `payments`, esto
+// NUNCA se declara a mano en `TODAY_SALES` (ver invariante "TODA venta trae
+// una `ElectronicInvoice`" arriba): se genera igual para las 7 de mano y
+// para cualquiera de `buildDay()`. `issuedAt` reusa la fecha/hora de la
+// venta con el offset fijo de Colombia (-05:00, sin horario de verano).
+function withInvoice(sale: RawSale, seq: number): RawSale & { invoice: ElectronicInvoice } {
+  return {
+    ...sale,
+    invoice: {
+      prefix: INVOICE_PREFIX,
+      number: String(INVOICE_NUMBER_SEED + seq),
+      cufe: buildCufe(sale.id),
+      issuedAt: `${sale.date}T${sale.time}:00-05:00`,
+    },
+  };
+}
+
+export const MOCK_SALES: Sale[] = RAW_SALES.map((sale, index) => withPayment(withInvoice(sale, index)));
 
 // Si la venta ya trae `payments` explícito (pago mixto con reparto propio,
 // ver V-2007), se respeta tal cual. Si no, se deriva un pago PRINCIPAL +
@@ -384,7 +454,7 @@ export const MOCK_SALES: Sale[] = RAW_SALES.map(withPayment);
 // del total va al método secundario y el resto al principal, sin mantener
 // dos números a mano por separado. Garantiza la invariante "≥2 métodos de
 // pago" para cualquier venta del mock, generada o a mano.
-function withPayment(sale: RawSale): Sale {
+function withPayment(sale: RawSale & { invoice: ElectronicInvoice }): Sale {
   if (sale.payments) {
     return sale as Sale;
   }

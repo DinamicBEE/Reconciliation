@@ -1,5 +1,5 @@
 import {
-  MatchStatus,
+  ReconciliationStatus,
   SaleTransaction,
   SettlementTransaction,
   TenderMedia,
@@ -20,13 +20,14 @@ export interface TenderDaySummary {
   soldCount: number; // # de ventas POS del día que entran en soldAmount
   settledAmount: number;
   settlements: SettlementTransaction[]; // transacciones bancarias del día — "Ver detalles"
-  status: MatchStatus;
+  status: ReconciliationStatus;
   difference: number;
-  // Una orden puntual sale_only/amount_mismatch dentro de este grupo, para
-  // que "Gestionar" siga aterrizando en la pantalla de resolución manual
-  // (que sigue siendo por orden, ver difference-management) — null cuando
-  // el grupo ya está "Cruzado" o es una anomalía `settlement_only` (esos dos
-  // casos no tienen nada que gestionar a mano, mismo criterio que antes).
+  // Una orden puntual sale_only/amount_mismatch (MatchStatus, a nivel de
+  // orden — ver cross-match.util.ts) dentro de este grupo, para que
+  // "Gestionar" apunte a una pantalla de resolución concreta (que sigue
+  // siendo por orden, ver difference-management) — null cuando el grupo no
+  // tiene ninguna orden así (ya está "conciliado", o es una anomalía
+  // `settlement_only` pura sin venta que gestionar).
   actionableOrder: TransactionMatch | null;
 }
 
@@ -34,11 +35,14 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function statusFor(soldAmount: number, settledAmount: number): MatchStatus {
-  if (soldAmount > 0 && settledAmount === 0) return 'sale_only';
-  if (soldAmount === 0 && settledAmount > 0) return 'settlement_only';
-  if (soldAmount === settledAmount) return 'matched';
-  return 'amount_mismatch';
+// 3 estados, no 4 — "desconciliado" cubre tanto un monto distinto como una
+// liquidación bancaria sin venta asociada (ver `ReconciliationStatus` en
+// reconciliation-item.model.ts): a nivel de día+medio de pago ambas causas
+// son "esto no cuadra", no ameritan su propio estado en esta tabla.
+function statusFor(soldAmount: number, settledAmount: number): ReconciliationStatus {
+  if (soldAmount > 0 && settledAmount === 0) return 'por_conciliar';
+  if (soldAmount === settledAmount) return 'conciliado';
+  return 'desconciliado';
 }
 
 interface Bucket {
