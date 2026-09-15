@@ -15,13 +15,9 @@ import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzPopoverModule } from 'ng-zorro-antd/popover';
 import { ThemeService } from '../../services/theme.service';
 import { PaletteService } from '../../services/palette.service';
+import { AccessControlService } from '../../../features/auth/data/access-control.service';
 import { AuthService } from '../../../features/auth/data/auth.service';
-import {
-  AppUser,
-  ROLE_LABEL,
-  fullName as appUserFullName,
-} from '../../../features/user-management/data/user-management.model';
-import { UserManagementService } from '../../../features/user-management/data/user-management.service';
+import { ROLE_LABEL, fullName as appUserFullName } from '../../../features/user-management/data/user-management.model';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { SEARCHABLE_PAGES, SearchablePage, searchPages } from './header-search.util';
 
@@ -42,7 +38,7 @@ export class Header {
   protected readonly auth = inject(AuthService);
   protected readonly theme = inject(ThemeService);
   protected readonly palette = inject(PaletteService);
-  private readonly userMgmt = inject(UserManagementService);
+  protected readonly access = inject(AccessControlService);
   private readonly router = inject(Router);
 
   private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
@@ -51,7 +47,15 @@ export class Header {
   // --- Búsqueda de pantallas ---------------------------------------------
   protected readonly searchOpen = signal(false);
   protected readonly query = signal('');
-  protected readonly results = computed(() => searchPages(SEARCHABLE_PAGES, this.query()));
+  // Filtra por permiso ANTES de buscar por texto — un resultado que el
+  // usuario no puede abrir es peor que no mostrarlo (mismo criterio que el
+  // Menu lateral, ver AccessControlService).
+  protected readonly results = computed(() =>
+    searchPages(
+      SEARCHABLE_PAGES.filter((page) => !page.permission || this.access.hasPermission(page.permission)),
+      this.query(),
+    ),
+  );
 
   constructor() {
     // Foco automático al abrir el input — no se puede hacer en el mismo
@@ -93,14 +97,10 @@ export class Header {
   }
 
   // --- Usuario logeado -------------------------------------------------
-  // `AuthUser` (sesión) solo trae `appUserId` — el registro completo
-  // (nombre real, foto, roles) vive en `user-management`, la misma lista
-  // que ve "Administración de usuarios". Así el Header nunca puede mostrar
-  // datos distintos a los que un admin ve/edita ahí.
-  protected readonly currentAppUser = computed<AppUser | null>(() => {
-    const id = this.auth.currentUser()?.appUserId;
-    return id ? this.userMgmt.findUser(id) : null;
-  });
+  // Delega en `AccessControlService` (misma resolución `appUserId` →
+  // `AppUser` que antes vivía duplicada aquí) — se mantiene el nombre
+  // `currentAppUser` para no tocar `header.html`.
+  protected readonly currentAppUser = this.access.currentAppUser;
 
   protected readonly fullName = computed(() => {
     const user = this.currentAppUser();

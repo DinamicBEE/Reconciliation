@@ -1,5 +1,6 @@
 @use '../../shared/styles/summary-strip';
 @use '../../shared/styles/back-link';
+@use '../../shared/styles/import-dropzone';
 
 // Solo 2 utilidades de shared/styles/_data-table.scss hacen falta aquí — se
 // duplican en vez de @use-ar el partial completo (que trae .table-card,
@@ -227,42 +228,10 @@
   align-items: flex-start;
 }
 
-// Dropzone de importación — dentro de .diff-grid__col--side, debajo de la
-// alerta del motor de cálculo, a todo el ancho de esa columna.
-.import-dropzone-row {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-}
-
-.import-dropzone {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  height: 150px;
-  padding: 14px;
-  border: 2.5px dashed var(--color-border);
-  border-radius: 8px;
-  background: var(--color-card) !important;
-  color: var(--color-muted-foreground);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 120ms ease, color 120ms ease;
-
-  &:hover,
-  &:focus-visible {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-ring);
-    outline-offset: 2px;
-  }
-}
+// `.import-dropzone`/`.import-dropzone-row` (dropzone de importación, dentro
+// de .diff-grid__col--side, debajo de la alerta del motor de cálculo) se
+// promovieron a shared/styles/_import-dropzone.scss al aparecer un segundo
+// consumidor (reconciliation-dashboard) — ver MASTER.md.
 
 // --- Nota obligatoria -----------------------------------------------------
 .note-section {

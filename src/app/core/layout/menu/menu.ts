@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { MenuService } from '../../services/menu.service';
+import { AccessControlService } from '../../../features/auth/data/access-control.service';
 import { AuthService } from '../../../features/auth/data/auth.service';
 
 /**
@@ -23,6 +24,7 @@ import { AuthService } from '../../../features/auth/data/auth.service';
 })
 export class Menu {
   protected readonly menu = inject(MenuService);
+  protected readonly access = inject(AccessControlService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 

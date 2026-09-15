@@ -3,11 +3,135 @@
 @use '../../shared/styles/data-table';
 @use '../../shared/styles/status-dot';
 @use '../../shared/styles/row-actions';
+@use '../../shared/styles/import-dropzone';
 
 .dashboard {
   display: flex;
   flex-direction: column;
   gap: var(--grid-gap);
+}
+
+// Botón "Importar", arriba de la tabla, alineado a la derecha (ver
+// MASTER.md, "Patrón: importar movimientos bancarios").
+.dashboard__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+// Icono + label centrados como una sola unidad dentro del botón — mismo
+// criterio que .user-list__audit-link/.user-list__add-user.
+.dashboard__import-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+// --- Modal "Importar movimientos bancarios" -------------------------------
+.bank-import {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bank-import__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bank-import__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.bank-import__select {
+  width: 100%;
+}
+
+// Icono + texto (label + nombre de archivo) del botón de importación —
+// `.import-dropzone` (shared/styles/_import-dropzone.scss) ya centra este
+// bloque como una sola unidad; aquí solo se apila el texto en 2 líneas.
+.import-dropzone__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.import-dropzone__filename {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-muted-foreground);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Spinner — mismo criterio de iconografía del proyecto (SVG inline,
+// `stroke="currentColor"`, nunca un icon font/librería): un círculo tenue +
+// un arco que gira, en vez de un `nz-spin` que traería su propio bridge que
+// puentear por un solo consumidor.
+.import-dropzone__spinner {
+  animation: import-dropzone-spin 0.8s linear infinite;
+}
+
+@keyframes import-dropzone-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// --- Resultado del import: icono + valor + label, apilados y centrados ---
+// (a diferencia de `.summary-strip`, que es horizontal con divisores — este
+// resultado no necesita distinguirse visualmente por columnas, solo por
+// color, igual que los `*StatusTag`).
+.import-result {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.import-result__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.import-result__value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.import-result__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+}
+
+// Mismos tokens que `*StatusTag` (`nzColor="success"/"warning"/"error"`,
+// ver "Colores de tag" en MASTER.md) — no los semánticos de relleno sólido
+// (`--color-success`/etc.), para que el resultado se lea con la MISMA
+// paleta que ya asocia el usuario a "Conciliado"/"Por conciliar"/
+// "Desconciliado" en la tabla.
+.import-result__item--success {
+  color: var(--color-tag-success-fg);
+}
+
+.import-result__item--warning {
+  color: var(--color-tag-warning-fg);
+}
+
+.import-result__item--error {
+  color: var(--color-tag-error-fg);
 }
 
 // Medios de pago: lista compacta con indicador de estado (específico de

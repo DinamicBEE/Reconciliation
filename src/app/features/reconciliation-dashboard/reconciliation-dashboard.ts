@@ -10,12 +10,27 @@ import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import { NzMessageService } from 'ng-zorro-antd/message';
+import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { ReconciliationStatusTag } from '../../shared/components/reconciliation-status-tag/reconciliation-status-tag';
 import { Sparkline } from '../../shared/components/sparkline/sparkline';
 import { RadialProgress } from '../../shared/components/radial-progress/radial-progress';
 import { ReconciliationStatus, TENDER_MEDIA_LABEL, TenderMedia } from '../../shared/models/reconciliation-item.model';
+import { MOCK_SETTLEMENTS } from '../../shared/mock-data/sales-settlements.mock-data';
 import { DateRangeFilter, ReconciliationService, StatusFilter, TenderMediaFilter } from './data/reconciliation.service';
 import { TenderDaySummary } from './data/group-by-tender-day.util';
+import { BankAccount, BANK_ACCOUNTS } from './data/bank-accounts.mock-data';
+import {
+  BankImportRejection,
+  BankImportSummary,
+  parseBankImportFile,
+  simulateBankImportRejection,
+  summarizeBankImport,
+} from './data/bank-import.util';
+
+// Tiempo simulado de la llamada al backend (ver `onImportFileSelected`) —
+// deliberadamente perceptible para que el spinner/estado "Conectando con el
+// banco…" tengan tiempo de leerse, no un valor real de ninguna API.
+const IMPORT_SIMULATED_DELAY_MS = 1800;
 
 // "Gestionar" en ambos — un mismo día+medio "no cuadra" ya sea porque el
 // proveedor aún no liquida nada (`por_conciliar`) o porque lo liquidado no
@@ -36,6 +51,7 @@ const ACTIONABLE_STATUSES = new Set<ReconciliationStatus>(['desconciliado', 'por
     NzButtonModule,
     NzTooltipModule,
     NzModalModule,
+    NzAlertModule,
     ReconciliationStatusTag,
     Sparkline,
     RadialProgress,
@@ -173,5 +189,117 @@ export class ReconciliationDashboard {
 
   protected closeDetails(): void {
     this.selectedGroup.set(null);
+  }
+
+  // --- "Importar movimientos bancarios" -----------------------------------
+  // Botón propio arriba de la tabla (no una fila de acción) — carga masiva
+  // de un estado de cuenta completo, a diferencia del "Importar CSV" de
+  // difference-management (que agrega candidatos para UNA orden puntual).
+  // No hay backend real: se simula la llamada con un `setTimeout` de
+  // `IMPORT_SIMULATED_DELAY_MS` (ver `onImportFileSelected`, que también
+  // loguea en consola lo que el parser obtuvo del archivo) y el resultado
+  // nunca se inyecta de vuelta a `MOCK_SALES`/`MOCK_SETTLEMENTS` — es un
+  // resumen de la carga, no una fuente nueva de datos para la tabla (ver
+  // MASTER.md).
+  protected readonly bankAccounts: BankAccount[] = BANK_ACCOUNTS;
+
+  protected readonly importTenderMediaOptions: { value: TenderMedia; label: string }[] = [
+    { value: 'bbva', label: 'BBVA' },
+    { value: 'rappi', label: 'Rappi' },
+    { value: 'didi_food', label: 'DiDi Food' },
+    { value: 'efectivo', label: 'Efectivo' },
+  ];
+
+  protected readonly importModalOpen = signal(false);
+  protected readonly importTenderMedia = signal<TenderMedia | null>(null);
+  protected readonly importBankAccountId = signal<string | null>(null);
+  protected readonly importing = signal(false);
+  protected readonly importSummary = signal<BankImportSummary | null>(null);
+  protected readonly importRejection = signal<BankImportRejection | null>(null);
+  // Nombre del archivo elegido — se muestra debajo del label del botón de
+  // importación en cuanto se selecciona, independiente de si ya hay
+  // resultado o todavía está "Conectando con el banco…".
+  protected readonly selectedFileName = signal<string | null>(null);
+
+  // Cuenta los intentos de ESTA sesión de la pantalla (se reinicia si se
+  // navega fuera de /conciliacion y se vuelve, igual que el resto del
+  // estado del componente) — "la segunda vez" del enunciado, no algo que
+  // necesite sobrevivir a un refresh real.
+  private importAttempts = 0;
+
+  protected openImportModal(): void {
+    this.importModalOpen.set(true);
+  }
+
+  protected closeImportModal(): void {
+    this.importModalOpen.set(false);
+    this.importTenderMedia.set(null);
+    this.importBankAccountId.set(null);
+    this.importSummary.set(null);
+    this.importRejection.set(null);
+    this.selectedFileName.set(null);
+  }
+
+  protected onImportTenderMediaChange(value: TenderMedia): void {
+    this.importTenderMedia.set(value);
+  }
+
+  protected onImportBankAccountChange(value: string): void {
+    this.importBankAccountId.set(value);
+  }
+
+  // El botón de importar (dropzone) solo se habilita con AMBOS selectores
+  // completos — "una vez que los campos estén completos", tal cual se pidió
+  // — y se deshabilita mientras la llamada simulada está en curso.
+  protected canImportFile(): boolean {
+    return this.importTenderMedia() !== null && this.importBankAccountId() !== null && !this.importing();
+  }
+
+  protected onImportFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // permite volver a elegir el mismo archivo dos veces seguidas
+
+    const tenderMedia = this.importTenderMedia();
+    if (!file || !tenderMedia || !this.canImportFile()) return;
+
+    this.selectedFileName.set(file.name);
+    this.importSummary.set(null);
+    this.importRejection.set(null);
+    this.importing.set(true);
+    this.importAttempts += 1;
+    const isSecondAttemptOrLater = this.importAttempts >= 2;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === 'string' ? reader.result : '';
+
+      // Un solo parseo — se loguea tal cual (lo que "se obtiene" del
+      // archivo) y se reutiliza para el resumen/rechazo de abajo, en vez de
+      // volver a leerlo/parsearlo por cada cosa.
+      const parsed = parseBankImportFile(text);
+      console.log('[Importar movimientos bancarios] archivo procesado', {
+        archivo: file.name,
+        medioDePago: tenderMedia,
+        cuentaBancaria: this.importBankAccountId(),
+        intento: this.importAttempts,
+        filas: parsed.rows,
+        erroresDeFormato: parsed.errors,
+      });
+
+      // Simula la latencia de una llamada real al backend.
+      setTimeout(() => {
+        this.importing.set(false);
+
+        if (isSecondAttemptOrLater) {
+          this.importRejection.set(simulateBankImportRejection(parsed));
+          return;
+        }
+
+        const existingReferences = new Set(MOCK_SETTLEMENTS[tenderMedia].map((s) => s.orderId));
+        this.importSummary.set(summarizeBankImport(parsed, existingReferences));
+      }, IMPORT_SIMULATED_DELAY_MS);
+    };
+    reader.readAsText(file);
   }
 }

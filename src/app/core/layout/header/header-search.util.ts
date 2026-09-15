@@ -1,23 +1,39 @@
-// Registro de pantallas buscables desde el Header — solo rutas estáticas
-// (sin params) a las que cualquier usuario autenticado tiene acceso hoy: no
-// existe todavía un sistema de permisos granular en `AuthUser` (ver
-// AuthService — es un tipo mínimo de sesión, distinto de `AppUser`/
-// `PermissionKey` de user-management), así que "las pantallas que el
-// usuario pueda tener acceso" es, por ahora, el mismo set para todos los
-// logeados — el día que `AuthUser` tenga permisos reales, este registro
-// filtra por ellos en vez de listarse completo.
+import { PermissionKey } from '../../../features/user-management/data/user-management.model';
+
+// Registro de pantallas buscables desde el Header — cada una declara el
+// permiso que hace falta para verla (`AccessControlService.hasPermission`,
+// ver `header.ts`); sin `permission`, la pantalla es visible para
+// cualquier usuario autenticado (hoy solo "Perfil"). El propio Header
+// filtra por permiso ANTES de llamar a `searchPages` — este archivo solo
+// declara el catálogo completo.
 export interface SearchablePage {
   label: string;
   path: string;
   keywords: string[];
+  permission?: PermissionKey;
 }
 
 export const SEARCHABLE_PAGES: SearchablePage[] = [
-  { label: 'Dashboard', path: '/dashboard', keywords: ['resumen', 'ventas', 'inicio'] },
-  { label: 'Conciliación', path: '/conciliacion', keywords: ['bancaria', 'transacciones', 'liquidaciones'] },
-  { label: 'Usuarios', path: '/usuarios', keywords: ['administración', 'administracion', 'cuentas'] },
-  { label: 'Nuevo usuario', path: '/usuarios/nuevo', keywords: ['crear', 'alta'] },
-  { label: 'Auditoría de usuarios', path: '/usuarios/auditoria', keywords: ['historial', 'log'] },
+  { label: 'Dashboard', path: '/dashboard', keywords: ['resumen', 'ventas', 'inicio'], permission: 'view_dashboard' },
+  {
+    label: 'Conciliación',
+    path: '/conciliacion',
+    keywords: ['bancaria', 'transacciones', 'liquidaciones'],
+    permission: 'view_reconciliation',
+  },
+  {
+    label: 'Usuarios',
+    path: '/usuarios',
+    keywords: ['administración', 'administracion', 'cuentas'],
+    permission: 'manage_users',
+  },
+  { label: 'Nuevo usuario', path: '/usuarios/nuevo', keywords: ['crear', 'alta'], permission: 'manage_users' },
+  {
+    label: 'Auditoría de usuarios',
+    path: '/usuarios/auditoria',
+    keywords: ['historial', 'log'],
+    permission: 'manage_users',
+  },
   { label: 'Perfil', path: '/perfil', keywords: ['cuenta', 'yo', 'información general'] },
 ];
 
