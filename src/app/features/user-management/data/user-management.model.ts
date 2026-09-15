@@ -8,7 +8,15 @@
 
 export type UserStatus = 'active' | 'inactive' | 'blocked';
 
-export type RoleId = 'admin' | 'supervisor' | 'analista' | 'auditor';
+// 4 roles, cada uno con acceso a un módulo EXCLUYENTE de la app (ver `ROLES`
+// abajo) — a diferencia del set anterior (admin/supervisor/analista/
+// auditor, permisos superpuestos dentro de un mismo módulo de conciliación),
+// estos 4 delimitan PANTALLAS completas, no solo acciones dentro de una:
+// `superadmin` ve todo, y los otros 3 ven solo su propio módulo
+// (Administración de usuarios / Resumen de venta / Conciliación bancaria).
+// Aplicado por `permissionGuard` (`features/auth/data/permission.guard.ts`)
+// sobre las rutas en `app.routes.ts`.
+export type RoleId = 'superadmin' | 'admin' | 'contabilidad' | 'tesoreria';
 
 export type PermissionKey =
   | 'view_dashboard'
@@ -154,9 +162,9 @@ export interface AuditLogEntry {
 
 export const ROLES: RoleDef[] = [
   {
-    id: 'admin',
-    label: 'Administrador',
-    description: 'Acceso total: usuarios, roles y permisos, conciliación y reportes.',
+    id: 'superadmin',
+    label: 'Superadministrador',
+    description: 'Acceso total a todas las pantallas y funcionalidades de la aplicación.',
     defaultPermissions: [
       'view_dashboard',
       'view_reconciliation',
@@ -169,22 +177,22 @@ export const ROLES: RoleDef[] = [
     ],
   },
   {
-    id: 'supervisor',
-    label: 'Supervisor',
-    description: 'Gestiona diferencias, importaciones y reportes — no administra usuarios.',
-    defaultPermissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
+    id: 'admin',
+    label: 'Administrador',
+    description: 'Acceso exclusivo al módulo de Administración de usuarios y sus funcionalidades.',
+    defaultPermissions: ['manage_users', 'manage_roles', 'view_audit_log'],
   },
   {
-    id: 'analista',
-    label: 'Analista de Conciliación',
-    description: 'Concilia movimientos y gestiona diferencias del día a día.',
-    defaultPermissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements'],
+    id: 'contabilidad',
+    label: 'Contabilidad',
+    description: 'Acceso exclusivo al Resumen de venta y sus funcionalidades.',
+    defaultPermissions: ['view_dashboard'],
   },
   {
-    id: 'auditor',
-    label: 'Auditor (solo lectura)',
-    description: 'Consulta dashboards, conciliación e historial, sin poder modificar nada.',
-    defaultPermissions: ['view_dashboard', 'view_reconciliation', 'view_audit_log'],
+    id: 'tesoreria',
+    label: 'Tesorería',
+    description: 'Acceso exclusivo a Conciliación bancaria y sus funcionalidades.',
+    defaultPermissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
   },
 ];
 
@@ -240,19 +248,25 @@ export const ROLE_OPTIONS: { value: RoleId; label: string }[] = ROLES.map((r) =>
 
 // Roles considerados "responsables" a efectos de "Administrador responsable"
 // (Organización) — cualquier AppUser con al menos uno de estos roles puede
-// elegirse como responsable de otro. Auditor/Analista quedan fuera a
-// propósito: son roles de operación/consulta, no de gestión de personas.
-export const MANAGER_ROLE_IDS: RoleId[] = ['admin', 'supervisor'];
+// elegirse como responsable de otro. Contabilidad/Tesorería quedan fuera a
+// propósito: son roles de un solo módulo operativo, no de gestión de personas.
+export const MANAGER_ROLE_IDS: RoleId[] = ['superadmin', 'admin'];
 
+// `group` ahora nombra la PANTALLA/módulo al que pertenece cada permiso
+// (antes eran buckets genéricos "Consulta/Operación/Administración") — con
+// los 4 roles nuevos siendo cada uno dueño exclusivo de un módulo completo
+// (ver `ROLES`), agrupar por pantalla hace que el grid de "Permisos" en
+// "Seguridad y acceso" (user-detail) se lea directo: cada columna = un
+// módulo = lo que un rol de este set puede tocar.
 export const PERMISSIONS: PermissionDef[] = [
-  { key: 'view_dashboard', label: 'Ver resumen de venta', group: 'Consulta' },
-  { key: 'view_reconciliation', label: 'Ver conciliación', group: 'Consulta' },
-  { key: 'view_audit_log', label: 'Ver historial y auditoría', group: 'Consulta' },
-  { key: 'manage_differences', label: 'Gestionar diferencias', group: 'Operación' },
-  { key: 'import_settlements', label: 'Importar liquidaciones (CSV)', group: 'Operación' },
-  { key: 'export_reports', label: 'Exportar reportes', group: 'Operación' },
-  { key: 'manage_users', label: 'Administrar usuarios', group: 'Administración' },
-  { key: 'manage_roles', label: 'Administrar roles y permisos', group: 'Administración' },
+  { key: 'view_dashboard', label: 'Ver resumen de venta', group: 'Resumen de venta' },
+  { key: 'view_reconciliation', label: 'Ver conciliación', group: 'Conciliación bancaria' },
+  { key: 'manage_differences', label: 'Gestionar diferencias', group: 'Conciliación bancaria' },
+  { key: 'import_settlements', label: 'Importar liquidaciones (CSV)', group: 'Conciliación bancaria' },
+  { key: 'export_reports', label: 'Exportar reportes', group: 'Conciliación bancaria' },
+  { key: 'manage_users', label: 'Administrar usuarios', group: 'Administración de usuarios' },
+  { key: 'manage_roles', label: 'Administrar roles y permisos', group: 'Administración de usuarios' },
+  { key: 'view_audit_log', label: 'Ver historial y auditoría', group: 'Administración de usuarios' },
 ];
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {

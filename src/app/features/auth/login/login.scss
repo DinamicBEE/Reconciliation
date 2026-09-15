@@ -4,7 +4,7 @@
 .login-page {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 480px);
+  grid-template-columns: minmax(340px, 480px) minmax(0, 1fr);
   background: var(--color-background);
 
   @media (max-width: 900px) {
@@ -60,6 +60,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+  background: var(--color-card);
 }
 
 // Mismo patrón visual que .icon-button de shell.scss — no se puede reutilizar
@@ -97,6 +98,9 @@
 }
 
 .login-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
   max-width: 360px;
 }
@@ -136,6 +140,10 @@
   margin-bottom: 16px;
 }
 
+.login-form {
+  width: 100%;
+}
+
 .login-form__affix-icon {
   display: inline-flex;
   color: var(--color-muted-foreground);
@@ -145,16 +153,53 @@
   margin-top: 4px;
 }
 
-.login-card__hint {
+// Reemplaza el antiguo hint de una sola cuenta ("Demo: admin / ...") —
+// ahora son 4, una por rol (ver auth-mock.data.ts), así que necesitan lista,
+// no una sola línea.
+.login-card__demo {
   margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.login-card__demo-title {
+  margin: 0 0 8px;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--color-muted-foreground);
+}
+
+.login-card__demo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--color-muted-foreground);
+  }
 
   code {
     font-family: var(--font-mono);
     background: var(--color-muted);
     padding: 1px 5px;
     border-radius: 4px;
+    white-space: nowrap;
   }
+}
+
+.login-card__demo-role {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--color-foreground);
 }

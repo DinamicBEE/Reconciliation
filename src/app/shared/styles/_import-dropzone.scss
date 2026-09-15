@@ -1,0 +1,60 @@
+// Botón/dropzone de importación de archivo (CSV/TXT) — nació en
+// `difference-management` ("Importar CSV", candidatos de match manual) y se
+// promovió aquí al aparecer un segundo consumidor
+// (`reconciliation-dashboard`, modal "Importar movimientos bancarios") —
+// mismo criterio de siempre, ver MASTER.md "Estructura de carpetas".
+//
+// `.import-dropzone-row` centra el botón en su contenedor (lo usaba
+// `difference-management` para ocupar toda la columna lateral del grid;
+// `reconciliation-dashboard` lo reutiliza tal cual dentro del modal, que ya
+// es angosto). `.import-dropzone` es el botón en sí: caja punteada grande,
+// icono + label centrados como una sola unidad.
+.import-dropzone-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.import-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 150px;
+  padding: 14px;
+  border: 2.5px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-card) !important;
+  color: var(--color-muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  // Primer consumidor con un estado deshabilitado real (`reconciliation-dashboard`
+  // — el import de un archivo bancario exige elegir antes medio de pago +
+  // cuenta) — `difference-management` siempre lo deja disponible, así que
+  // esto no le cambia nada.
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--color-border);
+      color: var(--color-muted-foreground);
+    }
+  }
+}

@@ -80,6 +80,8 @@
     </nz-card>
   </section>
 
+
+
   <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
        tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
@@ -110,6 +112,22 @@
         (ngModelChange)="onDateRangeChange($event)"
         nzFormat="dd/MM/yyyy"
       />
+
+      <span class="toolbar__spacer"></span>
+
+        <!-- Botón "Importar" — carga masiva de un estado de cuenta bancario
+       completo (ver modal al final del archivo), independiente de la tabla:
+       por eso vive arriba, a la derecha, no dentro de la columna Acciones. -->
+      <div class="dashboard__actions">
+        <button nz-button type="button" class="dashboard__import-btn" (click)="openImportModal()">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+          </svg>
+          <span>Importar</span>
+        </button>
+      </div>
+
     </section>
 
     <!-- Bleed: se sale del padding de la card (margin negativo, ver
@@ -262,6 +280,128 @@
           </nz-table>
         </div>
       }
+    </ng-container>
+  </nz-modal>
+
+  <!-- "Importar movimientos bancarios": carga masiva de un estado de cuenta
+       completo, no ligada a una fila de la tabla. No hay backend real — se
+       simula la llamada con 500ms de espera (ver reconciliation-dashboard.ts)
+       y, a partir del segundo intento en esta pantalla, se simula además el
+       rechazo del archivo en vez del resumen de carga. -->
+  <nz-modal
+    [nzVisible]="importModalOpen()"
+    nzTitle="Importar movimientos bancarios"
+    [nzFooter]="null"
+    nzWidth="480px"
+    (nzOnCancel)="closeImportModal()"
+  >
+    <ng-container *nzModalContent>
+      <div class="bank-import">
+        <div class="bank-import__field">
+          <label class="bank-import__label" for="import-tender-media">Medio de pago</label>
+          <nz-select
+            id="import-tender-media"
+            class="bank-import__select"
+            nzPlaceHolder="Selecciona un medio de pago"
+            [nzDisabled]="importing()"
+            [ngModel]="importTenderMedia()"
+            (ngModelChange)="onImportTenderMediaChange($event)"
+          >
+            @for (opt of importTenderMediaOptions; track opt.value) {
+              <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+            }
+          </nz-select>
+        </div>
+
+        <div class="bank-import__field">
+          <label class="bank-import__label" for="import-bank-account">Cuenta bancaria</label>
+          <nz-select
+            id="import-bank-account"
+            class="bank-import__select"
+            nzPlaceHolder="Selecciona una cuenta bancaria"
+            [nzDisabled]="importing()"
+            [ngModel]="importBankAccountId()"
+            (ngModelChange)="onImportBankAccountChange($event)"
+          >
+            @for (account of bankAccounts; track account.id) {
+              <nz-option [nzValue]="account.id" [nzLabel]="account.bankName + ' ' + account.accountNumber" />
+            }
+          </nz-select>
+        </div>
+
+        <!-- Mismo botón de importación (icono + label centrados) que
+             "Importar CSV" en Gestión de diferencias — ver
+             shared/styles/_import-dropzone.scss. Deshabilitado hasta que
+             ambos selectores de arriba tengan valor. El icono se cambia por
+             un spinner mientras `importing()` simula la llamada al backend,
+             y el nombre del archivo elegido se muestra debajo del label en
+             cuanto se selecciona uno. -->
+        <section class="import-dropzone-row">
+          <input
+            #bankImportInput
+            type="file"
+            accept=".csv,.txt,text/csv,text/plain"
+            hidden
+            (change)="onImportFileSelected($event)"
+          />
+          <button type="button" class="import-dropzone" [disabled]="!canImportFile()" (click)="bankImportInput.click()">
+            @if (importing()) {
+              <svg class="import-dropzone__spinner" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9" stroke-opacity="0.25" />
+                <path stroke-linecap="round" d="M21 12a9 9 0 0 0-9-9" />
+              </svg>
+            } @else {
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+              </svg>
+            }
+            <span class="import-dropzone__text">
+              <span>{{ importing() ? 'Conectando con el banco…' : 'Importar archivo (.csv, .txt)' }}</span>
+              @if (selectedFileName()) {
+                <span class="import-dropzone__filename">{{ selectedFileName() }}</span>
+              }
+            </span>
+          </button>
+        </section>
+
+        @if (importSummary(); as summary) {
+          <div class="import-result">
+            <div class="import-result__item import-result__item--success">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20 6 9 17l-5-5" />
+              </svg>
+              <span class="import-result__value">{{ summary.incorporated }}</span>
+              <span class="import-result__label">Incorporados</span>
+            </div>
+            <div class="import-result__item import-result__item--warning">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="8" y="8" width="12" height="12" rx="2" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16V6a2 2 0 0 1 2-2h10" />
+              </svg>
+              <span class="import-result__value">{{ summary.duplicates }}</span>
+              <span class="import-result__label">Duplicados</span>
+            </div>
+            <div class="import-result__item import-result__item--error">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9" />
+                <path stroke-linecap="round" d="M12 8v5M12 16h.01" />
+              </svg>
+              <span class="import-result__value">{{ summary.errors }}</span>
+              <span class="import-result__label">Con error</span>
+            </div>
+          </div>
+        }
+
+        @if (importRejection(); as rejection) {
+          <nz-alert
+            nzType="error"
+            nzShowIcon
+            nzMessage="El archivo fue rechazado"
+            [nzDescription]="'Línea ' + rejection.line + ': ' + rejection.reason"
+          />
+        }
+      </div>
     </ng-container>
   </nz-modal>
 </div>

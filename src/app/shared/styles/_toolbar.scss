@@ -28,3 +28,10 @@
 .toolbar__spacer {
   flex: 1 1 auto;
 }
+
+
+.toolbar__export-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

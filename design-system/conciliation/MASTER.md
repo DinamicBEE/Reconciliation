@@ -1000,7 +1000,7 @@ función pura `fullName()` del model), Correo, Teléfono, Estado, Fecha de
 creación, Última conexión. El detalle (`user-detail`) repite esos mismos
 campos en su primera tab, junto con una sub-card de "Organización"
 (departamento, área, puesto, administrador responsable — `managerId`
-referencia a otro `AppUser` con rol admin/supervisor, ver
+referencia a otro `AppUser` con rol superadmin/admin, ver
 `MANAGER_ROLE_IDS`; "Organización" fue su propia tab en una iteración
 anterior, ver "Patrón: tab con card general…") y una de "Cuenta". La segunda
 tab, "Seguridad y acceso", cubre roles asignados (**array `roleIds:
@@ -1630,6 +1630,181 @@ día + medio de pago de *este* feature.
   soportar "resolver una orden ya matched pero desconciliada a mano" (o una
   anomalía `settlement_only` sin venta) es trabajo pendiente, no se hizo
   aquí para no tocar a fondo ese feature de paso.
+
+## Patrón: control de acceso por rol (pantallas exclusivas por módulo)
+
+Hasta ahora `RoleId`/`PermissionKey`/`ROLES`/`PERMISSIONS` (user-management.model.ts)
+eran un modelo de datos completo pero **decorativo** — se usaban para
+asignar/editar roles y permisos en "Seguridad y acceso", pero nada en la app
+los CONSULTABA para decidir qué pantallas mostrar. `authGuard` (único guard
+que existía) solo verificaba "¿hay sesión?", no "¿puede ver ESTA ruta?". Este
+patrón cierra ese hueco.
+
+1. **4 roles, cada uno dueño de UN módulo completo** (reemplazan al set
+   anterior — admin/supervisor/analista/auditor, con permisos superpuestos
+   dentro de un mismo dominio de conciliación): `superadmin`
+   (Superadministrador, todo), `admin` (Administrador, EXCLUSIVO a
+   Administración de usuarios), `contabilidad` (Contabilidad, EXCLUSIVO a
+   Resumen de venta), `tesoreria` (Tesorería, EXCLUSIVO a Conciliación
+   bancaria). `PERMISSIONS` no cambió de claves, solo de `group` — ahora
+   nombra la PANTALLA a la que pertenece cada permiso ("Resumen de venta"/
+   "Conciliación bancaria"/"Administración de usuarios", antes buckets
+   genéricos "Consulta/Operación/Administración") para que el grid de
+   "Permisos" en `user-detail` se lea directo: cada columna = un módulo = lo
+   que un rol de este set puede tocar.
+2. **`AccessControlService`** (`features/auth/data/access-control.service.ts`)
+   resuelve QUÉ puede ver la sesión — vive SEPARADO de `AuthService` a
+   propósito: `AuthService` debe seguir siendo "tonto" (solo sabe quién
+   inició sesión, `AuthUser` sin roles ni permisos, ver "Patrón: módulo de
+   administración" más arriba sobre `appUserId`); y como
+   `UserManagementService` YA depende de `AuthService` (para `actorName` en
+   auditoría), si `AuthService` dependiera de vuelta de
+   `UserManagementService` sería circular. `AccessControlService` vive
+   "por encima" de ambos: resuelve `AppUser` vía `appUserId` (mismo cómputo
+   que antes vivía duplicado en `Header.currentAppUser` — ahora `Header` solo
+   delega) y expone `hasPermission(key)` leyendo `AppUser.permissions` — el
+   set EFECTIVO, no `defaultPermissionsForRoles(roleIds)`, porque un admin
+   puede haber ajustado permisos por usuario a mano (ver "Seguridad y
+   acceso") y la sesión debe respetar esa personalización.
+3. **`permissionGuard`** (`features/auth/data/permission.guard.ts`) — un
+   `CanActivateFn` genérico que lee `route.data['permission']` (un
+   `PermissionKey`) y compara contra `AccessControlService.hasPermission()`.
+   Se declara por RUTA HIJA en `app.routes.ts` (`dashboard` →
+   `view_dashboard`, `conciliacion` y su ruta de detalle →
+   `view_reconciliation`, `usuarios`/`usuarios/nuevo`/`usuarios/:userId`/
+   `usuarios/auditoria` → `manage_users`) — a diferencia de `authGuard`
+   (aplicado UNA VEZ en el `Shell` padre, protege todo el árbol como bloque),
+   este necesita ir en cada hija porque cada una requiere un permiso
+   DISTINTO. `perfil` no declara `data.permission` — el propio perfil es
+   visible para cualquier autenticado, sin importar el rol. Sin el permiso:
+   no bloquea en seco, redirige a `AccessControlService.homeRoute()` (la
+   PRIMERA pantalla que la sesión sí puede ver, orden fijo: dashboard →
+   conciliación → usuarios) — mismo criterio que `authGuard` redirigiendo a
+   `/login` en vez de solo devolver `false`.
+4. **`redirectTo: 'dashboard'` en la ruta vacía se queda ESTÁTICO** — no se
+   volvió una función que calcule el home real de la sesión. Si el usuario
+   no puede ver `/dashboard`, el propio `permissionGuard` de ESA ruta lo
+   rebota a su `homeRoute()` real: un hop extra (`''` → `dashboard` →
+   `homeRoute()`), pero sin duplicar la lógica de "primera pantalla
+   accesible" en dos lugares. `login.ts` sí navega directo a
+   `access.homeRoute()` tras un login exitoso (ya no `/dashboard` fijo) para
+   no pagar ese hop en el caso más común.
+5. **Menu lateral (`core/layout/menu`) filtra sus 3 links por permiso**:
+   cada `<a>` de `menu.html` quedó envuelto en `@if
+   (access.hasPermission('view_dashboard'|'view_reconciliation'|'manage_users'))`
+   — antes los 3 se mostraban a cualquier logeado sin importar su rol. Mismo
+   criterio aplicado a la búsqueda de pantallas del Header
+   (`header-search.util.ts`): `SearchablePage` ahora declara un `permission?`
+   opcional (sin él, visible para cualquiera — hoy solo "Perfil"), y
+   `Header.results` filtra `SEARCHABLE_PAGES` por permiso ANTES de buscar por
+   texto — ya no hay resultados de búsqueda que lleven a una pantalla que el
+   guard va a rebotar de todas formas.
+6. **Una cuenta de demo por rol** (`features/auth/data/auth-mock.data.ts`) —
+   antes 2 cuentas (`admin`/`analista`) sin relación con los roles nuevos;
+   ahora 4, una tomada de `MOCK_USERS` (user-management) por cada rol:
+   `superadmin` (`u0001`), `administrador` (`u0006`), `contabilidad`
+   (`u0018`), `tesoreria` (`u0011`) — así se puede entrar con cada rol y
+   comprobar en vivo que cada uno ve solo su módulo. Las 4 se listan también
+   en `login.html` ("Cuentas de demo", reemplazó el hint de una sola línea
+   "Demo: admin / ...") para poder probarlas sin abrir el mock.
+7. **Los 25 usuarios de `MOCK_USERS` se reasignaron a los 4 roles nuevos**
+   por su `area`/`jobTitle` existente (no al azar): `area === 'Contabilidad'`
+   → rol `contabilidad`; el resto de analistas/supervisores (Conciliación
+   Bancaria, Tesorería, y los "Supervisor de Conciliación" de Sistemas) →
+   `tesoreria`; los antiguos `auditor` (Auditoría Interna/Cumplimiento) →
+   `admin`; el único `admin` antiguo (Administrador de Plataforma) →
+   `superadmin`. `jobTitle`/`department`/`area` NO se reescribieron — son
+   datos organizacionales independientes del rol de acceso al sistema (un
+   "Auditor de Procesos" puede perfectamente tener hoy el rol `admin`).
+8. **Gotcha evitado a propósito**: `AccessControlService` NUNCA debe
+   importarse desde `AuthService` (dependencia circular vía
+   `UserManagementService`, que ya importa `AuthService`) ni desde
+   `UserManagementService` (mismo problema, en el otro sentido). Cualquier
+   lógica que necesite cruzar sesión + registro completo (`AppUser`) va en
+   `AccessControlService` o en el componente consumidor — nunca empujada
+   "hacia abajo" a `AuthService` o `UserManagementService` para "estar más
+   cerca de los datos".
+
+## Patrón: importar movimientos bancarios (carga masiva, no por orden)
+
+Botón "Importar" en `reconciliation-dashboard`, arriba de la tabla y
+alineado a la derecha (`.dashboard__actions`) — icono + label centrados
+como una sola unidad (`.dashboard__import-btn`), distinto de una acción de
+fila: no pertenece a ninguna orden puntual, es una carga masiva de un
+estado de cuenta bancario completo.
+
+- **Dos selectores independientes**: "Medio de pago" (mismo catálogo de
+  siempre, `TenderMedia`) y "Cuenta bancaria" — catálogo nuevo,
+  `BankAccount` (`reconciliation-dashboard/data/bank-accounts.mock-data.ts`),
+  bancos colombianos (Bancolombia, Davivienda, Banco de Bogotá, BBVA
+  Colombia, Nequi) porque la app está pensada para conciliaciones en
+  Colombia — no se cruzan entre sí (una cuenta cualquiera puede recibir
+  liquidaciones de cualquier medio de pago).
+- **Botón de importación de archivo reutilizado, no reinventado**:
+  `.import-dropzone`/`.import-dropzone-row` se promovieron de
+  `difference-management` ("Importar CSV") a
+  `shared/styles/_import-dropzone.scss` al aparecer este segundo consumidor
+  — mismo criterio de siempre (ver "Estructura de carpetas"). Único agregado
+  nuevo: un estado `:disabled` (primer consumidor que lo necesita — el
+  import de un archivo bancario exige elegir antes medio de pago + cuenta;
+  `difference-management` lo deja disponible siempre, así que no le cambia
+  nada). Acepta `.csv`/`.txt` (`difference-management` solo aceptaba `.csv`).
+- **Simulación de backend, `IMPORT_SIMULATED_DELAY_MS` (1.8s)**:
+  `onImportFileSelected` en `reconciliation-dashboard.ts` lee el archivo con
+  `FileReader` y espera con `setTimeout(…, IMPORT_SIMULATED_DELAY_MS)` antes
+  de resolver — mismo espíritu que el resto del mock ("no hay backend
+  todavía"), aquí explícito y deliberadamente perceptible (subido desde
+  500ms) para que el estado de carga se alcance a leer.
+- **Estado de carga**: mientras `importing()` es `true`, el icono del botón
+  de importación cambia a un spinner (`.import-dropzone__spinner`, SVG
+  inline con `@keyframes` — mismo criterio de iconografía del proyecto,
+  nunca un `nz-spin`/librería para no puentear un componente nuevo por un
+  solo consumidor) y el texto pasa a "Conectando con el banco…"; ambos
+  selectores (`[nzDisabled]="importing()"`) y el propio botón se
+  deshabilitan para que no se pueda disparar un segundo import superpuesto.
+- **Nombre del archivo elegido**, debajo del label del botón
+  (`selectedFileName`, `.import-dropzone__filename`) — se fija apenas se
+  elige el archivo (antes de simular la llamada) y se conserva mientras el
+  modal siga abierto, incluida la transición a "Conectando…"; se limpia en
+  `closeImportModal()`.
+- **`console.log` de lo que el parser obtiene del archivo**: un solo
+  `parseBankImportFile(text)` por intento (no uno distinto por función) —
+  se loguea tal cual (archivo, medio de pago, cuenta, número de intento,
+  filas parseadas, errores de formato) y ESE MISMO resultado se reutiliza
+  para el resumen/rechazo de abajo, en vez de volver a leer/parsear el
+  archivo dos veces. Por eso `summarizeBankImport`/`simulateBankImportRejection`
+  en `bank-import.util.ts` reciben un `BankImportParseResult` ya calculado,
+  no el texto crudo.
+- **Resultado — icono + valor + label, apilados y centrados** (`.import-result`,
+  `.import-result__item`): a diferencia de `.summary-strip` (horizontal, con
+  divisores — ya no se usa aquí), cada uno de los 3 números es su propia
+  columna con un icono arriba, el número al centro y la etiqueta abajo,
+  todo centrado. **Color = el mismo que usan los `*StatusTag`**
+  (`--color-tag-success-fg`/`-warning-fg`/`-error-fg`, ver "Colores de tag"
+  arriba) — no los semánticos de relleno sólido — para que
+  incorporados/duplicados/con error se lean con la MISMA paleta que ya
+  asocia el usuario a "Conciliado"/"Por conciliar"/"Desconciliado" en la
+  tabla. `bank-import.util.ts` (parser propio, mismo formato
+  `referencia,descripcion,monto,fecha` que `csv-import.util.ts` pero SIN
+  atar el resultado a una orden — aquí no hay filas seleccionables, solo un
+  resumen) clasifica "duplicado" contra las referencias que YA existen en
+  `MOCK_SETTLEMENTS` del medio de pago elegido — anclado a data real de la
+  app, no un número inventado. **El archivo importado nunca se inyecta de
+  vuelta** a `MOCK_SALES`/`MOCK_SETTLEMENTS` ni recalcula la tabla — es un
+  resumen de la carga, no una fuente nueva de datos (deliberado, fuera de
+  alcance de lo pedido).
+- **Segundo intento en adelante → rechazo simulado, no el resumen**: un
+  contador `importAttempts` privado en el componente (se reinicia si se
+  navega fuera de `/conciliacion` y se vuelve — no es una persistencia real
+  entre sesiones, mismo criterio que `ReconciliationOverridesStore` pero sin
+  necesitar sobrevivir la navegación). `simulateBankImportRejection` en
+  `bank-import.util.ts` es INCONDICIONAL a partir del 2do intento — no
+  depende de que el archivo esté realmente mal formado: si el parser
+  encuentra un error real lo usa (más creíble), si no, sintetiza uno sobre
+  la última línea CON DATOS del archivo (`parsed.rows.at(-1)`, ya no cuenta
+  líneas del texto crudo — no hace falta, el `parsed` ya trae esa
+  información). Se muestra con `nz-alert` (`nzType="error"`), formato
+  "Línea N: motivo".
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

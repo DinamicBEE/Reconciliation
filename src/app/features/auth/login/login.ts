@@ -6,6 +6,7 @@ import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { ThemeService } from '../../../core/services/theme.service';
+import { AccessControlService } from '../data/access-control.service';
 import { AuthService } from '../data/auth.service';
 
 @Component({
@@ -18,6 +19,7 @@ import { AuthService } from '../data/auth.service';
 export class Login {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly auth = inject(AuthService);
+  private readonly access = inject(AccessControlService);
   private readonly router = inject(Router);
   protected readonly theme = inject(ThemeService);
 
@@ -47,7 +49,10 @@ export class Login {
       this.submitting.set(false);
 
       if (ok) {
-        this.router.navigateByUrl('/dashboard');
+        // No siempre es /dashboard — Administrador/Contabilidad/Tesorería
+        // no pueden verlo, cada uno aterriza en la primera pantalla que sí
+        // le corresponde (ver AccessControlService.homeRoute()).
+        this.router.navigateByUrl(this.access.homeRoute());
       } else {
         this.loginError.set('Usuario o contraseña incorrectos. Verifica tus datos e intenta de nuevo.');
       }

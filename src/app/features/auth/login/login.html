@@ -52,7 +52,7 @@
         <span>Conciliación Bancaria</span>
       </div>
 
-      <h2 class="login-card__title">Iniciar sesión</h2>
+      <h2 class="login-card__title">Bienvenido a "app"</h2>
       <p class="login-card__subtitle">Ingresa tus credenciales para continuar.</p>
 
       @if (loginError()) {
@@ -61,7 +61,7 @@
 
       <form nz-form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
         <nz-form-item>
-          <nz-form-label nzFor="username" nzRequired>Usuario</nz-form-label>
+          <!-- <nz-form-label nzFor="username" nzRequired>Usuario</nz-form-label> -->
           <nz-form-control [nzErrorTip]="usernameErrorTpl">
             <nz-input-wrapper>
               <span nzInputPrefix class="login-form__affix-icon">
@@ -90,7 +90,7 @@
         </ng-template>
 
         <nz-form-item>
-          <nz-form-label nzFor="password" nzRequired>Contraseña</nz-form-label>
+          <!-- <nz-form-label nzFor="password" nzRequired>Contraseña</nz-form-label> -->
           <nz-form-control [nzErrorTip]="passwordErrorTpl">
             <nz-input-password>
               <span nzInputPrefix class="login-form__affix-icon">
@@ -155,7 +155,27 @@
         </button>
       </form>
 
-      <p class="login-card__hint">Demo: <code>admin</code> / <code>Conciliacion2026</code></p>
+      <div class="login-card__demo">
+        <p class="login-card__demo-title">Cuentas de demo</p>
+        <ul class="login-card__demo-list">
+          <li>
+            <span class="login-card__demo-role">Superadministrador</span>
+            <code>superadmin</code> / <code>Conciliacion2026</code>
+          </li>
+          <li>
+            <span class="login-card__demo-role">Administrador</span>
+            <code>administrador</code> / <code>Administrador2026</code>
+          </li>
+          <li>
+            <span class="login-card__demo-role">Contabilidad</span>
+            <code>contabilidad</code> / <code>Contabilidad2026</code>
+          </li>
+          <li>
+            <span class="login-card__demo-role">Tesorería</span>
+            <code>tesoreria</code> / <code>Tesoreria2026</code>
+          </li>
+        </ul>
+      </div>
     </div>
   </section>
 </div>
