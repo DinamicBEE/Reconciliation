@@ -2023,6 +2023,83 @@ los leía ni los incrementaba — la brecha que reveló validar contra
    conocidos en vez de construir infraestructura para un caso que nada
    dispara aún.
 
+### Actualización: login apuntado al backend real (coctel-del-mar)
+
+Todo lo de arriba describía el mock; esta sección documenta qué cambió al
+conectar `AuthService` al `auth-service` real de "coctel-del-mar"
+(login/refresh/logout/change-password), NO una reescritura del patrón —
+los guards, `AccessControlService.mustChangePassword`/`homeRoute`, y el
+resto de esta sección siguen vigentes tal cual.
+
+1. **`AuthService.login()`/`refreshAccessToken()`/`logout()`/`changePassword()`
+   ahora llaman al backend real** (`POST {environment.apiUrl}/auth/...`,
+   ver `features/auth/data/auth.service.ts`) en vez de mutar un arreglo en
+   memoria. `features/auth/data/mock-token.util.ts` y
+   `features/auth/data/auth-mock.data.ts` (`MOCK_USERS`, credenciales) se
+   ELIMINARON — el comentario que tenían literalmente decía "el día que
+   exista backend, esta lista desaparece".
+2. **`environment.apiUrl` es `''` a propósito, no la URL del gateway** — las
+   llamadas van a rutas relativas (`/auth/login`, etc.) que `ng serve`
+   reenvía al gateway vía `proxy.conf.json` (`/auth`, `/users` →
+   `http://localhost:8082` en este entorno local — remapeado desde el 8080
+   por defecto de coctel-del-mar, ya ocupado por otro proyecto en esta
+   máquina; ver el comentario en `docker-compose.yml` de ese repo). El
+   gateway de coctel-del-mar no tiene CORS configurado; el proxy evita el
+   problema por completo (mismo origen desde el navegador) sin tocar ese
+   repo. En producción, `apiUrl` pasaría a ser el origen real del gateway o
+   la app se serviría tras un reverse proxy en el mismo origen — mismo
+   criterio.
+3. **`AuthService.login()` YA NO arma la sesión directo** — devuelve un
+   `Observable<LoginResult>` (email/displayName/mustChangePassword/tokens
+   del backend, sin `appUserId` todavía) y expone `completeLogin(result,
+   appUserId)` como segundo paso. Sigue sin poder depender de
+   `UserManagementService` (misma dependencia circular de siempre, ver
+   "Patrón: control de acceso por rol"), así que **`Login.onSubmit` (el
+   componente, no el service) resuelve `appUserId` vía el NUEVO
+   `UserManagementService.findUserByEmail(result.email)`** antes de llamar
+   `completeLogin` — reemplaza a `findAppUserIdForUsername`, que buscaba en
+   la lista de credenciales ahora eliminada. Solo las cuentas de demo cuyo
+   `email` coincide con lo sembrado en la base de coctel-del-mar quedan
+   vinculadas a un `AppUser`; el resto se autentica igual mas sin
+   nombre/foto/permisos derivados de `user-management` (no existe todavía
+   un backend de administración de usuarios que comparta el mismo
+   registro).
+4. **`mustChangePassword` ahora tiene DOS fuentes, no una** —
+   `AccessControlService.mustChangePassword` hace OR entre
+   `currentAppUser()?.mustChangePassword` (el `AppUser` mock, cuando hay
+   match) y `auth.currentUser()?.mustChangePasswordHint` (nuevo campo en
+   `AuthUser`, copiado tal cual de `UserSummaryDto.mustChangePassword` en
+   cada login) — una cuenta real SIN match en el mock (p. ej. el admin
+   sembrado por `AdminUserSeeder`, `admin@cocteldelmar.local`) sigue
+   forzando el cambio de contraseña correctamente gracias a la segunda
+   fuente. `AuthService.changePassword()` apaga `mustChangePasswordHint` en
+   la sesión al confirmar el backend, simétrico a como
+   `UserManagementService.clearMustChangePassword` ya apagaba la del mock.
+5. **Bloqueo por intentos fallidos: ya NO hay chequeo/contador local en
+   `Login`** — el backend real es quien cuenta los intentos y devuelve HTTP
+   423 (`AccountLockedException`, ver `GlobalExceptionHandler` en
+   auth-service); `AppUser.failedLoginAttempts`/`recordFailedLogin`/
+   `clearFailedLogins` (`UserManagementService`) se QUEDAN (siguen
+   existiendo como datos/acciones de "Seguridad y acceso" en
+   `user-detail`), pero `Login.onSubmit` ya no los llama — hubiera sido un
+   segundo contador desincronizado del real. 401/423 del backend se
+   traducen a `INVALID_CREDENTIALS_MESSAGE`/`BLOCKED_MESSAGE` (mismos
+   textos que antes, ahora sí alineados con el backend real, no una
+   simulación); un error de red/conexión (status 0, p. ej. el stack de
+   Docker no está levantado) muestra un mensaje aparte, no "usuario
+   inválido".
+6. **Roles/permisos del backend real NO se usan todavía** —
+   `UserSummaryDto.roles`/`.permissions` llegan en la respuesta de login
+   pero se descartan: el catálogo de permisos de coctel-del-mar (`app_role`/
+   `app_permission`, ver `V2__auth_schema.sql`) no tiene filas sembradas
+   hoy y sus códigos de rol (`ADMIN`/`ALTAS`/`CONTABILIDAD`/`TESORERIA`/
+   `COSTOS`) no coinciden con los de este frontend (`superadmin`/`admin`/
+   `contabilidad`/`tesoreria`, ver `RoleId`). Usarlos directo habría dejado
+   sin permisos (y por lo tanto sin acceso a ninguna pantalla, ver
+   `homeRoute()`) a cualquier cuenta real sin match en el mock. Pendiente
+   de retomar cuando exista un backend de administración de usuarios con un
+   catálogo de permisos alineado a los 4 roles de este frontend.
+
 ## Pendientes / deuda conocida al cerrar este módulo
 
 1. Borde de `nz-range-picker` no refleja `--color-border` (ver arriba).
@@ -2068,9 +2145,10 @@ los leía ni los incrementaba — la brecha que reveló validar contra
    fácil de confundir con un bug real al probar a mano (pasó verificando
    este mismo módulo: navegar por URL en vez de por link/botón in-app hace
    recarga dura y "revierte" el cambio recién hecho). `AuthService` es la
-   única excepción real: la sesión (tokens incluidos) y las credenciales de
-   `auth-mock.data.ts` (mutadas en el propio arreglo por `changePassword`,
-   no vía un signal re-derivado) sí sobreviven. Si algún día importa que
+   única excepción real: la sesión (tokens incluidos) sobrevive vía
+   `sessionStorage` — las credenciales YA NO viven en el frontend (login
+   real contra coctel-del-mar, ver "Actualización: login apuntado al
+   backend real" arriba). Si algún día importa que
    `user-management` persista entre recargas sin backend real, la solución
    es la misma que ya usa `AuthService`: `sessionStorage`/`localStorage`,
    no cambiar cómo se inicializan los signals.

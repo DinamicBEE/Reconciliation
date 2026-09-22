@@ -1,4 +1,5 @@
 import { ApplicationConfig, LOCALE_ID, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { provideHttpClient } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { routes } from './app.routes';
 import { es_ES, provideNzI18n } from 'ng-zorro-antd/i18n';
@@ -15,6 +16,7 @@ registerLocaleData(esMX);
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    provideHttpClient(),
     provideRouter(routes, withComponentInputBinding()),
     { provide: LOCALE_ID, useValue: 'es-MX' },
     provideNzI18n(es_ES),

@@ -13,9 +13,12 @@ type MockUserSeed = Omit<
 >;
 
 // Incluye a 'u0001', 'u0006', 'u0011' y 'u0018' — los mismos 4 usuarios demo
-// (uno por rol) de `features/auth/data/auth-mock.data.ts` — para que el
+// (uno por rol) listados en login.html ("Cuentas de demo") — para que el
 // módulo de administración se sienta parte de la misma app y no un dataset
-// desconectado. El resto son personas ficticias para dar variedad realista
+// desconectado. Su `email` es además el puente hacia la sesión real (ver
+// `UserManagementService.findUserByEmail`, `AuthService.AuthUser.appUserId`):
+// solo se resuelven permisos/nombre/foto para cuentas cuyo email coincide
+// con lo sembrado en coctel-del-mar. El resto son personas ficticias para dar variedad realista
 // de roles/estado/último acceso (incluyendo "nunca ha iniciado sesión") y de
 // los nuevos campos de seguridad/organización. `jobTitle`/`department`/
 // `area` NO se reescribieron al redefinir los roles (ver `ROLES` en

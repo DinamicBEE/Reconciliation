@@ -224,6 +224,19 @@ export class UserManagementService {
     return this.usersSignal().find((u) => u.id === userId) ?? null;
   }
 
+  // Puente entre la sesión (login.ts, tras un login real contra
+  // coctel-del-mar) y el registro local de `user-management` — el backend
+  // de autenticación identifica cuentas por email, no por el `id` mock de
+  // este módulo (no hay todavía un backend de administración de usuarios
+  // que los comparta). Solo resuelve para cuentas de demo cuyo email
+  // coincide con las sembradas en coctel-del-mar; si no hay match, la sesión
+  // sigue autenticada pero sin `AppUser` vinculado (ver
+  // `AccessControlService.currentAppUser`).
+  findUserByEmail(email: string): AppUser | null {
+    const target = email.trim().toLowerCase();
+    return this.usersSignal().find((u) => u.email.toLowerCase() === target) ?? null;
+  }
+
   createUser(input: CreateUserInput): AppUser {
     const user: AppUser = {
       // Mínimo 4 dígitos (regla de negocio) — el padding es solo cosmético,

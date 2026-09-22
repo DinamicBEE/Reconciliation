@@ -154,8 +154,8 @@
 }
 
 // Reemplaza el antiguo hint de una sola cuenta ("Demo: admin / ...") —
-// ahora son 4, una por rol (ver auth-mock.data.ts), así que necesitan lista,
-// no una sola línea.
+// ahora son 4, una por rol (ver login.html, "Cuentas de demo"), así que
+// necesitan lista, no una sola línea.
 .login-card__demo {
   margin: 20px 0 0;
   padding-top: 16px;

@@ -37,7 +37,18 @@ export class AccessControlService {
   // otra ruta protegida) y por `mustChangePasswordGuard` (esa misma ruta,
   // en sentido contrario) — ver MASTER.md, "Patrón: refresh token de un
   // solo uso + cambio obligatorio de contraseña".
-  readonly mustChangePassword = computed(() => this.currentAppUser()?.mustChangePassword ?? false);
+  //
+  // Dos fuentes, no una: `currentAppUser()?.mustChangePassword` (el registro
+  // mock de `user-management`, para las cuentas de demo con `appUserId`
+  // vinculado) OR `auth.currentUser()?.mustChangePasswordHint` (lo que
+  // devolvió el login REAL contra coctel-del-mar, ver `AuthService`) — una
+  // cuenta autenticada por el backend real pero SIN match en el mock (no
+  // existe todavía un backend de administración de usuarios que comparta el
+  // mismo registro) solo tiene la segunda fuente, y aun así debe respetar
+  // el flag.
+  readonly mustChangePassword = computed(
+    () => (this.currentAppUser()?.mustChangePassword ?? false) || (this.auth.currentUser()?.mustChangePasswordHint ?? false),
+  );
 
   hasPermission(key: PermissionKey): boolean {
     return this.permissions().has(key);

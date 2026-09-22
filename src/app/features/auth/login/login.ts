@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -11,11 +12,10 @@ import { AuthService } from '../data/auth.service';
 import { UserManagementService } from '../../user-management/data/user-management.service';
 
 // Copys alineados TEXTUAL con el contrato real del backend
-// (Auth_Service_Endpoints.pdf, sección "2. Codigos de error") — no
-// paráfrasis propia, para que el usuario vea el MISMO mensaje el día que
-// esto se conecte a la API real.
+// (Auth_Service_Endpoints.pdf, sección "2. Codigos de error").
 const INVALID_CREDENTIALS_MESSAGE = 'Usuario o contraseña inválidos.';
 const BLOCKED_MESSAGE = 'Usuario bloqueado por intentos fallidos. Contacte al administrador.';
+const CONNECTION_ERROR_MESSAGE = 'No se pudo conectar con el servidor. Intenta de nuevo.';
 
 @Component({
   selector: 'app-login',
@@ -50,31 +50,19 @@ export class Login {
     this.submitting.set(true);
 
     const { username, password } = this.form.getRawValue();
-    // Resuelto ANTES del intento (no depende de si la contraseña es
-    // correcta) — el backend real bloquea por cuenta, no por intento
-    // puntual: una cuenta ya bloqueada rechaza incluso con la contraseña
-    // correcta (HTTP 423), mismo criterio aquí. `null` si el username no
-    // corresponde a ninguna cuenta — ver `recordFailedLogin`/bloque `else`
-    // abajo, donde ese caso simplemente no contabiliza nada (no hay cuenta
-    // real a la que sumarle un intento fallido).
-    const appUserId = this.auth.findAppUserIdForUsername(username);
 
-    // Simula latencia de red — cuando exista backend, esto se reemplaza por
-    // una llamada HTTP real; el resto del componente no se entera.
-    setTimeout(() => {
-      if (appUserId && this.userMgmt.findUser(appUserId)?.status === 'blocked') {
+    this.auth.login(username, password).subscribe({
+      next: (result) => {
         this.submitting.set(false);
-        this.loginError.set(BLOCKED_MESSAGE);
-        return;
-      }
 
-      const ok = this.auth.login(username, password);
-      this.submitting.set(false);
+        // Vincula la sesión al registro local de `user-management` cuando el
+        // email coincide con una cuenta de demo (ver
+        // `UserManagementService.findUserByEmail`) — `null` si no hay match,
+        // la sesión queda igual de autenticada, solo sin `AppUser` del que
+        // leer permisos/nombre/foto (ver AuthService.AuthUser.appUserId).
+        const appUserId = this.userMgmt.findUserByEmail(result.email)?.id ?? null;
+        this.auth.completeLogin(result, appUserId);
 
-      if (ok) {
-        if (appUserId) {
-          this.userMgmt.clearFailedLogins(appUserId);
-        }
         // Cambio de contraseña obligatorio pendiente → directo a esa
         // pantalla, ni siquiera pasa por homeRoute() (el propio authGuard
         // rebotaría ahí de todas formas al primer intento de navegación,
@@ -88,22 +76,22 @@ export class Login {
         // no pueden verlo, cada uno aterriza en la primera pantalla que sí
         // le corresponde (ver AccessControlService.homeRoute()).
         this.router.navigateByUrl(this.access.homeRoute());
-        return;
-      }
-
-      // Contraseña incorrecta sobre una cuenta real (appUserId no nulo) —
-      // cuenta el intento. Si ESTE intento es el que llega al umbral,
-      // `recordFailedLogin` ya dejó la cuenta bloqueada: se muestra el
-      // mensaje de bloqueo en vez del genérico, igual que mostraría el
-      // backend real en la siguiente petición.
-      if (appUserId) {
-        this.userMgmt.recordFailedLogin(appUserId);
-        if (this.userMgmt.findUser(appUserId)?.status === 'blocked') {
+      },
+      error: (err: HttpErrorResponse) => {
+        this.submitting.set(false);
+        // 401/423 vienen del backend (GlobalExceptionHandler en
+        // auth-service); status 0 es "no se pudo ni conectar" (backend
+        // caído, CORS, red) — un mensaje genérico, no "usuario inválido",
+        // que llevaría a la persona a sospechar de su contraseña en vez del
+        // servidor.
+        if (err.status === 423) {
           this.loginError.set(BLOCKED_MESSAGE);
-          return;
+        } else if (err.status === 401) {
+          this.loginError.set(INVALID_CREDENTIALS_MESSAGE);
+        } else {
+          this.loginError.set(CONNECTION_ERROR_MESSAGE);
         }
-      }
-      this.loginError.set(INVALID_CREDENTIALS_MESSAGE);
-    }, 400);
+      },
+    });
   }
 }
