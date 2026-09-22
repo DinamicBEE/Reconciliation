@@ -6,6 +6,7 @@ import {
   AuditAction,
   AuditLogEntry,
   MANAGER_ROLE_IDS,
+  MAX_FAILED_LOGIN_ATTEMPTS,
   PermissionKey,
   ROLE_LABEL,
   RoleId,
@@ -29,6 +30,11 @@ export interface CreateUserInput {
   status: UserStatus;
 }
 
+// Datos personales SOLOS (sin organización) — el único que necesita
+// `Profile` (self-service: cada quien edita su propia información de
+// contacto, nunca su propia asignación organizacional). Ver
+// `UpdateUserProfileInput` abajo para el caso de `UserDetail` (un admin
+// editando a otro usuario, personal + organización JUNTOS).
 export interface UpdateUserInfoInput {
   firstName: string;
   lastName: string;
@@ -40,7 +46,25 @@ export interface UpdateUserInfoInput {
   address: AppUserAddress;
 }
 
-export interface UpdateOrganizationInput {
+// Un solo input para TODO "Información general" en `UserDetail` (datos
+// personales + organización) — antes eran 2 interfaces
+// (`UpdateUserInfoInput`/`UpdateOrganizationInput`) que viajaban a 2 métodos
+// del service en 2 llamadas separadas; ahora esa pantalla las junta en un
+// solo `<form>` lógico y las guarda en una sola llamada
+// (`updateUserProfile`, ver abajo) — el día que exista backend real, esto
+// es UN solo endpoint, no dos. `Profile` (self-service) sigue usando el
+// `UpdateUserInfoInput` más chico de arriba, vía `updateInfo` — 2 métodos
+// a propósito: son 2 casos de uso distintos (self-service acotado vs.
+// edición administrativa completa), no la misma acción con menos campos.
+export interface UpdateUserProfileInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  birthDate: string;
+  ssn: string;
+  gender: string;
+  address: AppUserAddress;
   department: string;
   area: string;
   jobTitle: string;
@@ -223,6 +247,9 @@ export class UserManagementService {
       failedLoginAttempts: 0,
       twoFactorEnabled: false,
       activeSessions: 0,
+      // Cuenta nueva → contraseña inicial asignada por un admin, igual que
+      // tras un `resetPassword` — debe cambiarla en su primer login.
+      mustChangePassword: true,
       // No se piden al crear — se completan después editando el detalle (ver
       // UpdateUserInfoInput/UpdateOrganizationInput y sus respectivos update*).
       birthDate: '',
@@ -243,6 +270,10 @@ export class UserManagementService {
     return user;
   }
 
+  // Self-service: el propio usuario edita SOLO su información personal (ver
+  // `Profile`, `/perfil`) — nunca su organización, así que no reutiliza
+  // `updateUserProfile` (exigiría los 7 campos de organización que esa
+  // pantalla ni siquiera muestra).
   updateInfo(userId: string, input: UpdateUserInfoInput): void {
     const user = this.findUser(userId);
     if (!user) return;
@@ -270,6 +301,45 @@ export class UserManagementService {
     this.appendAudit(updated, 'updated', 'Se actualizó información personal.');
   }
 
+  // Administrativo: un admin edita a OTRO usuario, información personal Y
+  // organización JUNTAS, en una sola actualización + una sola entrada de
+  // auditoría (ver `UserDetail.onSaveProfile()`) — reemplaza a los antiguos
+  // `updateInfo`/`updateOrganization` como 2 llamadas separadas para ESE
+  // caso de uso. Ver `UpdateUserProfileInput`.
+  updateUserProfile(userId: string, input: UpdateUserProfileInput): void {
+    const user = this.findUser(userId);
+    if (!user) return;
+
+    const updated: AppUser = {
+      ...user,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      email: input.email.trim(),
+      phone: input.phone.trim(),
+      birthDate: input.birthDate,
+      ssn: input.ssn.trim(),
+      gender: input.gender,
+      address: {
+        city: input.address.city.trim(),
+        state: input.address.state.trim(),
+        zipCode: input.address.zipCode.trim(),
+        street1: input.address.street1.trim(),
+        street2: input.address.street2?.trim() || null,
+        exteriorNumber: input.address.exteriorNumber.trim(),
+        interiorNumber: input.address.interiorNumber?.trim() || null,
+      },
+      department: input.department.trim(),
+      area: input.area.trim(),
+      jobTitle: input.jobTitle.trim(),
+      managerId: input.managerId,
+      employeeId: input.employeeId.trim(),
+      hireDate: input.hireDate,
+      contractEndDate: input.contractEndDate,
+    };
+    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+    this.appendAudit(updated, 'updated', 'Se actualizó información personal y de organización.');
+  }
+
   // Cambiar los roles asignados resetea los permisos a la UNIÓN de los
   // defaults de esos roles — el componente parte de ahí y el admin ajusta
   // manualmente lo que necesite (mismo criterio que un selector de rol en
@@ -290,24 +360,6 @@ export class UserManagementService {
     } else {
       this.appendAudit(updated, 'permissions_changed', 'Se actualizaron los permisos asignados.');
     }
-  }
-
-  updateOrganization(userId: string, input: UpdateOrganizationInput): void {
-    const user = this.findUser(userId);
-    if (!user) return;
-
-    const updated: AppUser = {
-      ...user,
-      department: input.department.trim(),
-      area: input.area.trim(),
-      jobTitle: input.jobTitle.trim(),
-      managerId: input.managerId,
-      employeeId: input.employeeId.trim(),
-      hireDate: input.hireDate,
-      contractEndDate: input.contractEndDate,
-    };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-    this.appendAudit(updated, 'organization_updated', 'Se actualizaron departamento, área, puesto y/o responsable.');
   }
 
   // 3 estados posibles (activo/inactivo/bloqueado, ver StatusChip) — cada
@@ -348,19 +400,84 @@ export class UserManagementService {
   // No hay backend/correo real todavía — genera una contraseña temporal y la
   // devuelve para que el componente la muestre UNA vez (toast). El día que
   // exista backend, esto pasa a disparar un correo real y deja de devolver
-  // la contraseña en claro. También limpia los intentos fallidos — mismo
-  // criterio que un "desbloqueo" real: una contraseña nueva reinicia el
-  // contador de intentos previos.
+  // la contraseña en claro. También limpia los intentos fallidos Y desbloquea
+  // la cuenta si el bloqueo fue POR ESOS intentos (ver `recordFailedLogin`)
+  // — mismo criterio que un "desbloqueo" real: una contraseña nueva reinicia
+  // el contador Y el estado que ese contador había disparado. Si el estado
+  // era 'inactive' (decisión administrativa aparte, no ligada a intentos
+  // fallidos), NO se reactiva solo — eso sigue siendo una acción explícita
+  // en "Seguridad y acceso" (`setStatus`), no un efecto secundario de esto.
+  // `mustChangePassword: true` obliga a la persona a definir SU PROPIA
+  // contraseña en el siguiente login en vez de quedarse con la temporal
+  // indefinidamente (ver `authGuard`/`ChangePassword`, MASTER.md "Patrón:
+  // refresh token de un solo uso + cambio obligatorio de contraseña").
   resetPassword(userId: string): string | null {
     const user = this.findUser(userId);
     if (!user) return null;
 
-    const updated: AppUser = { ...user, failedLoginAttempts: 0 };
+    const updated: AppUser = {
+      ...user,
+      failedLoginAttempts: 0,
+      status: user.status === 'blocked' ? 'active' : user.status,
+      mustChangePassword: true,
+    };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
 
     const tempPassword = generateTempPassword();
     this.appendAudit(updated, 'password_reset', 'Se generó una nueva contraseña temporal.');
     return tempPassword;
+  }
+
+  // Se llama tras una contraseña incorrecta (ver `Login.onSubmit`) —
+  // incrementa el contador y, al llegar a `MAX_FAILED_LOGIN_ATTEMPTS`,
+  // bloquea la cuenta automáticamente (umbral y comportamiento del backend
+  // real, ver Auth_Service_Endpoints.pdf — "Usuario bloqueado (5 intentos
+  // fallidos)", HTTP 423). No hace nada si la cuenta YA está bloqueada — no
+  // tiene sentido seguir sumando intentos sobre una cuenta que ya no deja
+  // entrar a nadie.
+  recordFailedLogin(userId: string): void {
+    const user = this.findUser(userId);
+    if (!user || user.status === 'blocked') return;
+
+    const failedLoginAttempts = user.failedLoginAttempts + 1;
+    const justBlocked = failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
+    const updated: AppUser = { ...user, failedLoginAttempts, status: justBlocked ? 'blocked' : user.status };
+    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+
+    if (justBlocked) {
+      this.appendAudit(
+        updated,
+        'blocked',
+        `Cuenta bloqueada automáticamente tras ${MAX_FAILED_LOGIN_ATTEMPTS} intentos fallidos de inicio de sesión.`,
+      );
+    }
+  }
+
+  // Login correcto — reinicia el contador de intentos fallidos, mismo
+  // criterio que `resetPassword`. No hay entrada de auditoría propia: un
+  // login correcto no es un evento de seguridad que reportar, es lo
+  // esperado.
+  clearFailedLogins(userId: string): void {
+    const user = this.findUser(userId);
+    if (!user || user.failedLoginAttempts === 0) return;
+
+    const updated: AppUser = { ...user, failedLoginAttempts: 0 };
+    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+  }
+
+  // Llamado por `ChangePassword` tras confirmar el cambio (ver
+  // `AuthService.changePassword`, que valida/actualiza la CONTRASEÑA en sí —
+  // este método solo apaga la bandera en el registro de `user-management`,
+  // el único de los dos que la conoce). Sin entrada de auditoría propia:
+  // "Contraseña restablecida" (`password_reset`) ya quedó registrada cuando
+  // se ORIGINÓ la obligación (alta de cuenta o reset de un admin) — esto es
+  // solo completarla, no un evento nuevo que reportar.
+  clearMustChangePassword(userId: string): void {
+    const user = this.findUser(userId);
+    if (!user || !user.mustChangePassword) return;
+
+    const updated: AppUser = { ...user, mustChangePassword: false };
+    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
   }
 
   deleteUser(userId: string): void {

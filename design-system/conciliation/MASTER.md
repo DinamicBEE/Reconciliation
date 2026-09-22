@@ -1165,15 +1165,28 @@ in-place, sin mover nada alrededor".
    @else { <span class="info-field__value">... }` — el `<div
    class="info-field">`, su icono y su etiqueta NUNCA cambian, solo el nodo
    de abajo. El `<form>` (`infoForm`/`orgForm`, sin cambios de fondo) envuelve
-   TODO el `.info-fields` de su sección + el botón "Guardar cambios" (visible
-   solo si `isEditing()`) — sigue siendo un formulario real para
-   validación/submit, solo que ya no impone su propio layout visual. Cada
-   sección conserva su propio botón "Guardar cambios" (2 forms
-   independientes, 2 llamadas de servicio distintas) — `onSaveInfo()`/
-   `onSaveOrganization()` ponen `isEditing.set(false)` al terminar, así que
-   guardar cualquiera de las 2 cierra el modo edición completo (no hay un
-   tercer estado "una sección guardada, la otra no"). El botón del header
-   cambia a "Cancelar edición" mientras `isEditing()` es true —
+   TODO el `.info-fields` de su sección — sigue siendo un formulario real
+   para validación (`infoForm.invalid` bloquea el guardado; `orgForm` no
+   tiene validadores propios), solo que ya no impone su propio layout
+   visual ni dispara su propio submit. **Un solo botón "Guardar cambios"
+   para AMBAS secciones** (`.tab-card__save-bar`, hermano de
+   `.tab-card__sections`, visible solo si `isEditing()`) — antes cada
+   `<form>` tenía el suyo con `(ngSubmit)` propio (2 botones, 2 llamadas de
+   servicio: `onSaveInfo()`/`onSaveOrganization()` → `updateInfo`/
+   `updateOrganization`); se consolidó a pedido explícito ("que no se guarde
+   por partes sino que se guarden todos los cambios juntos en un solo
+   endpoint") en `onSaveProfile()`, que lee `infoForm.getRawValue()` +
+   `orgForm.getRawValue()` y llama a `UserManagementService.updateUserProfile()`
+   — una sola actualización + una sola entrada de auditoría. Los 2
+   `FormGroup` en sí NO se fusionaron (seguir usando 2 formularios Angular
+   separados no tiene costo — el requisito era sobre la ACCIÓN de guardado,
+   no sobre la forma de los datos). `Profile` (`/perfil`, self-service —
+   ver "Patrón: página de perfil…" si existe, o el propio `profile.ts`)
+   sigue usando el `updateInfo()` original, sin tocar: solo edita su propia
+   información personal, nunca organización, así que es un caso de uso
+   distinto y no participó de esta consolidación. `onSaveProfile()` pone
+   `isEditing.set(false)` al terminar. El botón del header cambia a
+   "Cancelar edición" mientras `isEditing()` es true —
    `onCancelEditClick()` restaura ambos forms a los valores actuales del
    usuario (descarta cambios sin guardar) antes de salir del modo.
    `isEditing` se resetea a `false` en el mismo `effect()` que reinicia los
@@ -1221,8 +1234,8 @@ in-place, sin mover nada alrededor".
    `nz-date-picker` trabaja con `Date | null`, no ISO string — `parseIsoDate`/
    `toIsoDate`/`toIsoDateOrNull` (funciones locales en `user-detail.ts`) son
    las únicas que cruzan esa frontera, en los 2 sentidos (reset de forms al
-   entrar/cancelar, y al armar el payload de `updateInfo`/`updateOrganization`
-   antes de guardar).
+   entrar/cancelar, y al armar el payload de `updateUserProfile` antes de
+   guardar — ver punto 5).
 8. **Tags "sueltos" (`nz-tag` sin acción al lado) también van en
    `.info-field__value-row`**: "Estado de la cuenta" y "Autenticación de dos
    factores (2FA)" en "Seguridad de la cuenta" se estiraban al ancho
@@ -1252,7 +1265,7 @@ in-place, sin mover nada alrededor".
     antes se filtraría global. Con esto, cualquier botón nuevo con icono en
     estas 3 pantallas hereda la alineación automáticamente. Se completaron
     además los botones que tenían label pero NO icono (Eliminar usuario,
-    Guardar cambios ×2, Guardar permisos, Restablecer contraseña, Crear
+    Guardar cambios, Guardar permisos, Restablecer contraseña, Crear
     usuario) reutilizando SVGs ya existentes en el módulo cuando aplicaba
     (el candado de "Restablecer contraseña" es el mismo de la fila de
     acciones en `user-list`; el "+" de "Crear usuario" es el mismo de
@@ -1806,6 +1819,210 @@ estado de cuenta bancario completo.
   información). Se muestra con `nz-alert` (`nzType="error"`), formato
   "Línea N: motivo".
 
+## Patrón: refresh token de un solo uso + cambio obligatorio de contraseña + bloqueo por intentos fallidos
+
+Tres features de sesión, las tres dadas por contrato del backend (así llegan
+los datos/reglas, no son decisiones de este frontend). Las dos primeras se
+diseñaron sobre la especificación verbal del backend; la tercera se agregó
+después, al validar el diseño contra el contrato REAL y ya probado
+(`Auth_Service_Endpoints.pdf`, Coctel del Mar — Auth Service, endpoints y
+ejemplos reales contra Postgres) — ese mismo documento confirmó que el
+diseño de refreshToken/mustChangePassword ya construido coincidía punto por
+punto con el backend real, y reveló el bloqueo como la brecha funcional más
+concreta (HTTP 423, no estaba implementado en absoluto).
+
+> "Cada vez que usas el refreshToken para pedir un accessToken nuevo,
+> también te mando un refreshToken nuevo, y el anterior queda invalidado de
+> inmediato (de un solo uso)."
+>
+> `mustChangePassword`: booleano que activa el cambio obligatorio de
+> contraseña en el primer inicio de sesión.
+>
+> "Usuario bloqueado (5 intentos fallidos)" → HTTP 423 → "Usuario bloqueado
+> por intentos fallidos. Contacte al administrador."
+
+### RefreshToken (rotación de un solo uso)
+
+`AuthService` (`features/auth/data/auth.service.ts`) pasó de guardar solo
+`AuthUser` a guardar una `AuthSession` completa (`user` + `accessToken` +
+`refreshToken` + `accessTokenExpiresAt`), persistida igual que antes en
+`sessionStorage`. `features/auth/data/mock-token.util.ts` (`issueMockTokenPair`)
+simula al backend emitiendo el par — un contador + sufijo aleatorio, para que
+cada emisión sea distinta y la comparación de "¿es este el vigente?" (abajo)
+tenga sentido.
+
+1. **`ACCESS_TOKEN_TTL_MS` corto a propósito** (45s, no minutos como sería
+   real) — para poder OBSERVAR la rotación automática en una sesión de
+   prueba normal sin esperar. `REFRESH_MARGIN_MS` (8s) dispara la renovación
+   ANTES de que expire, no exactamente al vencer — mismo margen que usaría
+   un interceptor HTTP real.
+2. **Un solo `setTimeout` recursivo** (`scheduleRefresh`/`clearRefreshTimer`
+   en `AuthService`) — se reprograma a sí mismo en cada `setSession`
+   (login, refresh) y se limpia en `logout`. Lee la sesión FRESCA al
+   disparar (`this.session()`, no un valor capturado al programar) para no
+   depender de que solo exista un timer vivo a la vez, aunque en la
+   práctica siempre es así.
+3. **`refreshAccessToken(presentedRefreshToken)` valida contra el vigente,
+   no "siempre rota"**: si el token presentado NO coincide con
+   `session().refreshToken`, es un reuso de uno ya invalidado por una
+   rotación anterior — un backend real trataría eso como señal de robo de
+   token y cerraría la sesión POR COMPLETO (`logout()`), no solo rechazaría
+   esa llamada; mismo criterio aquí. El propio timer automático pasa por
+   este MISMO método (con el token vigente) — un solo camino de código para
+   "renovar", nunca una implementación separada para el caso automático vs.
+   uno manual/futuro (p. ej. un interceptor HTTP en un 401).
+4. **El `refreshToken` nunca sale de `AuthService`** — no hay getter
+   público para él (a diferencia de `accessToken`, sí expuesto en
+   `computed`, para el día que exista un interceptor que necesite mandar
+   `Authorization: Bearer <token>`). Nada fuera de este service debe
+   presentarlo directamente; mismo espíritu que un refreshToken real
+   viviendo en una cookie httpOnly que el JS de la página no puede leer.
+5. **`changePassword(currentPassword, newPassword)` vive en `AuthService`**
+   (no en `UserManagementService`) porque verifica/actualiza la MISMA lista
+   (`MOCK_USERS` de `auth-mock.data.ts`) que `login()` ya usa como fuente de
+   verdad de credenciales — mutación en el propio registro, mismo criterio
+   mock que el resto de la app (p. ej. `AuthService` ya mutaba sesión antes).
+   No toca `mustChangePassword` (ver abajo, por qué).
+
+### Cambio obligatorio de contraseña
+
+`mustChangePassword: boolean` vive en `AppUser` (`user-management.model.ts`),
+NO en `AuthUser`/`AuthSession` (`features/auth`) — aunque a primera vista
+parece "dato de sesión", es en realidad un ATRIBUTO DE SEGURIDAD del
+usuario, igual que `twoFactorEnabled`/`emailVerified`/`failedLoginAttempts`
+(mismo bloque de `AppUser`, ver "Seguridad y acceso" en `user-detail`), y
+`AuthService` debe seguir siendo "tonto" (ver "Patrón: control de acceso por
+rol" arriba) — no puede conocer `AppUser` sin arriesgar la dependencia
+circular que esa sección ya documentó.
+
+1. **`AccessControlService.mustChangePassword`** (computed, mismo patrón que
+   `hasPermission`/`homeRoute`) resuelve el cruce sesión+registro — es la
+   ÚNICA fuente que tanto los guards como `login.ts`/`ChangePassword`
+   consultan, nunca leen `AppUser.mustChangePassword` directo.
+2. **Dos guards, uno por sentido** (mismo criterio que
+   `authGuard`/`permissionGuard`, cada uno resuelve una dirección):
+   - `authGuard` (Shell, protege TODO lo de adentro): si
+     `access.mustChangePassword()`, redirige a `/cambiar-password` ANTES de
+     evaluar nada más — ni siquiera llega a que corra el `permissionGuard`
+     de la ruta hija (Angular evalúa guards de afuera hacia adentro), así
+     que el cambio obligatorio bloquea CUALQUIER pantalla, sin importar el
+     permiso que tenga el rol.
+   - `mustChangePasswordGuard` (`features/auth/data/must-change-password.guard.ts`,
+     solo en la ruta `/cambiar-password`): si NO hace falta, rebota a
+     `access.homeRoute()` — nadie debería poder visitarla por curiosidad ni
+     quedarse ahí tras completar el cambio.
+   Sin loop entre los dos: `/cambiar-password` vive FUERA del árbol de
+   `Shell` (ver siguiente punto), así que `authGuard` nunca se evalúa al
+   navegar hacia ella.
+3. **`/cambiar-password` fuera de Shell** (`app.routes.ts`, sibling de
+   `/login`, no child) — mismo criterio que login: es un paso de la puerta
+   de entrada, no una pantalla del menú; nadie debería ver header/menú
+   mientras esta obligación siga pendiente. `ChangePassword` (componente)
+   reutiliza los tokens/patrón visual de `login.scss` pero NO su layout de
+   dos paneles — una sola card centrada (`change-password.scss`), porque no
+   es la bienvenida a la app, es un paso intermedio obligatorio de una sola
+   tarea.
+4. **`login.ts` resuelve el destino post-login en el propio componente**,
+   no delega solo en el guard: `mustChangePassword` → `/cambiar-password`
+   directo; si no, `access.homeRoute()` — mismo "evitar el hop extra"  que
+   ya se documentó para `homeRoute()` en "Patrón: control de acceso por
+   rol" (el guard igual lo haría cumplir si se saltara este chequeo, pero
+   resolverlo aquí evita el viaje redondo en el caso más común).
+5. **Validación cruzada de campos con `nzErrorTip`: un gotcha real** —
+   `ChangePassword.form` NO usa un validator de GRUPO
+   (`fb.group(..., { validators: [...] })`) para "nueva ≠ actual" y
+   "confirmar == nueva". `nz-form-control`/`nzErrorTip` solo miran el
+   estado del control INDIVIDUAL que envuelven (vía `NzFormStatusService`,
+   atado al `NgControl` descendiente) — un validator de grupo deja
+   `form.invalid` en `true` (el botón sí se deshabilita correctamente) pero
+   NUNCA marca inválido al control hijo, así que el mensaje de error jamás
+   llega a mostrarse aunque la lógica sea correcta. La solución: los
+   validators se agregan en el CONSTRUCTOR (después de que `this.form`
+   exista) directo al control DEPENDIENTE (`newPassword.addValidators(...)`
+   comparando contra `currentPassword`; `confirmPassword.addValidators(...)`
+   comparando contra `newPassword`), más una suscripción a
+   `valueChanges` del control del que depende cada uno para forzar
+   `updateValueAndValidity()` — sin eso, escribir en `currentPassword` no
+   re-evalúa la validez de `newPassword` (Angular solo revalida un control
+   cuando SU PROPIO valor cambia). Aplicar este mismo patrón para
+   cualquier validación cruzada futura que necesite mostrarse con
+   `nzErrorTip` — nunca un validator de grupo si el mensaje debe aparecer
+   junto a un campo puntual.
+6. **`resetPassword`/`createUser` (`UserManagementService`) ponen
+   `mustChangePassword: true`** — una cuenta nueva o una contraseña
+   restablecida por un admin SIEMPRE fuerza el cambio en el siguiente
+   login, no es exclusivo del mock de demo de abajo.
+   `clearMustChangePassword(userId)` (nuevo método, sin entrada de
+   auditoría propia: el evento que importa, "Contraseña restablecida", ya
+   quedó registrado cuando se ORIGINÓ la obligación) la apaga tras un
+   cambio exitoso.
+7. **Una sola cuenta demo con el flag activo**: `u0018` (Gabriela Vargas,
+   cuenta `contabilidad`) — ver `user-management-mock.data.ts`, el
+   `.map()` que construye `MOCK_USERS` desde `MOCK_USERS_SEED` lo defaultea
+   a `false` para las 25 y lo prende SOLO para esa. `login.html` la marca
+   con "(pide cambiar contraseña)" en "Cuentas de demo" para que quien
+   pruebe la app sepa qué esperar sin tener que abrir el mock.
+
+### Bloqueo automático por intentos fallidos
+
+`AppUser.failedLoginAttempts`/`status: 'blocked'` ya existían como DATOS
+(incluso con usuarios mock sembrados a mitad de camino, p. ej. `u0016` con
+`failedLoginAttempts: 5`) desde antes de este cambio, pero nada en el login
+los leía ni los incrementaba — la brecha que reveló validar contra
+`Auth_Service_Endpoints.pdf`. `MAX_FAILED_LOGIN_ATTEMPTS` (`user-management.model.ts`,
+= 5) es el único número nuevo.
+
+1. **La orquestación vive en `Login` (componente), no en `AuthService` ni
+   en `UserManagementService` solos** — mismo criterio que
+   `ChangePassword` (ver arriba): la operación cruza las dos fuentes
+   (credenciales en `AuthService`, contador/estado en `AppUser`) y ninguna
+   de las dos puede depender de la otra (`AuthService` sigue "tonto"), así
+   que quien las cruza es el componente que ya inyecta ambas.
+   `AuthService.findAppUserIdForUsername(username)` (nuevo, sin
+   contraseña) resuelve el `appUserId` ANTES de intentar el login — hace
+   falta conocerlo tanto si el login falla (a quién sumarle el intento)
+   como si ni siquiera se intenta (cuenta ya bloqueada).
+2. **El bloqueo es de CUENTA, no de intento** — igual que el backend real:
+   una cuenta con `status === 'blocked'` se rechaza ANTES de verificar la
+   contraseña (`Login.onSubmit`, primer chequeo), así que ni siquiera la
+   contraseña CORRECTA entra mientras siga bloqueada. Verificado a mano:
+   tras el 5° intento fallido, el 6° intento con la contraseña BUENA sigue
+   mostrando "Usuario bloqueado...".
+3. **`UserManagementService.recordFailedLogin`/`clearFailedLogins`** —
+   simétricos a como ya funcionaba `resetPassword` (que también limpia el
+   contador). `recordFailedLogin` no hace nada si la cuenta YA está
+   bloqueada (no tiene sentido seguir sumando), y solo agrega entrada de
+   auditoría (`'blocked'`, `actorName: 'Sistema'` — nadie con sesión
+   causó esto) cuando el intento ES el que cruza el umbral, no en cada
+   intento fallido individual (eso sería ruido en el historial).
+   `clearFailedLogins` no tiene entrada propia: un login correcto no es un
+   evento de seguridad que reportar.
+4. **`resetPassword` ahora TAMBIÉN reactiva la cuenta si estaba bloqueada
+   por intentos** — antes solo limpiaba el contador, dejando `status`
+   intacto; con el bloqueo automático agregado, eso habría dejado sin
+   forma de recuperar una cuenta bloqueada más que el control manual de
+   "Estado de la cuenta". Ojo: NO reactiva una cuenta `inactive` (decisión
+   administrativa aparte, sin relación con intentos fallidos) — el `? :`
+   en `resetPassword` compara explícitamente contra `'blocked'`, no
+   "cualquier estado distinto de activo".
+5. **Copys alineados TEXTUAL con el PDF** (`login.ts`,
+   `INVALID_CREDENTIALS_MESSAGE`/`BLOCKED_MESSAGE`) — "Usuario o contraseña
+   inválidos." / "Usuario bloqueado por intentos fallidos. Contacte al
+   administrador.", no una paráfrasis propia. El día que esto se conecte al
+   backend real, la UI ya muestra las mismas palabras que verá cualquiera
+   probando la API directo.
+6. **Fuera de alcance a propósito** (se validó contra el PDF pero no se
+   construyó): distinguir "refresh token inválido/expirado" de "reutilizado"
+   con mensajes propios (nuestro mock no modela una expiración de
+   refreshToken separada de la rotación — ver sección de arriba, sigue
+   siendo la misma decisión) y notificar proactivamente al usuario si un
+   refresh en segundo plano fuerza un logout (hoy es silencioso, se
+   resuelve solo en el siguiente intento de navegación vía `authGuard`) —
+   ninguna de las dos tiene hoy un disparador real dentro de la app (no
+   hay interceptor HTTP todavía), así que se documentan como huecos
+   conocidos en vez de construir infraestructura para un caso que nada
+   dispara aún.
+
 ## Pendientes / deuda conocida al cerrar este módulo
 
 1. Borde de `nz-range-picker` no refleja `--color-border` (ver arriba).
@@ -1841,3 +2058,19 @@ estado de cuenta bancario completo.
    montos ya afinados de `sales-mock.data.ts` para seguir cumpliendo las
    invariantes de arriba, revisar los 4 archivos con `'MXN'`) que no se pidió
    explícitamente — pendiente si el negocio real es 100% colombiano.
+7. **Ningún estado de `UserManagementService` sobrevive una recarga dura de
+   página (F5/URL escrita a mano) — preexistente, no algo que haya
+   introducido `mustChangePassword`**: `usersSignal`/`auditLogSignal` se
+   inicializan desde el `MOCK_USERS`/`MOCK_AUDIT_LOG` importados en CADA
+   bootstrap de la app; los cambios en memoria (roles, estado,
+   `clearMustChangePassword`, lo que sea) no tocan esos arrays originales,
+   así que una recarga los pierde TODOS, no solo los de esta sesión — muy
+   fácil de confundir con un bug real al probar a mano (pasó verificando
+   este mismo módulo: navegar por URL en vez de por link/botón in-app hace
+   recarga dura y "revierte" el cambio recién hecho). `AuthService` es la
+   única excepción real: la sesión (tokens incluidos) y las credenciales de
+   `auth-mock.data.ts` (mutadas en el propio arreglo por `changePassword`,
+   no vía un signal re-derivado) sí sobreviven. Si algún día importa que
+   `user-management` persista entre recargas sin backend real, la solución
+   es la misma que ya usa `AuthService`: `sessionStorage`/`localStorage`,
+   no cambiar cómo se inicializan los signals.

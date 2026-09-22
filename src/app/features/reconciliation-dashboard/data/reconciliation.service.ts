@@ -122,8 +122,12 @@ export class ReconciliationService {
     this.tenderMediaFilter.set(filter);
   }
 
+  // El botón "x" del range-picker (y a veces un cambio a medias de fecha)
+  // emite un array truthy con huecos (`[undefined, undefined]`) en vez de
+  // `null` — normalizarlo aquí evita que `filteredItems` reciba un rango
+  // con `range[0]`/`range[1]` inválidos.
   setDateRange(range: DateRangeFilter): void {
-    this.dateRange.set(range);
+    this.dateRange.set(range && range[0] && range[1] ? range : null);
   }
 
   // "Desconciliar" — ver comentario de `dayGroups` arriba.

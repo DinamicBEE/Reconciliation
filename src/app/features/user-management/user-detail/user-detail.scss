@@ -93,12 +93,17 @@ nz-tabs,
   margin: 0 0 16px;
 }
 
-// Botón de guardar de cada sección editable — el `<form>` ya no es flex
-// (dejó de compartir `.user-form`, ver `.info-fields` abajo), así que solo
-// necesita separarse del grid de campos, sin `align-self` (no aplica fuera
-// de un contenedor flex).
-.tab-card__section-submit {
-  margin-top: 16px;
+// Barra de guardado ÚNICA para "Información general" — un solo botón para
+// las 2 secciones editables (Información personal + Organización, ver
+// user-detail.ts `onSaveProfile()`), no un botón por sección. Vive FUERA de
+// `.tab-card__sections` (hermano, no hijo — ver .html) para no heredar el
+// padding vertical de `.tab-card__section`; el propio `border-top` marca la
+// separación con el contenido de arriba, igual criterio que el hairline
+// entre secciones.
+.tab-card__save-bar {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
 }
 
 .user-form {

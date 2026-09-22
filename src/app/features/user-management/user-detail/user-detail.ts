@@ -323,7 +323,13 @@ export class UserDetail {
     this.draftPermissions.set(new Set(defaultPermissionsForRoles(roleIds)));
   }
 
-  protected onSaveInfo(): void {
+  // Un solo guardado para TODA "Información general" (datos personales +
+  // organización) — valida y envía los 2 `FormGroup` JUNTOS en una sola
+  // llamada al service (`updateUserProfile`), no una por sección. Solo
+  // `infoForm` tiene validadores propios (nombre/correo/teléfono
+  // requeridos); `orgForm` es enteramente opcional, así que basta con
+  // chequear la validez de `infoForm`.
+  protected onSaveProfile(): void {
     if (this.infoForm.invalid) {
       this.infoForm.markAllAsTouched();
       return;
@@ -331,23 +337,16 @@ export class UserDetail {
     const id = this.userId();
     if (!id) return;
 
-    const raw = this.infoForm.getRawValue();
-    this.service.updateInfo(id, { ...raw, birthDate: toIsoDate(raw.birthDate) });
-    this.message.success('Datos actualizados.');
-    this.isEditing.set(false);
-  }
-
-  protected onSaveOrganization(): void {
-    const id = this.userId();
-    if (!id) return;
-
-    const raw = this.orgForm.getRawValue();
-    this.service.updateOrganization(id, {
-      ...raw,
-      hireDate: toIsoDate(raw.hireDate),
-      contractEndDate: toIsoDateOrNull(raw.contractEndDate),
+    const info = this.infoForm.getRawValue();
+    const org = this.orgForm.getRawValue();
+    this.service.updateUserProfile(id, {
+      ...info,
+      ...org,
+      birthDate: toIsoDate(info.birthDate),
+      hireDate: toIsoDate(org.hireDate),
+      contractEndDate: toIsoDateOrNull(org.contractEndDate),
     });
-    this.message.success('Datos de organización actualizados.');
+    this.message.success('Datos actualizados.');
     this.isEditing.set(false);
   }
 

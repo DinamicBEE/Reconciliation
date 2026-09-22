@@ -17,6 +17,16 @@ function endOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999).getTime();
 }
 
+function isSameDay(a: Date, b: Date): boolean {
+  return startOfDay(a) === startOfDay(b);
+}
+
+// Tienda + día sobre los que actuaría el botón "Reprocesar" del toolbar.
+export interface ReprocessTarget {
+  date: Date;
+  store: Store;
+}
+
 /**
  * Estado de "Resumen de venta". Sin KPIs ni toggle día/mes (retirados) — la
  * tabla ahora es el catálogo completo de ventas, acotado por los 5 filtros
@@ -55,8 +65,12 @@ export class SalesDashboardService {
     });
   });
 
+  // El botón "x" del range-picker (y a veces un cambio a medias de fecha)
+  // emite un array truthy con huecos (`[undefined, undefined]`) en vez de
+  // `null` — normalizarlo aquí evita que `filteredSales`/`reprocessTarget`
+  // reciban un rango con `range[0]`/`range[1]` inválidos.
   setDateRange(range: DateRangeFilter): void {
-    this.dateRange.set(range);
+    this.dateRange.set(range && range[0] && range[1] ? range : null);
   }
 
   setStoreFilter(filter: StoreFilter): void {
@@ -73,6 +87,31 @@ export class SalesDashboardService {
 
   setSearch(value: string): void {
     this.search.set(value);
+  }
+
+  // Botón "Reprocesar" del toolbar: solo tiene sentido cuando los filtros
+  // acotan a UN día específico (mismo día de inicio/fin del range-picker, no
+  // un rango) Y una tienda específica (`storeFilter !== 'all'`) — reprocesar
+  // "todas las tiendas" o un rango de varios días no es la operación que
+  // pidió el botón. `null` cuando no se cumple, consumido directamente por
+  // `[disabled]` en la plantilla.
+  readonly reprocessTarget = computed<ReprocessTarget | null>(() => {
+    const range = this.dateRange();
+    const store = this.storeFilter();
+
+    if (!range || store === 'all' || !isSameDay(range[0], range[1])) {
+      return null;
+    }
+
+    return { date: range[0], store };
+  });
+
+  // Simula la llamada al backend del reproceso (ver docs/api-endpoints.csv,
+  // POST /sales/{store}/{date}/reprocess) — delay artificial + éxito, sin
+  // mutar `sales()`: el reproceso corre del lado del backend real, la tabla
+  // de este mock no tiene un estado "reprocesando" que reflejar.
+  reprocessDay(target: ReprocessTarget): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 1200));
   }
 
   openSale(sale: Sale): void {
