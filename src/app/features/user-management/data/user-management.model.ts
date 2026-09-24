@@ -95,6 +95,13 @@ export interface AppUser {
   failedLoginAttempts: number;
   twoFactorEnabled: boolean;
   activeSessions: number;
+  // true en la creación de la cuenta o tras un `resetPassword` (ver
+  // UserManagementService) — obliga a `ChangePassword` (/cambiar-password,
+  // fuera de Shell) antes de dejar entrar a cualquier pantalla del resto de
+  // la app, ver `authGuard`. Dato del backend real (así llega, mismo nombre
+  // de campo) — ver MASTER.md, "Patrón: refresh token de un solo uso +
+  // cambio obligatorio de contraseña".
+  mustChangePassword: boolean;
 
   // "Organización" — todos opcionales/editables en cualquier momento; no se
   // piden al crear la cuenta (ver CreateUserInput), se completan después.
@@ -115,6 +122,12 @@ export const GENDER_OPTIONS: string[] = ['Femenino', 'Masculino', 'Otro', 'Prefi
 // dominio que pida "Teléfono" (user-detail, profile) para no divergir de
 // criterio entre pantallas.
 export const PHONE_PATTERN = /^[+]?[0-9()\-\s]{7,20}$/;
+
+// Umbral de bloqueo automático por intentos fallidos de inicio de sesión —
+// dato del contrato real del backend (Auth_Service_Endpoints.pdf, "Usuario
+// bloqueado (5 intentos fallidos)"), no una decisión de este frontend. Ver
+// `UserManagementService.recordFailedLogin`/`Login.onSubmit`.
+export const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 
 export function fullName(user: Pick<AppUser, 'firstName' | 'lastName'>): string {
   return `${user.firstName} ${user.lastName}`.trim();

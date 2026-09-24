@@ -55,6 +55,29 @@
 
       <span class="toolbar__spacer"></span>
 
+      <!-- Solo se habilita con un día específico + una tienda específica
+           seleccionados (`service.reprocessTarget()`, ver
+           sales-dashboard.service.ts) — el <span> lleva el tooltip en vez del
+           <button> porque un botón `disabled` no dispara eventos de hover en
+           Ant Design; así el usuario ve por qué está deshabilitado. -->
+      <span
+        nz-tooltip
+        [nzTooltipTitle]="
+          service.reprocessTarget()
+            ? 'Reprocesar el día completo de la tienda seleccionada'
+            : 'Selecciona una fecha específica (un solo día) y una tienda para habilitar el reproceso'
+        "
+      >
+        <button nz-button type="button" [disabled]="!service.reprocessTarget()" (click)="onReprocessClick()">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20 20v-5h-5" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.6 15a8 8 0 0 0 14.4 3.4M19.4 9A8 8 0 0 0 5 5.6" />
+          </svg>
+          Reprocesar
+        </button>
+      </span>
+
       <button
         nz-button
         type="button"

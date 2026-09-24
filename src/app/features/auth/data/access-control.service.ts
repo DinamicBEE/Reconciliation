@@ -33,6 +33,12 @@ export class AccessControlService {
     () => new Set(this.currentAppUser()?.permissions ?? []),
   );
 
+  // Leído por `authGuard` (fuerza a `/cambiar-password` antes que cualquier
+  // otra ruta protegida) y por `mustChangePasswordGuard` (esa misma ruta,
+  // en sentido contrario) — ver MASTER.md, "Patrón: refresh token de un
+  // solo uso + cambio obligatorio de contraseña".
+  readonly mustChangePassword = computed(() => this.currentAppUser()?.mustChangePassword ?? false);
+
   hasPermission(key: PermissionKey): boolean {
     return this.permissions().has(key);
   }

@@ -9,6 +9,8 @@ import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzDrawerModule } from 'ng-zorro-antd/drawer';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
+import { NzMessageService } from 'ng-zorro-antd/message';
 import { SaleStatusTag } from '../../shared/components/sale-status-tag/sale-status-tag';
 import { MatchStatusTag } from '../../shared/components/match-status-tag/match-status-tag';
 import { ReconciliationStatusTag } from '../../shared/components/reconciliation-status-tag/reconciliation-status-tag';
@@ -44,6 +46,7 @@ import { buildSalesCsv } from './data/sale-export.util';
     NzDrawerModule,
     NzButtonModule,
     NzTooltipModule,
+    NzModalModule,
     SaleStatusTag,
     MatchStatusTag,
     ReconciliationStatusTag,
@@ -55,6 +58,8 @@ import { buildSalesCsv } from './data/sale-export.util';
 })
 export class SalesDashboard {
   protected readonly service = inject(SalesDashboardService);
+  private readonly modal = inject(NzModalService);
+  private readonly message = inject(NzMessageService);
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
   protected readonly storeLabel = STORE_LABEL;
   protected readonly personTypeLabel = PERSON_TYPE_LABEL;
@@ -187,5 +192,36 @@ export class SalesDashboard {
     link.download = `resumen-de-venta_${stamp}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  // Botón "Reprocesar" del toolbar — solo llega a ejecutarse cuando
+  // `service.reprocessTarget()` no es null (mismo guard que `[disabled]` en
+  // la plantilla: un día específico + una tienda específica seleccionados).
+  // `nzOnOk` como Promise dice a ng-zorro que deje el botón "Confirmar" en
+  // estado de carga hasta que resuelva — así se simula la conexión con el
+  // backend sin necesitar un spinner propio (mismo patrón de
+  // `modal.confirm()` que "Desconciliar" en reconciliation-dashboard.ts).
+  protected onReprocessClick(): void {
+    const target = this.service.reprocessTarget();
+    if (!target) return;
+
+    const dateLabel = this.formatDate(target.date);
+    const storeLabel = this.storeLabel[target.store];
+
+    this.modal.confirm({
+      nzTitle: 'Reprocesar día',
+      nzContent: `Estás a punto de reprocesar el día completo del <b>${dateLabel}</b> para <b>${storeLabel}</b>. Esto vuelve a ejecutar la conciliación de ese día para esa tienda.`,
+      nzOkText: 'Confirmar',
+      nzCancelText: 'Cancelar',
+      nzOnOk: () =>
+        this.service.reprocessDay(target).then(() => {
+          this.message.success(`${storeLabel} del ${dateLabel} se reprocesó correctamente.`);
+        }),
+    });
+  }
+
+  private formatDate(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
   }
 }

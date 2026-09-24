@@ -4,10 +4,12 @@ import { AppUser, AppUserAddress, AuditLogEntry } from './user-management.model'
 // adicional"/"Organización" agregados más tarde (fecha de nacimiento, SSN,
 // género, dirección, ID de empleado, fecha de contratación/fin de
 // contrato) — ver `extraProfileFields()` más abajo, que los completa por
-// índice en vez de escribirlos 25 veces a mano.
+// índice en vez de escribirlos 25 veces a mano. `mustChangePassword` tampoco
+// se declara por usuario aquí — se defaultea a `false` para los 25 al
+// construir `MOCK_USERS`, con UNA excepción a propósito (ver ese bloque).
 type MockUserSeed = Omit<
   AppUser,
-  'birthDate' | 'ssn' | 'gender' | 'address' | 'employeeId' | 'hireDate' | 'contractEndDate'
+  'birthDate' | 'ssn' | 'gender' | 'address' | 'employeeId' | 'hireDate' | 'contractEndDate' | 'mustChangePassword'
 >;
 
 // Incluye a 'u0001', 'u0006', 'u0011' y 'u0018' — los mismos 4 usuarios demo
@@ -638,6 +640,13 @@ function extraProfileFields(
 export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   ...seed,
   ...extraProfileFields(index, seed.createdAt),
+  // Solo 'u0018' (Gabriela Vargas — cuenta demo "contabilidad", ver
+  // auth-mock.data.ts) arranca con cambio obligatorio de contraseña, para
+  // poder probar ese flujo de "primer inicio de sesión" con una sola de las
+  // 4 cuentas demo sin forzarlo en las otras 3 (ver login.html, "Cuentas de
+  // demo", y MASTER.md "Patrón: refresh token de un solo uso + cambio
+  // obligatorio de contraseña").
+  mustChangePassword: seed.id === 'u0018',
 }));
 
 // Incluye una entrada para 'u0009', un usuario ELIMINADO que ya no existe en

@@ -174,7 +174,7 @@
                    cambia el NODO del valor, nunca el layout alrededor. -->
               <div class="tab-card__section">
                 <h3 class="tab-card__section-title">Información personal</h3>
-                <form [formGroup]="infoForm" (ngSubmit)="onSaveInfo()">
+                <form [formGroup]="infoForm">
                   <div class="info-personal">
                     <nz-avatar
                       nzShape="square"
@@ -479,16 +479,6 @@
                       }
                     </div>
                   </div>
-
-                  @if (isEditing()) {
-                    <button nz-button nzType="primary" type="submit" class="tab-card__section-submit">
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-8H7v8M7 3v5h8" />
-                      </svg>
-                      Guardar cambios
-                    </button>
-                  }
                 </form>
               </div>
 
@@ -496,7 +486,7 @@
                    aquí (ver MASTER.md). -->
               <div class="tab-card__section">
                 <h3 class="tab-card__section-title">Organización</h3>
-                <form [formGroup]="orgForm" (ngSubmit)="onSaveOrganization()">
+                <form [formGroup]="orgForm">
                   <div class="info-fields">
                     <div class="info-field">
                       <span class="info-field__head">
@@ -652,16 +642,6 @@
                       }
                     </div>
                   </div>
-
-                  @if (isEditing()) {
-                    <button nz-button nzType="primary" type="submit" class="tab-card__section-submit">
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-8H7v8M7 3v5h8" />
-                      </svg>
-                      Guardar cambios
-                    </button>
-                  }
                 </form>
               </div>
 
@@ -711,6 +691,24 @@
                 </div>
               </div>
             </div>
+
+            <!-- Un solo botón para AMBAS secciones editables (Información
+                 personal + Organización) — al guardar, se combinan los 2
+                 formularios y se envían juntos en una sola llamada
+                 (`onSaveProfile()` → `UserManagementService.updateUserProfile`),
+                 no por partes. "Cuenta" no tiene forma editable, así que no
+                 participa. -->
+            @if (isEditing()) {
+              <div class="tab-card__save-bar">
+                <button nz-button nzType="primary" type="button" (click)="onSaveProfile()">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-8H7v8M7 3v5h8" />
+                  </svg>
+                  Guardar cambios
+                </button>
+              </div>
+            }
           </nz-card>
         </nz-tab>
 

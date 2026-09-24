@@ -1,12 +1,22 @@
 import { Routes } from '@angular/router';
 import { Shell } from './core/layout/shell/shell';
 import { authGuard } from './features/auth/data/auth.guard';
+import { mustChangePasswordGuard } from './features/auth/data/must-change-password.guard';
 import { permissionGuard } from './features/auth/data/permission.guard';
 
 export const routes: Routes = [
   {
     path: 'login',
     loadComponent: () => import('./features/auth/login/login').then((m) => m.Login),
+  },
+  {
+    // Fuera de Shell (mismo criterio que /login) — ver change-password.scss.
+    // `authGuard` (Shell) empuja para acá cuando hace falta; este guard es
+    // la contraparte: exige que de verdad haga falta para poder entrar, y
+    // saca a cualquiera que llegue sin la sesión debida.
+    path: 'cambiar-password',
+    canActivate: [mustChangePasswordGuard],
+    loadComponent: () => import('./features/auth/change-password/change-password').then((m) => m.ChangePassword),
   },
   {
     path: '',
