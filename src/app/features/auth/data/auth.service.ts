@@ -1,5 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { MOCK_USERS } from './auth-mock.data';
+import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
+import { RoleId } from '../../user-management/data/user-management.model';
+import { MOCK_SUBSIDIARIAS, MOCK_UBICACIONES, MOCK_USERS } from './auth-mock.data';
 import { issueMockTokenPair } from './mock-token.util';
 
 const STORAGE_KEY = 'conciliation-auth';
@@ -23,6 +25,23 @@ export interface AuthUser {
   // Perfil lo usan para leer nombre/foto/rol desde `UserManagementService`
   // en vez de duplicarlos en `AuthUser`.
   appUserId: string;
+  // Misma forma que la sesión del login real (rama
+  // `feature/login-coctel-del-mar-integration`) para que
+  // `AccessControlService` y `CatalogService` no dependan de si la sesión es
+  // mock o real.
+  // Códigos de rol de la cuenta — fuente de permisos vía
+  // `defaultPermissionsForRoles` solo cuando no hay `AppUser` vinculado (ver
+  // AccessControlService.permissions); en el mock siempre lo hay.
+  roles: RoleId[];
+  // Equivalente a `UserSummaryDto.mustChangePassword` del login real. En el
+  // mock siempre `false`: la fuente de verdad del cambio obligatorio es
+  // `AppUser.mustChangePassword` del registro vinculado (ver
+  // AccessControlService.mustChangePassword).
+  mustChangePasswordHint: boolean;
+  // Subsidiarias/ubicaciones a las que la cuenta tiene acceso — fuente de
+  // `CatalogService` (`core/services/catalog.service.ts`).
+  subsidiarias: CatalogEntry[];
+  ubicaciones: CatalogEntry[];
 }
 
 // Todo lo que persiste entre recargas — antes solo se guardaba `AuthUser`;
@@ -99,6 +118,10 @@ export class AuthService {
       username: match.username,
       displayName: match.displayName,
       appUserId: match.appUserId,
+      roles: [...match.roles],
+      mustChangePasswordHint: false,
+      subsidiarias: MOCK_SUBSIDIARIAS,
+      ubicaciones: MOCK_UBICACIONES,
     };
     this.setSession({ user: authUser, ...issueMockTokenPair(match.username, ACCESS_TOKEN_TTL_MS) });
     return true;
@@ -195,10 +218,18 @@ export class AuthService {
     }
     try {
       const parsed = JSON.parse(raw) as Partial<AuthSession>;
-      // Forma antigua (antes de tokens: solo `AuthUser` suelto) o payload
-      // corrupto → sesión inválida, de vuelta a login en vez de arrancar a
-      // medias sin tokens que rotar.
-      if (!parsed.user || !parsed.accessToken || !parsed.refreshToken || !parsed.accessTokenExpiresAt) {
+      // Forma antigua (antes de tokens/roles/catálogos) o payload corrupto →
+      // sesión inválida, de vuelta a login en vez de arrancar a medias sin
+      // tokens que rotar ni catálogos que mostrar.
+      if (
+        !parsed.user ||
+        !parsed.user.roles ||
+        !parsed.user.subsidiarias ||
+        !parsed.user.ubicaciones ||
+        !parsed.accessToken ||
+        !parsed.refreshToken ||
+        !parsed.accessTokenExpiresAt
+      ) {
         return null;
       }
       return parsed as AuthSession;

@@ -1,23 +1,30 @@
 import { Injectable, computed, inject } from '@angular/core';
-import { AppUser, PermissionKey } from '../../user-management/data/user-management.model';
+import { AppUser, PermissionKey, defaultPermissionsForRoles } from '../../user-management/data/user-management.model';
 import { UserManagementService } from '../../user-management/data/user-management.service';
 import { AuthService } from './auth.service';
 
 /**
  * Resuelve QUÉ puede ver/hacer el usuario logeado — separado de `AuthService`
  * a propósito: `AuthService` es (y debe seguir siendo) "tonto", solo sabe
- * quién inició sesión (`AuthUser`, sin roles ni permisos, ver ese archivo).
- * `UserManagementService` ya depende de `AuthService` (para `actorName` en
- * auditoría) — si `AuthService` importara este servicio de vuelta para
- * resolver permisos, sería una dependencia circular. Este servicio vive
- * "por encima" de ambos: lee la sesión de uno y el registro completo del
- * otro, y de ahí deriva `permissions`.
+ * quién inició sesión (`AuthUser`, con sus códigos de rol pero sin
+ * permisos propios, ver ese archivo). `UserManagementService` ya depende de
+ * `AuthService` (para `actorName` en auditoría) — si `AuthService`
+ * importara este servicio de vuelta para resolver permisos, sería una
+ * dependencia circular. Este servicio vive "por encima" de ambos: lee la
+ * sesión de uno y el registro completo del otro, y de ahí deriva
+ * `permissions`.
  *
- * `permissions` lee `AppUser.permissions` (el set EFECTIVO, no
- * `defaultPermissionsForRoles(roleIds)`) porque un admin puede haber
- * ajustado a mano los permisos de un usuario por debajo/encima del default
- * de su rol (ver "Seguridad y acceso" en user-detail) — la sesión debe
- * respetar esa personalización, no recalcularla desde el rol.
+ * `permissions` tiene DOS fuentes, no una:
+ * 1. `AppUser.permissions` (el set EFECTIVO del registro mock vinculado,
+ *    cuando existe) — un admin puede haber ajustado a mano los permisos de
+ *    ESE usuario por debajo/encima del default de su rol (ver "Seguridad y
+ *    acceso" en user-detail); la sesión debe respetar esa personalización,
+ *    no recalcularla desde el rol.
+ * 2. `defaultPermissionsForRoles(auth.currentUser()?.roles)` — para una
+ *    sesión SIN `AppUser` vinculado (no pasa con las cuentas mock de esta
+ *    rama, pero sí con el login real, donde el registro de usuarios todavía
+ *    no se comparte con el auth-service): sin esta segunda fuente, quedaría
+ *    con `permissions: []` y `homeRoute()` la mandaría siempre a `/login`.
  */
 @Injectable({ providedIn: 'root' })
 export class AccessControlService {
@@ -29,15 +36,28 @@ export class AccessControlService {
     return id ? this.userMgmt.findUser(id) : null;
   });
 
-  readonly permissions = computed<ReadonlySet<PermissionKey>>(
-    () => new Set(this.currentAppUser()?.permissions ?? []),
-  );
+  readonly permissions = computed<ReadonlySet<PermissionKey>>(() => {
+    const appUser = this.currentAppUser();
+    if (appUser) {
+      return new Set(appUser.permissions);
+    }
+    return new Set(defaultPermissionsForRoles(this.auth.currentUser()?.roles ?? []));
+  });
 
   // Leído por `authGuard` (fuerza a `/cambiar-password` antes que cualquier
   // otra ruta protegida) y por `mustChangePasswordGuard` (esa misma ruta,
   // en sentido contrario) — ver MASTER.md, "Patrón: refresh token de un
   // solo uso + cambio obligatorio de contraseña".
-  readonly mustChangePassword = computed(() => this.currentAppUser()?.mustChangePassword ?? false);
+  //
+  // Dos fuentes, no una: `currentAppUser()?.mustChangePassword` (el registro
+  // de `user-management` vinculado a la sesión) OR
+  // `auth.currentUser()?.mustChangePasswordHint` (lo que devuelve el login,
+  // ver `AuthService`; en el mock siempre `false`) — una sesión sin
+  // `AppUser` vinculado solo tiene la segunda fuente, y aun así debe
+  // respetar el flag.
+  readonly mustChangePassword = computed(
+    () => (this.currentAppUser()?.mustChangePassword ?? false) || (this.auth.currentUser()?.mustChangePasswordHint ?? false),
+  );
 
   hasPermission(key: PermissionKey): boolean {
     return this.permissions().has(key);
@@ -52,9 +72,10 @@ export class AccessControlService {
     if (this.hasPermission('view_dashboard')) return '/dashboard';
     if (this.hasPermission('view_reconciliation')) return '/conciliacion';
     if (this.hasPermission('manage_users')) return '/usuarios';
-    // No debería pasar con los 4 roles actuales (todos tienen al menos un
-    // permiso) — si pasa (usuario con `permissions: []`), de vuelta a login
-    // en vez de un bucle de redirects entre rutas que tampoco puede ver.
+    // Pasa con `COSTOS` (sin módulo propio, ver `ROLES`) y con cualquier
+    // sesión sin `AppUser` vinculado y sin rol reconocido — de vuelta a
+    // login en vez de un bucle de redirects entre rutas que tampoco puede
+    // ver.
     return '/login';
   }
 }

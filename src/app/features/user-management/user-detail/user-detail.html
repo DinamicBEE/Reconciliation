@@ -138,6 +138,46 @@
 
           <div class="summary-field">
             <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 21V7l9-4 9 4v14" />
+              <path stroke-linecap="round" d="M9 21v-6h6v6" />
+            </svg>
+            <span class="summary-field__label">Subsidiaria:</span>
+            <nz-select
+              class="summary-field__control"
+              [ngModel]="createSubsidiariaId()"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="createSubsidiariaId.set($event)"
+              nzAllowClear
+              nzPlaceholder="Selecciona una subsidiaria"
+            >
+              @for (opt of catalog.subsidiarias(); track opt.id) {
+                <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="summary-field">
+            <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="9" width="18" height="12" rx="1" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 9 12 3l9 6" />
+            </svg>
+            <span class="summary-field__label">Ubicación:</span>
+            <nz-select
+              class="summary-field__control"
+              [ngModel]="createUbicacionId()"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="createUbicacionId.set($event)"
+              nzAllowClear
+              nzPlaceholder="Selecciona una ubicación"
+            >
+              @for (opt of catalog.ubicaciones(); track opt.id) {
+                <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="summary-field">
+            <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="9" />
               <path stroke-linecap="round" stroke-linejoin="round" d="M8.5 12.5l2.5 2.5 5-5" />
             </svg>
@@ -528,6 +568,52 @@
                       } @else {
                         @if (u.area) {
                           <span class="info-field__value">{{ u.area }}</span>
+                        } @else {
+                          <span class="info-field__value text-muted">Sin asignar</span>
+                        }
+                      }
+                    </div>
+
+                    <div class="info-field">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 21V7l9-4 9 4v14" />
+                          <path stroke-linecap="round" d="M9 21v-6h6v6" />
+                        </svg>
+                        <span class="info-field__label">Subsidiaria</span>
+                      </span>
+                      @if (isEditing()) {
+                        <nz-select class="info-field__input" formControlName="subsidiariaId" nzAllowClear nzPlaceholder="Selecciona una subsidiaria">
+                          @for (opt of catalog.subsidiarias(); track opt.id) {
+                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+                          }
+                        </nz-select>
+                      } @else {
+                        @if (catalog.findSubsidiaria(u.subsidiariaId); as s) {
+                          <span class="info-field__value">{{ s.nombre }}</span>
+                        } @else {
+                          <span class="info-field__value text-muted">Sin asignar</span>
+                        }
+                      }
+                    </div>
+
+                    <div class="info-field">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="9" width="18" height="12" rx="1" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 9 12 3l9 6" />
+                        </svg>
+                        <span class="info-field__label">Ubicación</span>
+                      </span>
+                      @if (isEditing()) {
+                        <nz-select class="info-field__input" formControlName="ubicacionId" nzAllowClear nzPlaceholder="Selecciona una ubicación">
+                          @for (opt of catalog.ubicaciones(); track opt.id) {
+                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+                          }
+                        </nz-select>
+                      } @else {
+                        @if (catalog.findUbicacion(u.ubicacionId); as ub) {
+                          <span class="info-field__value">{{ ub.nombre }}</span>
                         } @else {
                           <span class="info-field__value text-muted">Sin asignar</span>
                         }

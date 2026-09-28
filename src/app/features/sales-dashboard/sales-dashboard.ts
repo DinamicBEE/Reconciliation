@@ -15,7 +15,8 @@ import { SaleStatusTag } from '../../shared/components/sale-status-tag/sale-stat
 import { MatchStatusTag } from '../../shared/components/match-status-tag/match-status-tag';
 import { ReconciliationStatusTag } from '../../shared/components/reconciliation-status-tag/reconciliation-status-tag';
 import { ReconciliationStatus, TENDER_MEDIA_LABEL } from '../../shared/models/reconciliation-item.model';
-import { PERSON_TYPE_LABEL, Sale, STORE_LABEL, TAX_REGIME_LABEL } from '../../shared/models/sale.model';
+import { PERSON_TYPE_LABEL, Sale, STORE_LABEL, Store, TAX_REGIME_LABEL } from '../../shared/models/sale.model';
+import { CatalogService } from '../../core/services/catalog.service';
 import {
   DateRangeFilter,
   SalesDashboardService,
@@ -32,6 +33,13 @@ import {
   saleTotal as computeSaleTotal,
 } from './data/sale.util';
 import { buildSalesCsv } from './data/sale-export.util';
+
+// Lookup inverso de `STORE_LABEL` ("Sucursal Polanco" → 'polanco') — ver el
+// comentario de `storeOptions` en el componente sobre por qué existe este
+// puente por nombre en vez de usar el id numérico real de la ubicación.
+const LABEL_TO_STORE: Record<string, Store> = Object.fromEntries(
+  Object.entries(STORE_LABEL).map(([slug, label]) => [label, slug as Store]),
+);
 
 @Component({
   selector: 'app-sales-dashboard',
@@ -58,6 +66,7 @@ import { buildSalesCsv } from './data/sale-export.util';
 })
 export class SalesDashboard {
   protected readonly service = inject(SalesDashboardService);
+  private readonly catalog = inject(CatalogService);
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
@@ -65,13 +74,26 @@ export class SalesDashboard {
   protected readonly personTypeLabel = PERSON_TYPE_LABEL;
   protected readonly taxRegimeLabel = TAX_REGIME_LABEL;
 
-  protected readonly storeOptions: { value: StoreFilter; label: string }[] = [
-    { value: 'all', label: 'Todas las tiendas' },
-    { value: 'polanco', label: 'Sucursal Polanco' },
-    { value: 'condesa', label: 'Sucursal Condesa' },
-    { value: 'roma', label: 'Sucursal Roma' },
-    { value: 'centro', label: 'Sucursal Centro' },
-  ];
+  // Opciones del catálogo de la sesión (`CatalogService.ubicaciones()`, ver
+  // MASTER.md "Catálogos reales: subsidiaria/ubicación" — regla general
+  // para todo select de este tipo), no un array hardcodeado como antes.
+  // `Store` (el slug interno que usa el mock de ventas, `sale.model.ts`)
+  // sigue fijo — no hay backend real de ventas todavía, así que este mock
+  // no puede recibir ids numéricos de ubicación como valor de `Sale.store`.
+  // El puente es por NOMBRE: las 4 ubicaciones del catálogo (mock hoy, las
+  // sembradas en el backend real después) se llaman EXACTAMENTE igual que los 4 valores de `STORE_LABEL`
+  // ("Sucursal Polanco", etc.) — `LABEL_TO_STORE` hace el lookup inverso.
+  // Una ubicación real que el backend agregue/quite con un nombre que NO
+  // está en `STORE_LABEL` simplemente no aparece en el filtro (no hay datos
+  // mock para ella); el día que exista un backend real de ventas, `Store`
+  // pasa a ser el id numérico de la ubicación directamente, sin este mapeo.
+  protected readonly storeOptions = computed<{ value: StoreFilter; label: string }[]>(() => {
+    const known = this.catalog
+      .ubicaciones()
+      .filter((u) => LABEL_TO_STORE[u.nombre])
+      .map((u) => ({ value: LABEL_TO_STORE[u.nombre], label: u.nombre }));
+    return [{ value: 'all' as const, label: 'Todas las tiendas' }, ...known];
+  });
 
   // Mismo vocabulario/orden que reconciliation-dashboard.ts (statusOptions)
   // — "los mismos estados que los de la conciliación".

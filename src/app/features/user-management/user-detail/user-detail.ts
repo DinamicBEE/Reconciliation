@@ -34,6 +34,7 @@ import { UserManagementService } from '../data/user-management.service';
 import { AREAS, DEPARTMENTS, JOB_TITLES } from '../data/organization-catalog';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
+import { CatalogService } from '../../../core/services/catalog.service';
 
 // Agrupación estática de PERMISSIONS por `group` — se calcula una sola vez
 // al cargar el módulo (la lista de permisos no cambia en runtime), no en
@@ -93,6 +94,7 @@ export class UserDetail {
   readonly userId = input<string>();
 
   protected readonly service = inject(UserManagementService);
+  protected readonly catalog = inject(CatalogService);
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly message = inject(NzMessageService);
   private readonly modal = inject(NzModalService);
@@ -190,11 +192,18 @@ export class UserDetail {
     employeeId: this.fb.control(''),
     hireDate: this.fb.control<Date | null>(null),
     contractEndDate: this.fb.control<Date | null>(null),
+    subsidiariaId: this.fb.control<number | null>(null),
+    ubicacionId: this.fb.control<number | null>(null),
   });
 
   // --- Estado local de creación (solo aplica cuando isCreate()) ---
   protected readonly createRoleIds = signal<RoleId[]>([]);
   protected readonly createActive = signal(true);
+  // A diferencia del resto de "Organización" (que solo se pide editando, ver
+  // orgForm/onSaveProfile), subsidiaria/ubicación SÍ se piden al crear — ver
+  // AppUser.subsidiariaId/.ubicacionId.
+  protected readonly createSubsidiariaId = signal<number | null>(null);
+  protected readonly createUbicacionId = signal<number | null>(null);
 
   // --- Borrador de "Seguridad y acceso" (solo aplica editando un usuario existente) ---
   protected readonly draftRoleIds = signal<RoleId[]>([]);
@@ -239,6 +248,8 @@ export class UserDetail {
           employeeId: found.employeeId,
           hireDate: parseIsoDate(found.hireDate),
           contractEndDate: parseIsoDate(found.contractEndDate),
+          subsidiariaId: found.subsidiariaId,
+          ubicacionId: found.ubicacionId,
         });
         this.draftRoleIds.set([...found.roleIds]);
         this.draftPermissions.set(new Set(found.permissions));
@@ -253,9 +264,21 @@ export class UserDetail {
           gender: '',
           address: { city: '', state: '', zipCode: '', street1: '', street2: null, exteriorNumber: '', interiorNumber: null },
         });
-        this.orgForm.reset({ department: '', area: '', jobTitle: '', managerId: null, employeeId: '', hireDate: null, contractEndDate: null });
+        this.orgForm.reset({
+          department: '',
+          area: '',
+          jobTitle: '',
+          managerId: null,
+          employeeId: '',
+          hireDate: null,
+          contractEndDate: null,
+          subsidiariaId: null,
+          ubicacionId: null,
+        });
         this.createRoleIds.set([]);
         this.createActive.set(true);
+        this.createSubsidiariaId.set(null);
+        this.createUbicacionId.set(null);
         this.draftRoleIds.set([]);
         this.draftPermissions.set(new Set());
       }
@@ -294,6 +317,8 @@ export class UserDetail {
         employeeId: user.employeeId,
         hireDate: parseIsoDate(user.hireDate),
         contractEndDate: parseIsoDate(user.contractEndDate),
+        subsidiariaId: user.subsidiariaId,
+        ubicacionId: user.ubicacionId,
       });
     }
     this.isEditing.set(false);
@@ -455,6 +480,8 @@ export class UserDetail {
       phone,
       roleIds: this.createRoleIds(),
       status: this.createActive() ? 'active' : 'inactive',
+      subsidiariaId: this.createSubsidiariaId(),
+      ubicacionId: this.createUbicacionId(),
     });
     this.message.success(`Usuario ${fullName(user)} creado.`);
     this.router.navigate(['/usuarios', user.id]);
