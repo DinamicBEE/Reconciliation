@@ -19,7 +19,7 @@
         [ngModel]="service.storeFilter()"
         (ngModelChange)="onStoreFilterChange($event)"
       >
-        @for (opt of storeOptions; track opt.value) {
+        @for (opt of storeOptions(); track opt.value) {
           <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
         }
       </nz-select>

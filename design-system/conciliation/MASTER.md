@@ -2088,17 +2088,149 @@ resto de esta sección siguen vigentes tal cual.
    simulación); un error de red/conexión (status 0, p. ej. el stack de
    Docker no está levantado) muestra un mensaje aparte, no "usuario
    inválido".
-6. **Roles/permisos del backend real NO se usan todavía** —
-   `UserSummaryDto.roles`/`.permissions` llegan en la respuesta de login
-   pero se descartan: el catálogo de permisos de coctel-del-mar (`app_role`/
-   `app_permission`, ver `V2__auth_schema.sql`) no tiene filas sembradas
-   hoy y sus códigos de rol (`ADMIN`/`ALTAS`/`CONTABILIDAD`/`TESORERIA`/
-   `COSTOS`) no coinciden con los de este frontend (`superadmin`/`admin`/
-   `contabilidad`/`tesoreria`, ver `RoleId`). Usarlos directo habría dejado
-   sin permisos (y por lo tanto sin acceso a ninguna pantalla, ver
-   `homeRoute()`) a cualquier cuenta real sin match en el mock. Pendiente
-   de retomar cuando exista un backend de administración de usuarios con un
-   catálogo de permisos alineado a los 4 roles de este frontend.
+6. **`UserSummaryDto.permissions` del backend real NO se usa** — el
+   catálogo de permisos (`app_permission`/`app_role_permission`) no tiene
+   filas sembradas en ningún backend probado hasta ahora, así que esa lista
+   siempre llega vacía. `UserSummaryDto.roles` SÍ se usa — ver siguiente
+   actualización.
+
+### Actualización: unificación de roles con el backend real
+
+`RoleId` (`user-management.model.ts`) dejó de ser un vocabulario inventado
+por este frontend (`superadmin`/`admin`/`contabilidad`/`tesoreria`) y pasó a
+ser EXACTAMENTE los códigos que siembra el backend real (`app_role.code`,
+ver `V1__init_schema.sql`/`V2__auth_schema.sql` de coctel-del-mar/coctel_midd):
+`'ADMIN' | 'ALTAS' | 'CONTABILIDAD' | 'TESORERIA' | 'COSTOS'`. Motivo: antes
+de esto, CUALQUIER cuenta autenticada por el backend real que no tuviera un
+`AppUser` mock vinculado por email (ver `UserManagementService.findUserByEmail`)
+quedaba con `permissions: []` — sin acceso a ninguna pantalla — porque no
+había forma de traducir su rol real a algo que este frontend reconociera.
+
+1. **Mapeo 1:1, no una traducción con lógica propia** — `admin` (frontend
+   viejo, "Administrador — solo Administración de usuarios") pasó a
+   `ALTAS` (backend, "Encargado de altas de usuarios") por ser la
+   descripción más cercana; `superadmin` pasó a `ADMIN`. `contabilidad`/
+   `tesoreria` ya coincidían en significado, solo cambiaron de
+   mayúsculas/minúsculas. `COSTOS` (quinto rol del backend, sin
+   equivalente previo) se agregó a `ROLES` con `defaultPermissions: []` a
+   propósito — no se inventó a qué pantalla debería dar acceso; una cuenta
+   solo-`COSTOS` se autentica igual, pero `homeRoute()` la manda a
+   `/login` por falta de permisos, mismo criterio que cualquier cuenta sin
+   permisos reconocidos.
+2. **`AuthUser.roles` (nuevo campo, `AuthService`)** — copia tal cual
+   `UserSummaryDto.roles` de la respuesta de `/auth/login`, cast a
+   `RoleId[]` sin validar en runtime (si el backend agrega un código nuevo
+   que este frontend no conoce, simplemente no aporta permisos, ver
+   `defaultPermissionsForRoles`).
+3. **`AccessControlService.permissions` ahora tiene DOS fuentes** (antes
+   una sola, el `AppUser` mock): si hay `currentAppUser()` vinculado (match
+   por email), se usa su `permissions` EFECTIVO tal cual (respeta ajustes
+   manuales de un admin, ver "Seguridad y acceso" en user-detail); si NO
+   hay match, se calculan los defaults del rol real
+   (`defaultPermissionsForRoles(auth.currentUser()?.roles)`). Esto es lo
+   que ahora permite que CUALQUIER cuenta del backend real (no solo las 4
+   de demo con email coincidente) aterrice en la pantalla correcta según su
+   rol real, sin necesitar un registro en el mock de `user-management`.
+4. **Las 25 filas de `user-management-mock.data.ts` se renombraron** —
+   mismo `roleIds` semántico, nuevo código (`superadmin`→`ADMIN`,
+   `admin`→`ALTAS`, `contabilidad`→`CONTABILIDAD`, `tesoreria`→`TESORERIA`).
+   Ninguna fila usa `COSTOS` (no había equivalente en el set anterior).
+5. **Las 4 cuentas demo del login mock (rama feature/header-layout-component,
+   `auth-mock.data.ts`, ya eliminado) se sembraron en el backend real** vía
+   SQL directo contra el contenedor de Postgres corriendo (`crypt()`+
+   `gen_salt('bf')` para el hash bcrypt) — NUNCA como archivo/migración en
+   el repo del backend, para no modificarlo: `admin@conciliacion.mx` /
+   `Conciliacion2026` (ADMIN), `carlos.medina@conciliacion.mx` /
+   `Administrador2026` (ALTAS), `roberto.sanchez@conciliacion.mx` /
+   `Tesoreria2026` (TESORERIA), `gabriela.vargas@conciliacion.mx` /
+   `Contabilidad2026` (CONTABILIDAD, con `mustChangePassword: true` — la
+   misma que ya lo tenía en el mock). Es un dato de RUNTIME del contenedor
+   Postgres (se pierde si se hace `docker compose down -v`), no algo que
+   viva en ningún repo — hay que re-ejecutar el script si el volumen se
+   recrea.
+
+### Actualización: desbloqueo de cuenta + catálogos reales de subsidiaria/ubicación
+
+Dos piezas nuevas del backend real conectadas al frontend — cambio de
+backend a "coctel_midd" (rama `feature/login`, sucesor de coctel-del-mar,
+mismo contrato): el endpoint de desbloqueo (`PATCH /users/{id}/unlock`,
+CU3 paso 5) y las listas `subsidiarias`/`ubicaciones` que ya venían en
+`UserSummaryDto` pero no se usaban (ver punto 6 de la actualización
+anterior).
+
+**Desbloqueo de cuenta**
+
+1. **`AuthService.unlockUser(backendUserId)`** — `PATCH /users/{id}/unlock`
+   con `Authorization: Bearer <accessToken>`, requiere que la sesión activa
+   tenga rol `ADMIN` o `ALTAS` (`SecurityConfig.hasAnyRole` en el
+   auth-service real; 403 si no alcanza). `backendUserId` es el id NUMÉRICO
+   del `app_user` real, no ningún id de este frontend — ver siguiente punto.
+2. **`AppUser.backendUserId`** (nuevo campo, `user-management.model.ts`) —
+   puente hacia el `app_user.id` real, solo para las 4 cuentas demo
+   sembradas en el backend (ver `BACKEND_USER_ID` en
+   `user-management-mock.data.ts`); `null` para el resto. Sin este puente
+   no hay forma de saber a qué cuenta REAL corresponde un registro de este
+   mock — no existe un `GET /users` que permita resolverlo al vuelo.
+3. **"Desbloquear cuenta" (`UserDetail`, sección "Cuenta") es un botón
+   APARTE del chip "Estado"** — a propósito, NO condicionado a que
+   `u.status === 'blocked'`: ese `status` es del registro MOCK y ya no
+   refleja el bloqueo real desde que el login dejó de simular intentos
+   fallidos localmente (ver actualización anterior, punto 5); el backend no
+   expone un `GET` para consultar si una cuenta real sigue bloqueada, solo
+   el propio `PATCH` para desbloquearla. El botón solo aparece cuando
+   `u.backendUserId` no es `null`.
+4. **Probado end-to-end por la UI real** (no solo por API): formulario de
+   login con la contraseña incorrecta 5 veces seguidas sobre una cuenta
+   demo → "Usuario bloqueado por intentos fallidos" (423 real); login como
+   `admin@conciliacion.mx` (rol `ADMIN`) → `UserDetail` de la cuenta
+   bloqueada → "Desbloquear cuenta" → confirmar → `PATCH .../unlock` 200 →
+   logout → login de nuevo con la cuenta antes bloqueada, contraseña
+   correcta → entra sin problema.
+
+**Catálogos reales: subsidiaria/ubicación**
+
+> REGLA GENERAL, aplica a cualquier select NUEVO que se agregue de aquí en
+> adelante: si el campo representa una SUBSIDIARIA (negocio, marca,
+> empresa) o una UBICACIÓN (tienda, store, punto de venta, sucursal), sus
+> opciones se llenan desde `CatalogService` (`core/services/catalog.service.ts`,
+> `subsidiarias()`/`ubicaciones()`) — nunca un array hardcodeado ni un enum
+> propio de este frontend. `CatalogService` deriva de `AuthService`
+> (mismo criterio que `AccessControlService`): las listas son las que trajo
+> el `/auth/login` de la sesión ACTUAL, no un catálogo global — el backend
+> no expone hoy un `GET /subsidiarias`/`GET /ubicaciones` suelto.
+
+1. **`AuthUser.subsidiarias`/`.ubicaciones`** (nuevo, `AuthService`) — copia
+   tal cual `UserSummaryDto.subsidiarias`/`.ubicaciones` (`{id, nombre}[]`,
+   ver `CatalogEntry` en `shared/models/catalog-entry.model.ts`) de la
+   respuesta de login. `CatalogService` solo las expone vía `computed()`,
+   no duplica el estado (mismo patrón que `AccessControlService.currentAppUser`).
+2. **`AppUser.subsidiariaId`/`.ubicacionId`** (nuevo, single-select) — a
+   diferencia del resto de "Organización" (departamento/área/puesto,
+   tampoco multi-valor), SÍ se piden al crear un usuario (`CreateUserInput`),
+   no solo al editar. El backend real modela acceso a VARIAS
+   subsidiarias/ubicaciones por persona (`empleado_subsidiaria`/
+   `empleado_ubicacion`, relación N:M) — esta pantalla simplifica a una
+   sola de cada una, mismo criterio de simplicidad que ya usaba el resto de
+   esa sección.
+3. **`sales-dashboard`: el filtro "Tienda" ahora lee sus opciones de
+   `CatalogService.ubicaciones()`**, no del array hardcodeado que tenía
+   antes — pero el VALOR interno (`Store`, `sale.model.ts`, el slug
+   `'polanco'|'condesa'|'roma'|'centro'` que usan las 25+ ventas del mock)
+   se queda igual: no hay backend real de ventas todavía, así que el mock
+   no puede recibir ids numéricos de ubicación como valor de `Sale.store`.
+   El puente es por NOMBRE (`LABEL_TO_STORE`, lookup inverso de
+   `STORE_LABEL`) — las 4 ubicaciones sembradas en el backend real se
+   llaman EXACTAMENTE "Sucursal Polanco"/etc., igual que `STORE_LABEL`. El
+   día que exista un backend real de ventas, `Store` pasa a ser el id
+   numérico de la ubicación directamente y este mapeo por nombre
+   desaparece.
+4. **Datos de runtime sembrados** (SQL directo, no migración — mismo
+   criterio que las 4 cuentas demo): 1 subsidiaria ("Conciliación
+   Bancaria") + 4 ubicaciones con esos mismos 4 nombres, y las 4 cuentas
+   demo vinculadas a la subsidiaria y a las 4 ubicaciones (acceso amplio a
+   propósito, son cuentas de demostración). Se pierde con
+   `docker compose down -v`, igual que las 4 cuentas — hay que re-sembrar
+   ambos scripts si el volumen se recrea.
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

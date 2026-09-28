@@ -34,6 +34,9 @@ import { UserManagementService } from '../data/user-management.service';
 import { AREAS, DEPARTMENTS, JOB_TITLES } from '../data/organization-catalog';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
+import { CatalogService } from '../../../core/services/catalog.service';
+import { AuthService } from '../../auth/data/auth.service';
+import { HttpErrorResponse } from '@angular/common/http';
 
 // Agrupación estática de PERMISSIONS por `group` — se calcula una sola vez
 // al cargar el módulo (la lista de permisos no cambia en runtime), no en
@@ -93,6 +96,8 @@ export class UserDetail {
   readonly userId = input<string>();
 
   protected readonly service = inject(UserManagementService);
+  protected readonly catalog = inject(CatalogService);
+  private readonly auth = inject(AuthService);
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly message = inject(NzMessageService);
   private readonly modal = inject(NzModalService);
@@ -190,11 +195,18 @@ export class UserDetail {
     employeeId: this.fb.control(''),
     hireDate: this.fb.control<Date | null>(null),
     contractEndDate: this.fb.control<Date | null>(null),
+    subsidiariaId: this.fb.control<number | null>(null),
+    ubicacionId: this.fb.control<number | null>(null),
   });
 
   // --- Estado local de creación (solo aplica cuando isCreate()) ---
   protected readonly createRoleIds = signal<RoleId[]>([]);
   protected readonly createActive = signal(true);
+  // A diferencia del resto de "Organización" (que solo se pide editando, ver
+  // orgForm/onSaveProfile), subsidiaria/ubicación SÍ se piden al crear — ver
+  // AppUser.subsidiariaId/.ubicacionId.
+  protected readonly createSubsidiariaId = signal<number | null>(null);
+  protected readonly createUbicacionId = signal<number | null>(null);
 
   // --- Borrador de "Seguridad y acceso" (solo aplica editando un usuario existente) ---
   protected readonly draftRoleIds = signal<RoleId[]>([]);
@@ -239,6 +251,8 @@ export class UserDetail {
           employeeId: found.employeeId,
           hireDate: parseIsoDate(found.hireDate),
           contractEndDate: parseIsoDate(found.contractEndDate),
+          subsidiariaId: found.subsidiariaId,
+          ubicacionId: found.ubicacionId,
         });
         this.draftRoleIds.set([...found.roleIds]);
         this.draftPermissions.set(new Set(found.permissions));
@@ -253,9 +267,21 @@ export class UserDetail {
           gender: '',
           address: { city: '', state: '', zipCode: '', street1: '', street2: null, exteriorNumber: '', interiorNumber: null },
         });
-        this.orgForm.reset({ department: '', area: '', jobTitle: '', managerId: null, employeeId: '', hireDate: null, contractEndDate: null });
+        this.orgForm.reset({
+          department: '',
+          area: '',
+          jobTitle: '',
+          managerId: null,
+          employeeId: '',
+          hireDate: null,
+          contractEndDate: null,
+          subsidiariaId: null,
+          ubicacionId: null,
+        });
         this.createRoleIds.set([]);
         this.createActive.set(true);
+        this.createSubsidiariaId.set(null);
+        this.createUbicacionId.set(null);
         this.draftRoleIds.set([]);
         this.draftPermissions.set(new Set());
       }
@@ -294,6 +320,8 @@ export class UserDetail {
         employeeId: user.employeeId,
         hireDate: parseIsoDate(user.hireDate),
         contractEndDate: parseIsoDate(user.contractEndDate),
+        subsidiariaId: user.subsidiariaId,
+        ubicacionId: user.ubicacionId,
       });
     }
     this.isEditing.set(false);
@@ -414,6 +442,48 @@ export class UserDetail {
     });
   }
 
+  // CU3 paso 5: desbloquea la cuenta REAL en el backend (`PATCH
+  // /users/{id}/unlock`, ver AuthService.unlockUser) — solo visible cuando
+  // `user.backendUserId` no es null (una de las 4 cuentas demo sembradas
+  // ahí, ver BACKEND_USER_ID en user-management-mock.data.ts). Sin
+  // relación con el botón "Cambiar estado" de arriba: ESE mueve el
+  // `status` de este registro MOCK, que ya no reflejaba el bloqueo real
+  // desde que el login dejó de simular intentos fallidos localmente (ver
+  // MASTER.md, "Actualización: login apuntado al backend real") — no hay
+  // endpoint para CONSULTAR el estado real (solo para desbloquear), así que
+  // este botón siempre está disponible para una cuenta con `backendUserId`,
+  // no solo cuando "se ve" bloqueada.
+  protected onUnlockBackendClick(): void {
+    const user = this.user();
+    if (!user?.backendUserId) return;
+    const backendUserId = user.backendUserId;
+
+    this.modal.confirm({
+      nzTitle: 'Desbloquear cuenta (backend real)',
+      nzContent: `¿Desbloquear en el backend real la cuenta de <b>${fullName(user)}</b> (id ${backendUserId})? Aplica si quedó bloqueada tras 5 intentos fallidos de inicio de sesión.`,
+      nzOkText: 'Desbloquear',
+      nzOnOk: () =>
+        new Promise<void>((resolve, reject) => {
+          this.auth.unlockUser(backendUserId).subscribe({
+            next: () => {
+              this.message.success('Cuenta desbloqueada en el backend real.');
+              resolve();
+            },
+            error: (err: HttpErrorResponse) => {
+              const text =
+                err.status === 403
+                  ? 'Tu sesión no tiene el rol necesario (ADMIN o ALTAS) para desbloquear cuentas.'
+                  : err.status === 404
+                    ? 'El backend no encontró esa cuenta (id ' + backendUserId + ').'
+                    : 'No se pudo conectar con el servidor. Intenta de nuevo.';
+              this.message.error(text);
+              reject();
+            },
+          });
+        }),
+    });
+  }
+
   protected onDeleteClick(): void {
     const user = this.user();
     if (!user) return;
@@ -455,6 +525,8 @@ export class UserDetail {
       phone,
       roleIds: this.createRoleIds(),
       status: this.createActive() ? 'active' : 'inactive',
+      subsidiariaId: this.createSubsidiariaId(),
+      ubicacionId: this.createUbicacionId(),
     });
     this.message.success(`Usuario ${fullName(user)} creado.`);
     this.router.navigate(['/usuarios', user.id]);

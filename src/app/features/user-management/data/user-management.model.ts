@@ -8,15 +8,19 @@
 
 export type UserStatus = 'active' | 'inactive' | 'blocked';
 
-// 4 roles, cada uno con acceso a un módulo EXCLUYENTE de la app (ver `ROLES`
-// abajo) — a diferencia del set anterior (admin/supervisor/analista/
-// auditor, permisos superpuestos dentro de un mismo módulo de conciliación),
-// estos 4 delimitan PANTALLAS completas, no solo acciones dentro de una:
-// `superadmin` ve todo, y los otros 3 ven solo su propio módulo
-// (Administración de usuarios / Resumen de venta / Conciliación bancaria).
-// Aplicado por `permissionGuard` (`features/auth/data/permission.guard.ts`)
-// sobre las rutas en `app.routes.ts`.
-export type RoleId = 'superadmin' | 'admin' | 'contabilidad' | 'tesoreria';
+// Códigos TAL CUAL los sembró coctel-del-mar/coctel_midd (`app_role.code`,
+// ver V1__init_schema.sql / V2__auth_schema.sql de esos repos y
+// `UserSummaryDto.roles` en /auth/login) — el backend es la fuente de
+// verdad de qué roles EXISTEN; este frontend ya no inventa los suyos (ver
+// MASTER.md, "Actualización: unificación de roles con el backend real").
+// Cada uno con acceso a un módulo EXCLUYENTE de la app (ver `ROLES` abajo):
+// `ADMIN` ve todo, `ALTAS`/`CONTABILIDAD`/`TESORERIA` ven solo su propio
+// módulo (Administración de usuarios / Resumen de venta / Conciliación
+// bancaria), y `COSTOS` no tiene todavía una pantalla propia en esta app
+// (ver su entrada en `ROLES`, `defaultPermissions: []`). Aplicado por
+// `permissionGuard` (`features/auth/data/permission.guard.ts`) sobre las
+// rutas en `app.routes.ts`.
+export type RoleId = 'ADMIN' | 'ALTAS' | 'CONTABILIDAD' | 'TESORERIA' | 'COSTOS';
 
 export type PermissionKey =
   | 'view_dashboard'
@@ -112,6 +116,25 @@ export interface AppUser {
   employeeId: string; // ID empleado
   hireDate: string; // ISO date — Fecha de contratación
   contractEndDate: string | null; // ISO date — Fecha fin de contrato; null = contrato indefinido
+  // Subsidiaria (negocio/marca/empresa) y ubicación (tienda/store/punto de
+  // venta/sucursal) — a diferencia del resto de "Organización", SÍ se piden
+  // al crear la cuenta (ver CreateUserInput). `id` numérico porque referencia
+  // el catálogo REAL del backend (`CatalogService`, `core/services/`), no un
+  // valor propio de este mock — `null` = sin asignar. El backend modela
+  // acceso a VARIAS subsidiarias/ubicaciones por persona (`empleado_subsidiaria`/
+  // `empleado_ubicacion`, tablas de relación); esta pantalla simplifica a UNA
+  // sola de cada una, mismo criterio de single-select que el resto de esta
+  // sección (departamento/área/puesto tampoco son multi-valor aquí).
+  subsidiariaId: number | null;
+  ubicacionId: number | null;
+  // Id del `app_user` REAL en el backend (`AppUser.id` allá, un Long) — solo
+  // presente para las 4 cuentas demo sembradas ahí (ver
+  // `AuthService.unlockBackendUser`/`UserDetail.onUnlockBackendClick`); el
+  // resto de este mock (21 usuarios sin cuenta real) lo deja en `null`. NO
+  // confundir con `AppUser.id` (el id 'uXXXX' de ESTE registro mock) ni con
+  // `AuthUser.appUserId` (que apunta al revés, del `AuthUser` de sesión hacia
+  // este mismo `AppUser.id`).
+  backendUserId: number | null;
 }
 
 // Género — lista cerrada (mismo criterio que STATUS_OPTIONS/ROLE_OPTIONS):
@@ -175,8 +198,8 @@ export interface AuditLogEntry {
 
 export const ROLES: RoleDef[] = [
   {
-    id: 'superadmin',
-    label: 'Superadministrador',
+    id: 'ADMIN',
+    label: 'Administrador',
     description: 'Acceso total a todas las pantallas y funcionalidades de la aplicación.',
     defaultPermissions: [
       'view_dashboard',
@@ -190,22 +213,33 @@ export const ROLES: RoleDef[] = [
     ],
   },
   {
-    id: 'admin',
-    label: 'Administrador',
+    id: 'ALTAS',
+    label: 'Encargado de altas',
     description: 'Acceso exclusivo al módulo de Administración de usuarios y sus funcionalidades.',
     defaultPermissions: ['manage_users', 'manage_roles', 'view_audit_log'],
   },
   {
-    id: 'contabilidad',
+    id: 'CONTABILIDAD',
     label: 'Contabilidad',
     description: 'Acceso exclusivo al Resumen de venta y sus funcionalidades.',
     defaultPermissions: ['view_dashboard'],
   },
   {
-    id: 'tesoreria',
+    id: 'TESORERIA',
     label: 'Tesorería',
     description: 'Acceso exclusivo a Conciliación bancaria y sus funcionalidades.',
     defaultPermissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
+  },
+  {
+    id: 'COSTOS',
+    label: 'Costos',
+    // Rol real del backend (coctel_midd) sin pantalla propia todavía en esta
+    // app — `defaultPermissions: []` a propósito, no un guess de qué debería
+    // ver: un usuario solo-COSTOS se autentica igual, pero `homeRoute()` lo
+    // manda a `/login` por falta de permisos (mismo criterio que cualquier
+    // cuenta sin match de permisos, ver AccessControlService.homeRoute()).
+    description: 'Rol del backend sin módulo propio asignado todavía en esta aplicación.',
+    defaultPermissions: [],
   },
 ];
 
@@ -261,16 +295,18 @@ export const ROLE_OPTIONS: { value: RoleId; label: string }[] = ROLES.map((r) =>
 
 // Roles considerados "responsables" a efectos de "Administrador responsable"
 // (Organización) — cualquier AppUser con al menos uno de estos roles puede
-// elegirse como responsable de otro. Contabilidad/Tesorería quedan fuera a
-// propósito: son roles de un solo módulo operativo, no de gestión de personas.
-export const MANAGER_ROLE_IDS: RoleId[] = ['superadmin', 'admin'];
+// elegirse como responsable de otro. Contabilidad/Tesorería/Costos quedan
+// fuera a propósito: son roles de un solo módulo operativo (o sin módulo
+// propio, ver COSTOS en `ROLES`), no de gestión de personas.
+export const MANAGER_ROLE_IDS: RoleId[] = ['ADMIN', 'ALTAS'];
 
 // `group` ahora nombra la PANTALLA/módulo al que pertenece cada permiso
 // (antes eran buckets genéricos "Consulta/Operación/Administración") — con
-// los 4 roles nuevos siendo cada uno dueño exclusivo de un módulo completo
-// (ver `ROLES`), agrupar por pantalla hace que el grid de "Permisos" en
-// "Seguridad y acceso" (user-detail) se lea directo: cada columna = un
-// módulo = lo que un rol de este set puede tocar.
+// 4 de los 5 roles (ver `ROLES`; `COSTOS` es la excepción, sin módulo propio)
+// siendo cada uno dueño exclusivo de un módulo completo, agrupar por
+// pantalla hace que el grid de "Permisos" en "Seguridad y acceso"
+// (user-detail) se lea directo: cada columna = un módulo = lo que un rol de
+// este set puede tocar.
 export const PERMISSIONS: PermissionDef[] = [
   { key: 'view_dashboard', label: 'Ver resumen de venta', group: 'Resumen de venta' },
   { key: 'view_reconciliation', label: 'Ver conciliación', group: 'Conciliación bancaria' },

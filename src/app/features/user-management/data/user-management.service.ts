@@ -28,6 +28,11 @@ export interface CreateUserInput {
   phone: string;
   roleIds: RoleId[];
   status: UserStatus;
+  // A diferencia del resto de "Organización", sí se piden al crear (ver
+  // AppUser.subsidiariaId/.ubicacionId) — catálogo REAL del backend
+  // (CatalogService), no un valor propio de este mock.
+  subsidiariaId: number | null;
+  ubicacionId: number | null;
 }
 
 // Datos personales SOLOS (sin organización) — el único que necesita
@@ -72,6 +77,8 @@ export interface UpdateUserProfileInput {
   employeeId: string;
   hireDate: string;
   contractEndDate: string | null;
+  subsidiariaId: number | null;
+  ubicacionId: number | null;
 }
 
 // El siguiente id debe ser mayor al de CUALQUIER id 'uN' ya usado, no solo
@@ -276,6 +283,13 @@ export class UserManagementService {
       employeeId: '',
       hireDate: '',
       contractEndDate: null,
+      // A diferencia del resto de "Organización" (arriba), sí se piden al
+      // crear — ver CreateUserInput.
+      subsidiariaId: input.subsidiariaId,
+      ubicacionId: input.ubicacionId,
+      // Cuenta nueva de este mock, sin equivalente en el backend real todavía
+      // (no hay endpoint de alta de usuarios ahí, ver MASTER.md).
+      backendUserId: null,
     };
 
     this.usersSignal.update((list) => [user, ...list]);
@@ -348,6 +362,8 @@ export class UserManagementService {
       employeeId: input.employeeId.trim(),
       hireDate: input.hireDate,
       contractEndDate: input.contractEndDate,
+      subsidiariaId: input.subsidiariaId,
+      ubicacionId: input.ubicacionId,
     };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
     this.appendAudit(updated, 'updated', 'Se actualizó información personal y de organización.');

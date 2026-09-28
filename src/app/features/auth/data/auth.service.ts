@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, map, throwError } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
+import { RoleId } from '../../user-management/data/user-management.model';
 
 const STORAGE_KEY = 'conciliation-auth';
 
@@ -12,16 +14,30 @@ export interface AuthUser {
   // esta misma persona — ver `UserManagementService.findUserByEmail`, que lo
   // resuelve por email tras un login exitoso (`Login.onSubmit`). `null`
   // cuando no hay match: no existe todavía un backend de administración de
-  // usuarios que comparta el mismo registro que coctel-del-mar, así que solo
-  // las cuentas de demo (mismo email que las sembradas ahí) quedan
+  // usuarios que comparta el mismo registro que el auth-service real, así
+  // que solo las cuentas de demo (mismo email que las sembradas ahí) quedan
   // vinculadas — el resto se autentica igual, pero Header/Perfil no tienen
-  // de dónde leer nombre/foto/rol (ver AccessControlService.currentAppUser).
+  // de dónde leer foto/organización (ver AccessControlService.currentAppUser).
   appUserId: string | null;
-  // Copia de `UserSummaryDto.mustChangePassword` (coctel-del-mar) tal como
-  // la devolvió el login — fuente de verdad además de/ante la del `AppUser`
-  // vinculado (ver AccessControlService.mustChangePassword): el backend real
-  // ya la sabe aunque el email no tenga match en `user-management`.
+  // Códigos de rol TAL CUAL los devolvió el backend (`UserSummaryDto.roles`,
+  // p. ej. `['ADMIN']`) — fuente de verdad para permisos vía
+  // `defaultPermissionsForRoles` (ver AccessControlService.permissions), NO
+  // los ids inventados por este frontend (ver MASTER.md, "Actualización:
+  // unificación de roles con el backend real"). Vacío si el backend no
+  // asignó ningún rol.
+  roles: RoleId[];
+  // Copia de `UserSummaryDto.mustChangePassword` tal como la devolvió el
+  // login — fuente de verdad además de/ante la del `AppUser` vinculado (ver
+  // AccessControlService.mustChangePassword): el backend real ya la sabe
+  // aunque el email no tenga match en `user-management`.
   mustChangePasswordHint: boolean;
+  // Subsidiarias/ubicaciones a las que ESTA cuenta tiene acceso, tal cual
+  // las devolvió el login (`UserSummaryDto.subsidiarias`/`.ubicaciones`) —
+  // fuente de los catálogos reales que consume `CatalogService`
+  // (`core/services/catalog.service.ts`). Vacías si el backend no le
+  // asignó ninguna.
+  subsidiarias: CatalogEntry[];
+  ubicaciones: CatalogEntry[];
 }
 
 interface AuthSession {
@@ -31,17 +47,16 @@ interface AuthSession {
   accessTokenExpiresAt: number; // epoch ms
 }
 
-// DTOs del contrato real — ver coctel-del-mar/auth-service
-// (AuthController + web/dto/*), también documentado en
-// docs/api-endpoints.csv ("Login").
+// DTOs del contrato real — ver auth-service (AuthController + web/dto/*),
+// también documentado en docs/api-endpoints.csv ("Login").
 interface UserSummaryDto {
   id: number;
   email: string;
   displayName: string;
   roles: string[];
   permissions: string[];
-  subsidiariaId: number | null;
-  ubicacionId: number | null;
+  subsidiarias: CatalogEntry[];
+  ubicaciones: CatalogEntry[];
   mustChangePassword: boolean;
 }
 
@@ -67,17 +82,21 @@ interface TokenPairResponseDto {
 export interface LoginResult {
   email: string;
   displayName: string;
+  roles: RoleId[];
   mustChangePassword: boolean;
+  subsidiarias: CatalogEntry[];
+  ubicaciones: CatalogEntry[];
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
 }
 
 /**
- * Sesión + autenticación contra el backend real (coctel-del-mar/auth-service,
- * vía el gateway en `environment.apiUrl` — ver docker-compose.yml de ese
- * repo). `providedIn: 'root'` porque el guard de rutas y la pantalla de
- * login lo necesitan fuera del árbol de `Shell`.
+ * Sesión + autenticación contra el backend real (auth-service, vía el
+ * gateway en `environment.apiUrl`/`proxy.conf.json` — ver MASTER.md,
+ * "Actualización: login apuntado al backend real"). `providedIn: 'root'`
+ * porque el guard de rutas y la pantalla de login lo necesitan fuera del
+ * árbol de `Shell`.
  *
  * Contrato de refreshToken (dado por el backend): al usarlo para pedir un
  * accessToken nuevo, el backend manda TAMBIÉN un refreshToken nuevo, y el
@@ -122,7 +141,15 @@ export class AuthService {
       map((res) => ({
         email: res.user.email,
         displayName: res.user.displayName,
+        // Cast sin validar: si el backend algún día agrega un código de rol
+        // que este frontend todavía no conoce, se cuela como string suelto
+        // y simplemente no aporta permisos (`defaultPermissionsForRoles`
+        // ignora ids que no están en `ROLES`) — no hay validación en
+        // runtime en ningún otro punto de este service tampoco.
+        roles: res.user.roles as RoleId[],
         mustChangePassword: res.user.mustChangePassword,
+        subsidiarias: res.user.subsidiarias,
+        ubicaciones: res.user.ubicaciones,
         accessToken: res.accessToken,
         refreshToken: res.refreshToken,
         expiresIn: res.expiresIn,
@@ -138,7 +165,10 @@ export class AuthService {
       username: result.email,
       displayName: result.displayName,
       appUserId,
+      roles: result.roles,
       mustChangePasswordHint: result.mustChangePassword,
+      subsidiarias: result.subsidiarias,
+      ubicaciones: result.ubicaciones,
     };
     this.setSession({
       user,
@@ -198,6 +228,26 @@ export class AuthService {
     );
   }
 
+  // CU3 paso 5: desbloquea una cuenta bloqueada por intentos fallidos
+  // (`PATCH /users/{id}/unlock`, ver UserAdminController/UserAdminService en
+  // el auth-service real). Requiere sesión activa con rol ADMIN o ALTAS —
+  // el backend responde 403 si el rol no alcanza, 401 si el token no es
+  // válido; el llamador (`UserDetail`) traduce el error a la UI. `id` es el
+  // id NUMÉRICO del `app_user` real (`AppUser.backendUserId` en el mock de
+  // `user-management` — no el id 'uXXXX' del mock), NO `AuthUser.appUserId`
+  // (que es el id del registro LOCAL, no del backend).
+  unlockUser(backendUserId: number): Observable<void> {
+    const accessToken = this.session()?.accessToken;
+    if (!accessToken) {
+      return throwError(() => new Error('unlockUser requiere una sesión activa.'));
+    }
+    return this.http.patch<void>(
+      `${this.apiUrl}/users/${backendUserId}/unlock`,
+      {},
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+  }
+
   private setSession(session: AuthSession): void {
     this.session.set(session);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
@@ -224,8 +274,8 @@ export class AuthService {
   // Si NO coincide con el vigente en la sesión, es un intento de reusar uno
   // ya invalidado por una rotación anterior: cierra la sesión localmente sin
   // llamar al backend (mismo criterio que un robo de token detectado ahí —
-  // ver AuthService.refresh en coctel-del-mar, que además cierra TODAS las
-  // sesiones activas de la cuenta). Si el backend rechaza el refresh por
+  // ver AuthService.refresh en el auth-service real, que además cierra
+  // TODAS las sesiones activas de la cuenta). Si el backend rechaza el refresh por
   // cualquier otra razón (expirado, backend caído), también cierra sesión:
   // no tiene sentido dejar un timer corriendo sobre una sesión que ya no se
   // puede renovar.
@@ -268,12 +318,15 @@ export class AuthService {
     }
     try {
       const parsed = JSON.parse(raw) as Partial<AuthSession>;
-      // Forma antigua (antes de tokens/mustChangePasswordHint, o payload
-      // corrupto) → sesión inválida, de vuelta a login en vez de arrancar a
-      // medias sin tokens que rotar.
+      // Forma antigua (antes de tokens/mustChangePasswordHint/roles/
+      // catálogos, o payload corrupto) → sesión inválida, de vuelta a login
+      // en vez de arrancar a medias sin tokens que rotar.
       if (
         !parsed.user ||
         parsed.user.mustChangePasswordHint === undefined ||
+        !parsed.user.roles ||
+        !parsed.user.subsidiarias ||
+        !parsed.user.ubicaciones ||
         !parsed.accessToken ||
         !parsed.refreshToken ||
         !parsed.accessTokenExpiresAt

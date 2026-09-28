@@ -7,9 +7,21 @@ import { AppUser, AppUserAddress, AuditLogEntry } from './user-management.model'
 // índice en vez de escribirlos 25 veces a mano. `mustChangePassword` tampoco
 // se declara por usuario aquí — se defaultea a `false` para los 25 al
 // construir `MOCK_USERS`, con UNA excepción a propósito (ver ese bloque).
+// `subsidiariaId`/`ubicacionId`/`backendUserId` (catálogo real + puente al
+// backend) tampoco — mismo criterio, ver el `.map()` de más abajo.
 type MockUserSeed = Omit<
   AppUser,
-  'birthDate' | 'ssn' | 'gender' | 'address' | 'employeeId' | 'hireDate' | 'contractEndDate' | 'mustChangePassword'
+  | 'birthDate'
+  | 'ssn'
+  | 'gender'
+  | 'address'
+  | 'employeeId'
+  | 'hireDate'
+  | 'contractEndDate'
+  | 'mustChangePassword'
+  | 'subsidiariaId'
+  | 'ubicacionId'
+  | 'backendUserId'
 >;
 
 // Incluye a 'u0001', 'u0006', 'u0011' y 'u0018' — los mismos 4 usuarios demo
@@ -36,7 +48,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-01-10T09:00:00',
     lastAccessAt: '2026-08-27T09:14:00',
-    roleIds: ['superadmin'],
+    roleIds: ['ADMIN'],
     permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'manage_users', 'manage_roles', 'view_audit_log'],
     emailVerified: true,
     lastActivityAt: '2026-08-27T09:40:00',
@@ -58,7 +70,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-01-10T09:05:00',
     lastAccessAt: '2026-08-27T08:02:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-08-27T08:20:00',
@@ -80,7 +92,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-03-02T10:00:00',
     lastAccessAt: '2026-08-26T18:40:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-08-26T19:00:00',
@@ -102,7 +114,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-05-14T09:30:00',
     lastAccessAt: '2026-08-27T07:55:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-08-27T08:10:00',
@@ -126,7 +138,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'blocked',
     createdAt: '2025-06-20T09:00:00',
     lastAccessAt: '2026-07-30T11:20:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-07-30T11:45:00',
@@ -148,7 +160,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-09-01T09:00:00',
     lastAccessAt: '2026-08-20T10:00:00',
-    roleIds: ['admin'],
+    roleIds: ['ALTAS'],
     permissions: ['manage_users', 'manage_roles', 'view_audit_log'],
     emailVerified: true,
     lastActivityAt: '2026-08-20T10:30:00',
@@ -170,7 +182,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2026-08-24T15:20:00',
     lastAccessAt: null,
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: false,
     lastActivityAt: null,
@@ -192,7 +204,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'inactive',
     createdAt: '2025-11-11T09:00:00',
     lastAccessAt: '2026-05-02T09:00:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-05-02T09:20:00',
@@ -218,7 +230,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-02-03T09:00:00',
     lastAccessAt: '2026-08-25T10:05:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-08-25T10:30:00',
@@ -240,7 +252,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-02-10T09:00:00',
     lastAccessAt: '2026-08-24T16:20:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-08-24T16:45:00',
@@ -262,7 +274,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-02-18T09:00:00',
     lastAccessAt: '2026-08-22T11:10:00',
-    roleIds: ['admin'],
+    roleIds: ['ALTAS'],
     permissions: ['manage_users', 'manage_roles', 'view_audit_log'],
     emailVerified: true,
     lastActivityAt: '2026-08-22T11:30:00',
@@ -284,7 +296,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'inactive',
     createdAt: '2025-03-05T09:00:00',
     lastAccessAt: '2026-03-15T09:40:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-03-15T10:00:00',
@@ -306,7 +318,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2026-08-20T14:00:00',
     lastAccessAt: null,
-    roleIds: ['contabilidad'],
+    roleIds: ['CONTABILIDAD'],
     permissions: ['view_dashboard'],
     emailVerified: false,
     lastActivityAt: null,
@@ -328,7 +340,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-04-02T09:00:00',
     lastAccessAt: '2026-08-21T08:50:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-08-21T09:10:00',
@@ -350,7 +362,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'blocked',
     createdAt: '2025-04-18T09:00:00',
     lastAccessAt: '2026-06-10T13:00:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-06-10T13:25:00',
@@ -372,7 +384,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-05-06T09:00:00',
     lastAccessAt: '2026-08-19T15:15:00',
-    roleIds: ['admin'],
+    roleIds: ['ALTAS'],
     permissions: ['manage_users', 'manage_roles', 'view_audit_log'],
     emailVerified: true,
     lastActivityAt: '2026-08-19T15:35:00',
@@ -394,7 +406,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-05-22T09:00:00',
     lastAccessAt: '2026-08-18T09:00:00',
-    roleIds: ['contabilidad'],
+    roleIds: ['CONTABILIDAD'],
     permissions: ['view_dashboard'],
     emailVerified: true,
     lastActivityAt: '2026-08-18T09:20:00',
@@ -416,7 +428,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'inactive',
     createdAt: '2025-06-09T09:00:00',
     lastAccessAt: '2026-02-14T10:00:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-02-14T10:20:00',
@@ -438,7 +450,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-06-25T09:00:00',
     lastAccessAt: '2026-08-26T12:00:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-08-26T12:20:00',
@@ -460,7 +472,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-07-14T09:00:00',
     lastAccessAt: '2026-08-17T14:40:00',
-    roleIds: ['admin'],
+    roleIds: ['ALTAS'],
     permissions: ['manage_users', 'manage_roles', 'view_audit_log'],
     emailVerified: true,
     lastActivityAt: '2026-08-17T15:00:00',
@@ -482,7 +494,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2026-08-22T11:00:00',
     lastAccessAt: null,
-    roleIds: ['contabilidad'],
+    roleIds: ['CONTABILIDAD'],
     permissions: ['view_dashboard'],
     emailVerified: false,
     lastActivityAt: null,
@@ -504,7 +516,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'blocked',
     createdAt: '2025-08-11T09:00:00',
     lastAccessAt: '2026-05-28T08:30:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-05-28T08:55:00',
@@ -526,7 +538,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-09-05T09:00:00',
     lastAccessAt: '2026-08-23T17:05:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-08-23T17:30:00',
@@ -548,7 +560,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'inactive',
     createdAt: '2025-09-21T09:00:00',
     lastAccessAt: '2026-01-30T09:15:00',
-    roleIds: ['tesoreria'],
+    roleIds: ['TESORERIA'],
     permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
     emailVerified: true,
     lastActivityAt: '2026-01-30T09:40:00',
@@ -570,7 +582,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     status: 'active',
     createdAt: '2025-10-08T09:00:00',
     lastAccessAt: '2026-08-16T10:45:00',
-    roleIds: ['admin'],
+    roleIds: ['ALTAS'],
     permissions: ['manage_users', 'manage_roles', 'view_audit_log'],
     emailVerified: true,
     lastActivityAt: '2026-08-16T11:05:00',
@@ -640,6 +652,17 @@ function extraProfileFields(
   };
 }
 
+// Puente de las 4 cuentas demo hacia su `app_user.id` REAL en el backend
+// (ver docker exec directo contra Postgres al sembrarlas — MASTER.md,
+// "Actualización: unificación de roles con el backend real") — el resto de
+// este mock (21 usuarios sin cuenta real) no tiene equivalente, `null`.
+const BACKEND_USER_ID: Partial<Record<string, number>> = {
+  u0001: 2, // admin@conciliacion.mx
+  u0006: 3, // carlos.medina@conciliacion.mx
+  u0011: 4, // roberto.sanchez@conciliacion.mx
+  u0018: 5, // gabriela.vargas@conciliacion.mx
+};
+
 export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   ...seed,
   ...extraProfileFields(index, seed.createdAt),
@@ -650,6 +673,14 @@ export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   // demo", y MASTER.md "Patrón: refresh token de un solo uso + cambio
   // obligatorio de contraseña").
   mustChangePassword: seed.id === 'u0018',
+  // La única subsidiaria real sembrada hoy (id 1, "Conciliación Bancaria")
+  // para los 25; ubicación varía por índice entre las 4 reales sembradas
+  // (ids 1-4) solo para dar variedad visible en la UI — ninguno de los 21
+  // usuarios sin cuenta real tiene esto verificado contra el backend, es
+  // puramente decorativo para ellos.
+  subsidiariaId: 1,
+  ubicacionId: (index % 4) + 1,
+  backendUserId: BACKEND_USER_ID[seed.id] ?? null,
 }));
 
 // Incluye una entrada para 'u0009', un usuario ELIMINADO que ya no existe en
