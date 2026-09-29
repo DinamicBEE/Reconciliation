@@ -15,7 +15,8 @@ import { SaleStatusTag } from '../../shared/components/sale-status-tag/sale-stat
 import { MatchStatusTag } from '../../shared/components/match-status-tag/match-status-tag';
 import { ReconciliationStatusTag } from '../../shared/components/reconciliation-status-tag/reconciliation-status-tag';
 import { ReconciliationStatus, TENDER_MEDIA_LABEL } from '../../shared/models/reconciliation-item.model';
-import { PERSON_TYPE_LABEL, Sale, STORE_LABEL, Store, TAX_REGIME_LABEL } from '../../shared/models/sale.model';
+import { Sale, STORE_LABEL, Store } from '../../shared/models/sale.model';
+import { COUNTRY_PROFILE } from '../../core/country/active-country';
 import { CatalogService } from '../../core/services/catalog.service';
 import {
   DateRangeFilter,
@@ -25,14 +26,15 @@ import {
   TenderMediaFilter,
 } from './data/sales-dashboard.service';
 import {
-  dianQueryUrl as computeDianQueryUrl,
   saleReconciliationStatus,
   saleSubtotal as computeSaleSubtotal,
   saleTaxAmount as computeSaleTaxAmount,
   saleTaxableBase,
+  saleTaxLines,
   saleTotal as computeSaleTotal,
 } from './data/sale.util';
 import { buildSalesCsv } from './data/sale-export.util';
+import { MoneyPipe } from '../../core/country/money.pipe';
 
 // Lookup inverso de `STORE_LABEL` ("Sucursal Polanco" → 'polanco') — ver el
 // comentario de `storeOptions` en el componente sobre por qué existe este
@@ -45,6 +47,7 @@ const LABEL_TO_STORE: Record<string, Store> = Object.fromEntries(
   selector: 'app-sales-dashboard',
   imports: [
     CommonModule,
+    MoneyPipe,
     FormsModule,
     NzCardModule,
     NzTableModule,
@@ -71,8 +74,10 @@ export class SalesDashboard {
   private readonly message = inject(NzMessageService);
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
   protected readonly storeLabel = STORE_LABEL;
-  protected readonly personTypeLabel = PERSON_TYPE_LABEL;
-  protected readonly taxRegimeLabel = TAX_REGIME_LABEL;
+  // Vocabulario fiscal y general del país activo (`environment.country`):
+  // tipo de persona, régimen, comprobante (CFDI / factura electrónica),
+  // RFC / NIT, impuestos y el nombre del punto de venta.
+  protected readonly country = inject(COUNTRY_PROFILE);
 
   // Opciones REALES del backend (`CatalogService.ubicaciones()`, ver
   // MASTER.md "Catálogos reales: subsidiaria/ubicación" — regla general
@@ -92,7 +97,7 @@ export class SalesDashboard {
       .ubicaciones()
       .filter((u) => LABEL_TO_STORE[u.nombre])
       .map((u) => ({ value: LABEL_TO_STORE[u.nombre], label: u.nombre }));
-    return [{ value: 'all' as const, label: 'Todas las tiendas' }, ...known];
+    return [{ value: 'all' as const, label: this.country.vocabulary.allLocations }, ...known];
   });
 
   // Mismo vocabulario/orden que reconciliation-dashboard.ts (statusOptions)
@@ -129,6 +134,7 @@ export class SalesDashboard {
     return {
       subtotal: computeSaleSubtotal(sale),
       taxableBase: saleTaxableBase(sale),
+      taxLines: saleTaxLines(sale),
       taxAmount: computeSaleTaxAmount(sale),
       total: computeSaleTotal(sale),
     };
@@ -186,10 +192,11 @@ export class SalesDashboard {
     return saleReconciliationStatus(sale);
   }
 
-  // Enlace de consulta del CUFE en el catálogo público de la DIAN —
-  // "Documento electrónico" del Drawer ("Consultar en la DIAN").
-  protected dianQueryUrl(sale: Sale): string {
-    return computeDianQueryUrl(sale.invoice);
+  // Enlace de consulta del comprobante ante la autoridad del país —
+  // verificador de CFDI del SAT (por UUID) o catálogo público de la DIAN
+  // (por CUFE).
+  protected fiscalQueryUrl(sale: Sale): string {
+    return this.country.invoice.queryUrl(sale.invoice.fiscalId);
   }
 
   // Botón "Exportar" del toolbar — exporta lo que los 5 filtros están
@@ -199,6 +206,7 @@ export class SalesDashboard {
   // acentos (nombres de cliente, "Sucursal ...") al abrirlo directamente.
   protected exportCsv(): void {
     const csv = buildSalesCsv(this.service.filteredSales(), {
+      location: this.country.vocabulary.location,
       store: this.storeLabel,
       tenderMedia: this.tenderMediaLabel,
       status: this.statusLabel,

@@ -267,9 +267,12 @@ export class UserManagementService {
       failedLoginAttempts: 0,
       twoFactorEnabled: false,
       activeSessions: 0,
-      // Cuenta nueva → contraseña inicial asignada por un admin, igual que
-      // tras un `resetPassword` — debe cambiarla en su primer login.
+      // Cuenta nueva → contraseña inicial GENERADA POR EL BACKEND (acuerdo con
+      // backend: la devuelve en `temporaryPassword` al consultar el detalle).
+      // El alta todavía no llama a `POST /users`, así que este mock hace de
+      // backend y la genera aquí. Debe cambiarla en su primer login.
       mustChangePassword: true,
+      temporaryPassword: generateTempPassword(),
       // No se piden al crear — se completan después editando el detalle (ver
       // UpdateUserInfoInput/UpdateOrganizationInput y sus respectivos update*).
       birthDate: '',
@@ -449,12 +452,14 @@ export class UserManagementService {
       failedLoginAttempts: 0,
       status: user.status === 'blocked' ? 'active' : user.status,
       mustChangePassword: true,
+      // Reemplaza la temporal anterior (la del alta, si seguía vigente) — así
+      // "Organización" nunca muestra una contraseña que ya no sirve.
+      temporaryPassword: generateTempPassword(),
     };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
 
-    const tempPassword = generateTempPassword();
     this.appendAudit(updated, 'password_reset', 'Se generó una nueva contraseña temporal.');
-    return tempPassword;
+    return updated.temporaryPassword;
   }
 
   // Se llama tras una contraseña incorrecta (ver `Login.onSubmit`) —
@@ -505,7 +510,9 @@ export class UserManagementService {
     const user = this.findUser(userId);
     if (!user || !user.mustChangePassword) return;
 
-    const updated: AppUser = { ...user, mustChangePassword: false };
+    // Ya definió su propia contraseña — la temporal deja de estar vigente
+    // (el backend deja de devolver `temporaryPassword`).
+    const updated: AppUser = { ...user, mustChangePassword: false, temporaryPassword: null };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
   }
 

@@ -57,6 +57,8 @@
 
       @if (loginError()) {
         <nz-alert class="login-card__alert" nzType="error" [nzMessage]="loginError()" nzShowIcon />
+      } @else if (sessionNotice(); as notice) {
+        <nz-alert class="login-card__alert" nzType="warning" [nzMessage]="notice" nzShowIcon />
       }
 
       <form nz-form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">

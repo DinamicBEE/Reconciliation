@@ -104,7 +104,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 2 .7 3a2 2 0 0 1-.4 2.1L8 10.2a16 16 0 0 0 6 6l1.4-1.4a2 2 0 0 1 2-.4c1 .3 2 .5 3 .7a2 2 0 0 1 1.6 2Z" />
             </svg>
             <span class="summary-field__label">Teléfono:</span>
-            <input nz-input class="summary-field__control" formControlName="phone" placeholder="+52 55 1234 5678" />
+            <input nz-input class="summary-field__control" formControlName="phone" [placeholder]="country.vocabulary.phonePlaceholder" />
             @if (infoForm.controls.phone.invalid && infoForm.controls.phone.touched) {
               <span class="summary-field__error">
                 @if (infoForm.controls.phone.hasError('required')) {
@@ -305,7 +305,7 @@
                         <span class="info-field__label">Teléfono</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" [formControl]="infoForm.controls.phone" placeholder="+52 55 1234 5678" />
+                        <input nz-input class="info-field__input" [formControl]="infoForm.controls.phone" [placeholder]="country.vocabulary.phonePlaceholder" />
                         @if (infoForm.controls.phone.invalid && infoForm.controls.phone.touched) {
                           <span class="info-field__error">
                             @if (infoForm.controls.phone.hasError('required')) {
@@ -346,10 +346,10 @@
                           <circle cx="8" cy="10" r="1.5" />
                           <path stroke-linecap="round" d="M6 15h4M13 9h5M13 12h5M13 15h5" />
                         </svg>
-                        <span class="info-field__label">SSN</span>
+                        <span class="info-field__label">{{ country.vocabulary.personalIdLabel }}</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" [formControl]="infoForm.controls.ssn" placeholder="000-00-0000" />
+                        <input nz-input class="info-field__input" [formControl]="infoForm.controls.ssn" [placeholder]="country.vocabulary.personalIdPlaceholder" />
                       } @else {
                         @if (u.ssn) {
                           <span class="info-field__value font-mono">{{ u.ssn }}</span>
@@ -393,10 +393,10 @@
                           <path stroke-linecap="round" stroke-linejoin="round" d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11Z" />
                           <circle cx="12" cy="10" r="2.5" />
                         </svg>
-                        <span class="info-field__label">Ciudad</span>
+                        <span class="info-field__label">{{ country.vocabulary.cityLabel }}</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" formControlName="city" placeholder="Ciudad" />
+                        <input nz-input class="info-field__input" formControlName="city" [placeholder]="country.vocabulary.cityLabel" />
                       } @else {
                         @if (u.address.city) {
                           <span class="info-field__value">{{ u.address.city }}</span>
@@ -411,10 +411,10 @@
                         <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v18M5 4h11l-2 3 2 3H5" />
                         </svg>
-                        <span class="info-field__label">Estado</span>
+                        <span class="info-field__label">{{ country.vocabulary.stateLabel }}</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" formControlName="state" placeholder="Estado" />
+                        <input nz-input class="info-field__input" formControlName="state" [placeholder]="country.vocabulary.stateLabel" />
                       } @else {
                         @if (u.address.state) {
                           <span class="info-field__value">{{ u.address.state }}</span>
@@ -727,6 +727,43 @@
                         }
                       }
                     </div>
+
+                    <!-- Contraseña inicial generada por el BACKEND (key
+                         `temporaryPassword` de GET /users/{id}) — solo se
+                         muestra si llega y no está vacía. Siempre de solo
+                         lectura, también en modo edición: el frontend nunca
+                         la define. -->
+                    @if (temporaryPassword(); as temporaryPassword) {
+                      <div class="info-field">
+                        <span class="info-field__head">
+                          <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="8" cy="15" r="4" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m10.8 12.2 9.2-9.2M17 6l3 3M15 8l2 2" />
+                          </svg>
+                          <span class="info-field__label">Contraseña temporal</span>
+                        </span>
+                        <div class="info-field__value-row">
+                          <span class="info-field__value font-mono">{{ temporaryPassword }}</span>
+                          <button
+                            nz-button
+                            nzType="text"
+                            nzSize="small"
+                            type="button"
+                            class="temp-password__copy"
+                            (click)="onCopyTemporaryPassword(temporaryPassword)"
+                            nz-tooltip
+                            nzTooltipTitle="Copiar contraseña"
+                            aria-label="Copiar contraseña temporal"
+                          >
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                              <rect x="9" y="9" width="12" height="12" rx="2" />
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+                            </svg>
+                          </button>
+                        </div>
+                        <span class="temp-password__hint text-muted">Vigente hasta que el usuario defina su propia contraseña.</span>
+                      </div>
+                    }
                   </div>
                 </form>
               </div>

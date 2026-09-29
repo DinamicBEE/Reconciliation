@@ -14,6 +14,8 @@ import { MatchCandidate } from './data/difference-management.model';
 import { DifferenceManagementService } from './data/difference-management.service';
 import { parseSettlementsCsv } from './data/csv-import.util';
 import { TENDER_MEDIA_LABEL, TenderMedia } from '../../shared/models/reconciliation-item.model';
+import { MoneyPipe } from '../../core/country/money.pipe';
+import { COUNTRY_PROFILE } from '../../core/country/active-country';
 
 const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
 
@@ -21,6 +23,7 @@ const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
   selector: 'app-difference-management',
   imports: [
     CommonModule,
+    MoneyPipe,
     FormsModule,
     RouterLink,
     NzAlertModule,
@@ -46,6 +49,7 @@ export class DifferenceManagement {
   private readonly message = inject(NzMessageService);
   private readonly modal = inject(NzModalService);
   private readonly router = inject(Router);
+  private readonly country = inject(COUNTRY_PROFILE);
 
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
   protected readonly noteTouched = signal(false);
@@ -158,6 +162,6 @@ export class DifferenceManagement {
   }
 
   private formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+    return new Intl.NumberFormat(this.country.locale, { style: 'currency', currency: this.country.currency }).format(amount);
   }
 }

@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
@@ -16,6 +16,9 @@ import { UserManagementService } from '../../user-management/data/user-managemen
 const INVALID_CREDENTIALS_MESSAGE = 'Usuario o contraseña inválidos.';
 const BLOCKED_MESSAGE = 'Usuario bloqueado por intentos fallidos. Contacte al administrador.';
 const CONNECTION_ERROR_MESSAGE = 'No se pudo conectar con el servidor. Intenta de nuevo.';
+// Texto propio del frontend (el backend decide por `code`, no por texto —
+// ver auth-errors.ts).
+const IDLE_TIMEOUT_MESSAGE = 'Tu sesión se cerró por inactividad. Inicia sesión de nuevo para continuar.';
 
 @Component({
   selector: 'app-login',
@@ -34,6 +37,12 @@ export class Login {
 
   protected readonly submitting = signal(false);
   protected readonly loginError = signal<string | null>(null);
+  // Aviso de sesión cerrada por inactividad — visible hasta el siguiente
+  // login exitoso (AuthService limpia el motivo ahí) o hasta que haya un
+  // error de credenciales, que tiene prioridad en el mismo lugar.
+  protected readonly sessionNotice = computed(() =>
+    this.auth.sessionEndReason() === 'idle_timeout' && !this.loginError() ? IDLE_TIMEOUT_MESSAGE : null,
+  );
 
   protected readonly form = this.fb.group({
     username: this.fb.control('', [Validators.required, Validators.minLength(3)]),

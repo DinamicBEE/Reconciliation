@@ -56,7 +56,7 @@
       <div class="kpi-card__body kpi-card__body--stacked">
         <div class="kpi-card__stat">
           <span class="kpi-card__value">
-            {{ discrepancyTrendSummary().today | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+            {{ discrepancyTrendSummary().today | money: '1.0-0' }}
           </span>
           <span
             class="kpi-card__delta"
@@ -72,7 +72,7 @@
             >
               <polygon points="5,0 10,10 0,10" fill="currentColor" />
             </svg>
-            {{ discrepancyTrendSummary().delta | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }} vs. ayer
+            {{ discrepancyTrendSummary().delta | money: '1.0-0' }} vs. ayer
           </span>
         </div>
         <app-sparkline class="kpi-card__sparkline" [values]="discrepancyTrendSummary().values" color="var(--color-destructive)" />
@@ -158,20 +158,20 @@
               <td class="text-right font-mono">{{ group.soldCount }}</td>
               <td class="text-right font-mono">
                 @if (group.soldAmount > 0) {
-                  {{ group.soldAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                  {{ group.soldAmount | money }}
                 } @else {
                   <span class="text-muted">—</span>
                 }
               </td>
               <td class="text-right font-mono">
                 @if (group.settledAmount > 0) {
-                  {{ group.settledAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                  {{ group.settledAmount | money }}
                 } @else {
                   <span class="text-muted">—</span>
                 }
               </td>
               <td class="text-right font-mono" [class.text-destructive]="group.difference !== 0">
-                {{ group.difference | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                {{ group.difference | money }}
               </td>
               <td><app-reconciliation-status-tag [status]="group.status" /></td>
               <td class="text-center" (click)="$event.stopPropagation()">
@@ -269,7 +269,7 @@
                   <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="settlement.description">
                     {{ settlement.description }}
                   </td>
-                  <td class="text-right font-mono">{{ settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+                  <td class="text-right font-mono">{{ settlement.amount | money }}</td>
                 </tr>
               } @empty {
                 <tr>

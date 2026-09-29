@@ -1,5 +1,7 @@
 import { MatchStatus, TenderMedia } from '../../../shared/models/reconciliation-item.model';
-import { ElectronicInvoice, Sale, Store } from '../../../shared/models/sale.model';
+import { ACTIVE_COUNTRY } from '../../../core/country/active-country';
+import { CountryProfile } from '../../../core/country/country.model';
+import { ElectronicInvoice, Sale, SaleCustomer, Store } from '../../../shared/models/sale.model';
 import { saleTotal } from './sale.util';
 
 // Ventas "en bruto" — `payments` es opcional aquí: si no se especifica,
@@ -10,9 +12,14 @@ import { saleTotal } from './sale.util';
 // explícito cuando el reparto entre métodos es una decisión propia de esa
 // venta y no un simple split derivado — ver V-2007 (tarjeta cubre cuenta+IVA,
 // efectivo cubre la propina). `invoice` tampoco se declara a mano: la arma
-// `withInvoice()` (abajo) para TODA venta, a mano o generada — ver ese
+// `withFiscalData()` (abajo) para TODA venta, a mano o generada — ver ese
 // helper.
-type RawSale = Omit<Sale, 'payments' | 'invoice'> & { payments?: Sale['payments'] };
+//
+// El cliente "en bruto" tampoco trae su identificación fiscal ya resuelta:
+// solo `vatResponsible` (¿causa IVA?), que `withFiscalData()` traduce al
+// régimen y al RFC/NIT del país activo (`environment.country`).
+type MockCustomer = Omit<SaleCustomer, 'taxId' | 'taxRegime'> & { vatResponsible?: boolean };
+type RawSale = Omit<Sale, 'payments' | 'invoice' | 'customer'> & { customer: MockCustomer; payments?: Sale['payments'] };
 
 // Invariantes de negocio de TODA venta del mock (a mano o generada, ver
 // `buildDay` abajo) — pedidas explícitamente para la demo del Drawer de
@@ -23,11 +30,11 @@ type RawSale = Omit<Sale, 'payments' | 'invoice'> & { payments?: Sale['payments'
 // separa el total en 2 métodos para CUALQUIER venta sin `payments` explícito,
 // y tanto `TODAY_SALES` como `buildDay()` arman siempre 5-6 líneas de
 // producto con un subtotal que deja el total muy por encima de $1,000 tras
-// el 16% de IVA. Una 4ª invariante, agregada al facturar bajo normativa
-// colombiana: TODA venta trae una `ElectronicInvoice` (`withInvoice()`,
-// abajo) — a diferencia de la identificación fiscal del cliente
-// (`personType`/`taxRegime`, opcional), la factura electrónica es
-// obligatoria sin importar quién compre.
+// el IVA del país. Una 4ª invariante: TODA venta trae su comprobante fiscal
+// (`ElectronicInvoice` — CFDI o factura electrónica según el país, ver
+// `withFiscalData()` abajo) — a diferencia del tipo de persona y el régimen
+// del cliente (opcionales), el comprobante es obligatorio sin importar quién
+// compre.
 //
 // 7 ventas de "hoy" (27 ago) con detalle a mano — ricas a propósito, para la
 // demo del Drawer (cliente con contacto + identificación fiscal, descuento,
@@ -72,7 +79,7 @@ const TODAY_SALES: RawSale[] = [
       name: 'Diego Salinas',
       phone: '55 1234 8890',
       personType: 'natural',
-      taxRegime: 'no_responsable',
+      vatResponsible: false,
     },
     items: [
       { id: 'I-1', productName: 'Sándwich club', quantity: 3, unitPrice: 95 },
@@ -100,7 +107,7 @@ const TODAY_SALES: RawSale[] = [
       name: 'María Fernanda Ruiz',
       email: 'mf.ruiz@correo.com',
       personType: 'natural',
-      taxRegime: 'responsable_iva',
+      vatResponsible: true,
     },
     items: [
       { id: 'I-1', productName: 'Ensalada césar', quantity: 3, unitPrice: 110 },
@@ -127,7 +134,7 @@ const TODAY_SALES: RawSale[] = [
       name: 'Jorge Ibáñez',
       phone: '55 9902 1147',
       personType: 'natural',
-      taxRegime: 'no_responsable',
+      vatResponsible: false,
     },
     items: [
       { id: 'I-1', productName: 'Latte', quantity: 4, unitPrice: 52 },
@@ -178,7 +185,7 @@ const TODAY_SALES: RawSale[] = [
       name: 'Ana Paola Cortés',
       phone: '55 4471 0032',
       personType: 'juridica',
-      taxRegime: 'responsable_iva',
+      vatResponsible: true,
     },
     items: [
       { id: 'I-1', productName: 'Ensalada césar', quantity: 3, unitPrice: 110 },
@@ -205,7 +212,7 @@ const TODAY_SALES: RawSale[] = [
       name: 'Roberto Nieto',
       email: 'r.nieto@correo.com',
       personType: 'natural',
-      taxRegime: 'responsable_iva',
+      vatResponsible: true,
     },
     items: [
       { id: 'I-1', productName: 'Café americano', quantity: 4, unitPrice: 45 },
@@ -395,25 +402,24 @@ const RAW_SALES: RawSale[] = [
   ...buildDay('2026-08-14', 4),
 ];
 
-// Prefijo de facturación electrónica — una sola resolución DIAN cubre las 4
-// sucursales (`Store`), así que el prefijo es global en vez de uno por
-// tienda; el consecutivo (`number`) sí es único por venta, ver
-// `INVOICE_NUMBER_SEED` abajo.
-const INVOICE_PREFIX = 'SETP';
+// Serie del CFDI (MX) / prefijo de la resolución de facturación DIAN (CO) —
+// una sola serie/resolución cubre las 4 sucursales (`Store`), así que es
+// global en vez de una por sucursal; el consecutivo (`number`) sí es único
+// por venta, ver `INVOICE_NUMBER_SEED` abajo.
+const INVOICE_SERIES: Record<CountryProfile['code'], string> = { MX: 'A', CO: 'SETP' };
 
-// Arranca en un consecutivo "ya usado" (no en 1) — una resolución de
-// facturación real nunca empieza una demo desde cero. Se suma el índice de
-// la venta dentro de `RAW_SALES` para que cada una tenga su propio número,
-// sin mantener un contador mutable aparte.
+// Arranca en un consecutivo "ya usado" (no en 1) — una serie de facturación
+// real nunca empieza una demo desde cero. Se suma el índice de la venta
+// dentro de `RAW_SALES` para que cada una tenga su propio número, sin
+// mantener un contador mutable aparte.
 const INVOICE_NUMBER_SEED = 84210;
 
-// CUFE real = SHA-384 hex (96 caracteres) de los datos del documento + la
-// clave técnica de la resolución DIAN — no hay backend aquí que calcule un
-// hash real, así que se genera un string hex determinístico de la MISMA
-// longitud a partir del id de la venta (FNV-1a + un LCG para estirarlo a 96
-// caracteres) — mismo criterio de "índice, no `Math.random()`" que el resto
-// de este generador, para que el CUFE de una venta no cambie entre builds.
-function buildCufe(seed: string): string {
+// Hex determinístico a partir del id de la venta (FNV-1a + un LCG para
+// estirarlo al largo pedido) — no hay backend aquí que timbre ni calcule un
+// hash real. Mismo criterio de "índice, no `Math.random()`" que el resto de
+// este generador, para que el folio fiscal de una venta no cambie entre
+// builds.
+function deterministicHex(seed: string, length: number): string {
   let hash = 2166136261; // FNV-1a offset basis
   for (let i = 0; i < seed.length; i++) {
     hash ^= seed.charCodeAt(i);
@@ -422,31 +428,93 @@ function buildCufe(seed: string): string {
 
   let hex = '';
   let x = (hash >>> 0) || 1;
-  while (hex.length < 96) {
+  while (hex.length < length) {
     x = (Math.imul(x, 1103515245) + 12345) >>> 0;
     hex += x.toString(16).padStart(8, '0');
   }
-  return hex.slice(0, 96);
+  return hex.slice(0, length);
 }
 
-// Arma la factura electrónica de la venta — a diferencia de `payments`, esto
-// NUNCA se declara a mano en `TODAY_SALES` (ver invariante "TODA venta trae
-// una `ElectronicInvoice`" arriba): se genera igual para las 7 de mano y
-// para cualquiera de `buildDay()`. `issuedAt` reusa la fecha/hora de la
-// venta con el offset fijo de Colombia (-05:00, sin horario de verano).
-function withInvoice(sale: RawSale, seq: number): RawSale & { invoice: ElectronicInvoice } {
+// Folio fiscal del país: UUID que asigna el SAT al timbrar (MX) / CUFE, un
+// SHA-384 hex de 96 caracteres (CO) — mismo largo y forma que el real.
+function buildFiscalId(seed: string, country: CountryProfile): string {
+  if (country.code === 'CO') {
+    return deterministicHex(seed, 96);
+  }
+  const h = deterministicHex(seed, 32).toUpperCase();
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-A${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
+// RFC (MX) / cédula o NIT (CO) ficticio pero con el formato real, derivado
+// del id de la venta.
+function buildTaxId(seed: string, personType: SaleCustomer['personType'], country: CountryProfile): string {
+  const digits = parseInt(deterministicHex(seed, 12), 16).toString().padStart(12, '0');
+  if (country.code === 'CO') {
+    return personType === 'juridica' ? `${digits.slice(0, 9)}-${digits[9]}` : digits.slice(0, 10);
+  }
+  const letters = deterministicHex(`${seed}-rfc`, 8)
+    .toUpperCase()
+    .replace(/[0-9]/g, (d) => 'ABCDEFGHJK'[Number(d)]);
+  const initials = personType === 'juridica' ? letters.slice(0, 3) : letters.slice(0, 4);
+  // Fecha de nacimiento / constitución en formato AAMMDD, siempre válida.
+  const n = Number(digits.slice(0, 6));
+  const date = `${digits.slice(0, 2)}${String((n % 12) + 1).padStart(2, '0')}${String((n % 28) + 1).padStart(2, '0')}`;
+  return `${initials}${date}${letters.slice(4, 7)}`;
+}
+
+// Régimen fiscal del país a partir de lo que el mock sabe del cliente:
+// c_RegimenFiscal del SAT (601 personas morales; 612 personas físicas con
+// actividad empresarial; 616 sin obligaciones fiscales) / responsabilidad de
+// IVA de la DIAN (48 responsable; 49 no responsable).
+function taxRegimeFor(customer: MockCustomer, country: CountryProfile): string | undefined {
+  if (!customer.personType || customer.vatResponsible === undefined) return undefined;
+  if (country.code === 'CO') {
+    return customer.vatResponsible ? '48' : '49';
+  }
+  if (customer.personType === 'juridica') return '601';
+  return customer.vatResponsible ? '612' : '616';
+}
+
+// Completa lo fiscal de la venta según el país activo — nunca se declara a
+// mano en `TODAY_SALES` (ver invariante "TODA venta trae su comprobante"
+// arriba): se genera igual para las 7 de mano y para cualquiera de
+// `buildDay()`. Un cliente sin tipo de persona es un receptor genérico
+// ("Público en general" / "Consumidor final") y lleva el id genérico del
+// país. `issuedAt` reusa la fecha/hora de la venta con el offset fiscal del
+// país (-06:00 MX / -05:00 CO, ninguno con horario de verano).
+function withFiscalData(
+  sale: RawSale,
+  seq: number,
+  country: CountryProfile = ACTIVE_COUNTRY,
+): Omit<Sale, 'payments'> & { payments?: Sale['payments'] } {
+  const { vatResponsible, ...customer } = sale.customer;
+  const identified = customer.personType !== undefined;
+  const offset = `${country.fiscalTimezone.slice(0, 3)}:${country.fiscalTimezone.slice(3)}`;
+  const invoice: ElectronicInvoice = {
+    series: INVOICE_SERIES[country.code],
+    number: String(INVOICE_NUMBER_SEED + seq),
+    fiscalId: buildFiscalId(sale.id, country),
+    issuedAt: `${sale.date}T${sale.time}:00${offset}`,
+  };
+  if (country.invoice.hasCfdiFields) {
+    // Receptor identificado → "G03 Gastos en general"; público en general →
+    // "S01 Sin efectos fiscales". Pago en una sola exhibición (PUE).
+    invoice.cfdiUse = identified ? 'G03 · Gastos en general' : 'S01 · Sin efectos fiscales';
+    invoice.paymentMethod = 'PUE · Pago en una sola exhibición';
+  }
+
   return {
     ...sale,
-    invoice: {
-      prefix: INVOICE_PREFIX,
-      number: String(INVOICE_NUMBER_SEED + seq),
-      cufe: buildCufe(sale.id),
-      issuedAt: `${sale.date}T${sale.time}:00-05:00`,
+    customer: {
+      ...customer,
+      taxId: identified ? buildTaxId(sale.id, customer.personType, country) : country.taxId.genericId,
+      taxRegime: taxRegimeFor({ ...customer, vatResponsible }, country),
     },
+    invoice,
   };
 }
 
-export const MOCK_SALES: Sale[] = RAW_SALES.map((sale, index) => withPayment(withInvoice(sale, index)));
+export const MOCK_SALES: Sale[] = RAW_SALES.map((sale, index) => withPayment(withFiscalData(sale, index)));
 
 // Si la venta ya trae `payments` explícito (pago mixto con reparto propio,
 // ver V-2007), se respeta tal cual. Si no, se deriva un pago PRINCIPAL +
@@ -454,7 +522,7 @@ export const MOCK_SALES: Sale[] = RAW_SALES.map((sale, index) => withPayment(wit
 // del total va al método secundario y el resto al principal, sin mantener
 // dos números a mano por separado. Garantiza la invariante "≥2 métodos de
 // pago" para cualquier venta del mock, generada o a mano.
-function withPayment(sale: RawSale & { invoice: ElectronicInvoice }): Sale {
+function withPayment(sale: Omit<Sale, 'payments'> & { payments?: Sale['payments'] }): Sale {
   if (sale.payments) {
     return sale as Sale;
   }

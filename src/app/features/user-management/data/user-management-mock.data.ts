@@ -19,6 +19,7 @@ type MockUserSeed = Omit<
   | 'hireDate'
   | 'contractEndDate'
   | 'mustChangePassword'
+  | 'temporaryPassword'
   | 'subsidiariaId'
   | 'ubicacionId'
   | 'backendUserId'
@@ -673,6 +674,9 @@ export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   // demo", y MASTER.md "Patrón: refresh token de un solo uso + cambio
   // obligatorio de contraseña").
   mustChangePassword: seed.id === 'u0018',
+  // Valor mock solo para cuentas sin `backendUserId`; las 4 cuentas demo del
+  // backend lo leen de `GET /users/{id}` (ver user-detail).
+  temporaryPassword: null,
   // La única subsidiaria real sembrada hoy (id 1, "Conciliación Bancaria")
   // para los 25; ubicación varía por índice entre las 4 reales sembradas
   // (ids 1-4) solo para dar variedad visible en la UI — ninguno de los 21

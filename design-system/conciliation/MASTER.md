@@ -19,7 +19,7 @@
 | Gestor de paquetes | pnpm |
 | UI kit | ng-zorro-antd v22 (MIT, sin license key) |
 | Animaciones | API nativa de Angular (`animate.enter`/`animate.leave`) — **no** `@angular/animations` (deprecado en v22) |
-| Locale | `es-MX` (`LOCALE_ID`), ng-zorro en `es_ES` (no hay `es_MX` en ng-zorro todavía) |
+| Locale | Según el país (`environment.country`, ver "Patrón: país de trabajo"): `es-MX` o `es-CO` (`LOCALE_ID`); ng-zorro en `es_ES` (no tiene `es_MX` ni `es_CO`) |
 | Ruteo | `provideRouter(routes, withComponentInputBinding())` — un param de ruta (p. ej. `:tenderMedia`/`:orderId`) se recibe como `input<string>()` en el componente, sin `ActivatedRoute`/`paramMap` manual (ver `difference-management.ts`). Un param ausente llega como `undefined` al input — el componente decide qué hacer (validar, redirigir, default). |
 
 ## Estructura de carpetas (por feature)
@@ -2231,6 +2231,93 @@ anterior).
    propósito, son cuentas de demostración). Se pierde con
    `docker compose down -v`, igual que las 4 cuentas — hay que re-sembrar
    ambos scripts si el volumen se recrea.
+
+### Actualización: acuerdos con backend — inactividad y contraseña temporal
+
+**Expiración de sesión por inactividad** (DED 7.2 paso 5). Contrato:
+`POST /auth/refresh` con un refresh token que lleva más de 30 minutos sin
+actividad (parámetro del backend) responde `401` con body
+`{ "error": "Sesion expirada por inactividad…", "code": "SESSION_IDLE_TIMEOUT" }`.
+
+1. **Se decide SOLO por `code`**, nunca por el texto de `error`:
+   `isSessionIdleTimeout(err)` (`features/auth/data/auth-errors.ts`) valida
+   `status === 401 && error.code === 'SESSION_IDLE_TIMEOUT'` sobre la misma
+   forma que `HttpErrorResponse`, así el mock y la llamada HTTP real se
+   validan con el mismo código.
+2. **Cierre completo + motivo**: `AuthService.refreshAccessToken` (ahora
+   privado, consume un `Observable` como lo haría con `HttpClient`) llama
+   `expireSession('idle_timeout')`: limpia timer, sesión, sessionStorage y
+   deja `sessionEndReason` en `idle_timeout`. `logout()` manual y el login
+   exitoso lo limpian.
+3. **Redirección en `App`, no en `Shell`**: un `effect` en el componente raíz
+   navega a `/login` cuando `sessionEndReason()` es `idle_timeout` — los
+   guards solo actúan al navegar, y `/cambiar-password` está fuera de `Shell`.
+   `Login` muestra un `nz-alert` `warning` ("Tu sesión se cerró por
+   inactividad…"); un error de credenciales tiene prioridad en ese lugar.
+4. **Sin simulación en esta rama**: la actividad la registra el propio
+   auth-service con cada petición autenticada; el frontend solo reacciona al
+   401 de `/auth/refresh`. `expireSession` NO llama a `/auth/logout` (el
+   backend ya invalidó ese refresh token). Pendiente del lado del backend:
+   devolver ese 401 con `code`.
+
+**Contraseña inicial generada por el backend** (DED 7.3 paso 2). El detalle
+del usuario (`GET /users/{id}`) trae la key `temporaryPassword`; si llega y no
+está vacía, se muestra en la sección "Organización" de `user-detail` (solo
+lectura también en modo edición, con botón de copiar).
+
+1. **Cuentas del backend** (`AppUser.backendUserId`): `user-detail` llama a
+   `AuthService.getUserDetail(backendUserId)` cada vez que cambia la cuenta
+   mostrada y toma `temporaryPassword` de la respuesta. Si la petición falla
+   o la key no viene, no se muestra nada. Pendiente del lado del backend:
+   agregar la key a la respuesta.
+2. **Cuentas que solo existen en el mock** (el alta todavía no llama a
+   `POST /users`): `AppUser.temporaryPassword` la simula —
+   `createUser`/`resetPassword` generan una y `clearMustChangePassword` la
+   vacía.
+
+## Patrón: país de trabajo (`environment.country`)
+
+`src/environments/environment.ts` define `country: 'MX' | 'CO'` (México por
+defecto). La configuración de build `co` lo reemplaza por
+`environment.co.ts` (`fileReplacements` en `angular.json`): `pnpm start:co` /
+`pnpm build:co` (= `ng build -c production,co`). Agregar un país = un
+`CountryProfile` más en `core/country/country-profiles.ts`, su
+`environment.<país>.ts` y su configuración de build.
+
+1. **Se lee una sola vez, al arrancar**: `core/country/active-country.ts`
+   resuelve `ACTIVE_COUNTRY` desde `environment.country` al cargar la app y
+   lanza un error claro si el valor no es un país soportado.
+   `provideCountry()` (en `app.config.ts`) registra el locale y provee
+   `COUNTRY_PROFILE`, `LOCALE_ID`, `DEFAULT_CURRENCY_CODE` y `<html lang>`.
+2. **`CountryProfile` (`core/country/country.model.ts`) concentra todo lo que
+   cambia entre países**: locale y moneda, offset horario fiscal, autoridad
+   (SAT / DIAN), identificación tributaria (RFC / NIT, con el id genérico
+   XAXX010101000 / 222222222222), tipo de persona (física-moral /
+   natural-jurídica), catálogo de régimen fiscal, impuestos de venta (IVA 16 % /
+   19 %), etiquetas del comprobante (CFDI: serie, folio, UUID, fecha de
+   timbrado, uso del CFDI y método de pago / factura electrónica: prefijo,
+   folio, CUFE, fecha de facturación) con su enlace de verificación, y
+   vocabulario general (Sucursal / Ubicación; NSS / Número de cédula;
+   Estado-Ciudad / Departamento-Municipio; formato de teléfono).
+3. **Componentes vía DI, funciones puras vía constante**: los componentes
+   hacen `protected readonly country = inject(COUNTRY_PROFILE)` y leen de ahí
+   en la plantilla — nunca un texto fiscal fijo. Las funciones puras y los
+   mocks (sin DI) usan `ACTIVE_COUNTRY` como valor por defecto de un
+   parámetro (`saleTaxLines(sale, taxes = ACTIVE_COUNTRY.salesTaxes)`), así
+   siguen siendo testeables con otro país.
+4. **Moneda con el pipe `money`** (`core/country/money.pipe.ts`), no con
+   `currency: 'MXN' : …`: formato y moneda del país activo, `'1.2-2'` por
+   defecto (`money: '1.0-0'` para cifras redondas).
+5. **Modelo de venta con nombres neutros**: `ElectronicInvoice` usa
+   `series`/`fiscalId` (antes `prefix`/`cufe`); `cfdiUse`/`paymentMethod`
+   solo existen en México (`invoice.hasCfdiFields`). `SaleCustomer` suma
+   `taxId` y su `taxRegime` es el código del catálogo del país. El mock
+   (`withFiscalData()` en `sales-mock.data.ts`) arma serie, UUID o CUFE,
+   RFC o NIT con formato real, régimen y offset horario según el país.
+6. **Lo que NO cambia con el país (a propósito, por ahora)**: los datos mock
+   operativos (sucursales de CDMX, medios de pago BBVA/DiDi, usuarios y sus
+   direcciones) y los textos internos de ng-zorro. El CSV exportado usa
+   punto decimal en ambos países.
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

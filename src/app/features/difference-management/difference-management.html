@@ -38,14 +38,14 @@
         <div class="summary-strip__item">
           <span class="summary-strip__label">Monto vendido</span>
           <span class="summary-strip__value">
-            {{ service.order()?.sale?.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            {{ service.order()?.sale?.amount | money }}
           </span>
         </div>
         <div class="summary-strip__item">
           <span class="summary-strip__label">Monto liquidado</span>
           <span class="summary-strip__value">
             @if (service.selectedCount() > 0) {
-              {{ service.selectedSettledAmount() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              {{ service.selectedSettledAmount() | money }}
             } @else {
               <span class="text-muted">—</span>
             }
@@ -54,7 +54,7 @@
         <div class="summary-strip__item">
           <span class="summary-strip__label">Diferencia</span>
           <span class="summary-strip__value" [class.text-destructive]="service.selectedDifference() !== 0">
-            {{ service.selectedDifference() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            {{ service.selectedDifference() | money }}
           </span>
         </div>
       </div>
@@ -130,7 +130,7 @@
                       <div class="candidate-card__field candidate-card__field--amount">
                         <span class="candidate-card__label">Monto</span>
                         <span class="candidate-card__value font-mono">
-                          {{ c.settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                          {{ c.settlement.amount | money }}
                         </span>
                       </div>
 

@@ -106,6 +106,15 @@ export interface AppUser {
   // de campo) — ver MASTER.md, "Patrón: refresh token de un solo uso +
   // cambio obligatorio de contraseña".
   mustChangePassword: boolean;
+  // Contraseña inicial GENERADA POR EL BACKEND al dar de alta la cuenta
+  // (acuerdo con backend: el detalle del usuario, `GET /users/{id}`, trae la
+  // key `temporaryPassword`). Si llega y no está vacía, `user-detail` la
+  // muestra en la sección "Organización" para que el administrador la
+  // entregue. `null` = sin contraseña temporal vigente. Para las cuentas con
+  // `backendUserId`, `user-detail` la toma de la respuesta real del backend;
+  // este campo solo la simula para las cuentas que viven únicamente en el
+  // mock (el alta todavía no llama a `POST /users`).
+  temporaryPassword: string | null;
 
   // "Organización" — todos opcionales/editables en cualquier momento; no se
   // piden al crear la cuenta (ver CreateUserInput), se completan después.

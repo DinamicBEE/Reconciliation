@@ -26,6 +26,7 @@ import {
   simulateBankImportRejection,
   summarizeBankImport,
 } from './data/bank-import.util';
+import { MoneyPipe } from '../../core/country/money.pipe';
 
 // Tiempo simulado de la llamada al backend (ver `onImportFileSelected`) —
 // deliberadamente perceptible para que el spinner/estado "Conectando con el
@@ -42,6 +43,7 @@ const ACTIONABLE_STATUSES = new Set<ReconciliationStatus>(['desconciliado', 'por
   selector: 'app-reconciliation-dashboard',
   imports: [
     CommonModule,
+    MoneyPipe,
     FormsModule,
     RouterLink,
     NzCardModule,

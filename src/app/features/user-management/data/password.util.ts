@@ -1,7 +1,8 @@
 // Función pura y testeable — sin estado, sin DI (ver MASTER.md, "Estructura
-// de carpetas"). Genera una contraseña temporal legible para el flujo de
-// "Restablecer contraseña" (no hay backend/correo real todavía: se muestra
-// una sola vez en un toast, ver UserManagementService.resetPassword).
+// de carpetas"). Genera una contraseña temporal legible — hace las veces del
+// backend para las cuentas que viven solo en el mock (alta y "Restablecer
+// contraseña", ver UserManagementService.createUser/resetPassword). Para las
+// cuentas del backend la contraseña temporal llega en `GET /users/{id}`.
 // Excluye caracteres ambiguos (0/O, 1/l/I) para que se pueda transcribir a
 // mano sin errores.
 const TEMP_PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
