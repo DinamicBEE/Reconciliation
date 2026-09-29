@@ -13,11 +13,12 @@ export type UserStatus = 'active' | 'inactive' | 'blocked';
 // `UserSummaryDto.roles` en /auth/login) — el backend es la fuente de
 // verdad de qué roles EXISTEN; este frontend ya no inventa los suyos (ver
 // MASTER.md, "Actualización: unificación de roles con el backend real").
-// Cada uno con acceso a un módulo EXCLUYENTE de la app (ver `ROLES` abajo):
-// `ADMIN` ve todo, `ALTAS`/`CONTABILIDAD`/`TESORERIA` ven solo su propio
-// módulo (Administración de usuarios / Resumen de venta / Conciliación
-// bancaria), y `COSTOS` no tiene todavía una pantalla propia en esta app
-// (ver su entrada en `ROLES`, `defaultPermissions: []`). Aplicado por
+// Cada uno con acceso a su propio módulo (ver `ROLES` abajo): `ADMIN` ve
+// todo, `ALTAS`/`CONTABILIDAD`/`TESORERIA` ven su módulo (Administración de
+// usuarios / Resumen de venta / Conciliación bancaria), y la consulta de
+// Catálogos cargados es transversal — la comparten ADMIN, CONTABILIDAD,
+// TESORERIA y COSTOS (matriz 7.16 del DED; COSTOS solo tiene esa pantalla
+// por ahora). Aplicado por
 // `permissionGuard` (`features/auth/data/permission.guard.ts`) sobre las
 // rutas en `app.routes.ts`.
 export type RoleId = 'ADMIN' | 'ALTAS' | 'CONTABILIDAD' | 'TESORERIA' | 'COSTOS';
@@ -30,7 +31,8 @@ export type PermissionKey =
   | 'export_reports'
   | 'manage_users'
   | 'manage_roles'
-  | 'view_audit_log';
+  | 'view_audit_log'
+  | 'view_catalogs';
 
 export interface PermissionDef {
   key: PermissionKey;
@@ -219,6 +221,7 @@ export const ROLES: RoleDef[] = [
       'manage_users',
       'manage_roles',
       'view_audit_log',
+      'view_catalogs',
     ],
   },
   {
@@ -230,25 +233,26 @@ export const ROLES: RoleDef[] = [
   {
     id: 'CONTABILIDAD',
     label: 'Contabilidad',
-    description: 'Acceso exclusivo al Resumen de venta y sus funcionalidades.',
-    defaultPermissions: ['view_dashboard'],
+    description: 'Acceso al Resumen de venta y a la consulta de catálogos cargados.',
+    defaultPermissions: ['view_dashboard', 'view_catalogs'],
   },
   {
     id: 'TESORERIA',
     label: 'Tesorería',
-    description: 'Acceso exclusivo a Conciliación bancaria y sus funcionalidades.',
-    defaultPermissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports'],
+    description: 'Acceso a Conciliación bancaria y a la consulta de catálogos cargados.',
+    defaultPermissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
   },
   {
     id: 'COSTOS',
     label: 'Costos',
-    // Rol real del backend (coctel_midd) sin pantalla propia todavía en esta
-    // app — `defaultPermissions: []` a propósito, no un guess de qué debería
-    // ver: un usuario solo-COSTOS se autentica igual, pero `homeRoute()` lo
-    // manda a `/login` por falta de permisos (mismo criterio que cualquier
-    // cuenta sin match de permisos, ver AccessControlService.homeRoute()).
-    description: 'Rol del backend sin módulo propio asignado todavía en esta aplicación.',
-    defaultPermissions: [],
+    // Matriz 7.16 del DED: Costos consulta y exporta ventas y catálogos. Por
+    // ahora solo tiene la consulta de catálogos (`/catalogos`, su pantalla de
+    // aterrizaje vía `homeRoute()`) — una cuenta real del backend con rol
+    // COSTOS (sin `AppUser` vinculado) la recibe vía
+    // `defaultPermissionsForRoles`. La consulta/exportación de ventas queda
+    // pendiente de ajustar junto con el resto de la matriz de permisos.
+    description: 'Consulta de catálogos cargados (solo lectura).',
+    defaultPermissions: ['view_catalogs'],
   },
 ];
 
@@ -311,8 +315,8 @@ export const MANAGER_ROLE_IDS: RoleId[] = ['ADMIN', 'ALTAS'];
 
 // `group` ahora nombra la PANTALLA/módulo al que pertenece cada permiso
 // (antes eran buckets genéricos "Consulta/Operación/Administración") — con
-// 4 de los 5 roles (ver `ROLES`; `COSTOS` es la excepción, sin módulo propio)
-// siendo cada uno dueño exclusivo de un módulo completo, agrupar por
+// cada rol dueño de un módulo (ver `ROLES`; "Catálogos" es la pantalla
+// transversal que comparten varios roles), agrupar por
 // pantalla hace que el grid de "Permisos" en "Seguridad y acceso"
 // (user-detail) se lea directo: cada columna = un módulo = lo que un rol de
 // este set puede tocar.
@@ -325,6 +329,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'manage_users', label: 'Administrar usuarios', group: 'Administración de usuarios' },
   { key: 'manage_roles', label: 'Administrar roles y permisos', group: 'Administración de usuarios' },
   { key: 'view_audit_log', label: 'Ver historial y auditoría', group: 'Administración de usuarios' },
+  { key: 'view_catalogs', label: 'Consultar catálogos cargados', group: 'Catálogos' },
 ];
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {

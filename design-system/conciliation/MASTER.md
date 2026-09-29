@@ -2319,6 +2319,59 @@ defecto). La configuración de build `co` lo reemplaza por
    direcciones) y los textos internos de ng-zorro. El CSV exportado usa
    punto decimal en ambos países.
 
+## Patrón: catálogos cargados (consulta de solo lectura, CU14 del DED)
+
+`features/catalogs/` (`/catalogos`, permiso `view_catalogs`) — primera
+pantalla construida contra el DED de Cóctel del Mar (sección 7.14, prueba 30
+de la matriz). Relación de catálogos con su número de registros y fecha de
+actualización; abrir uno muestra sus filas con búsqueda. **Sin ninguna acción
+de modificación para ningún rol** (DED 2.2: no hay pantallas de
+mantenimiento, las correcciones van por soporte) — el propio
+`CatalogsService` no expone escritura.
+
+1. **Mismos patrones de siempre, sin nada nuevo**: `.table-card` con toolbar
+   (texto libre sobre nombre/descripción + select de tipo + contador a la
+   derecha con `.toolbar__spacer`), fila clickeable + botón-icono "Ver" en
+   `.row-actions`, y detalle en **Drawer** al 50 % (no ruta: es de solo
+   lectura y sin flujo propio, ver "Patrón: Drawer de detalle"). El drawer
+   abre con `.info-fields` (Tipo, Origen, Registros, Última actualización) y
+   debajo la tabla de la lista con su propia búsqueda, envuelta en
+   `.table-bleed` igual que las tablas del drawer de ventas.
+2. **Una sola tabla genérica para listas de forma distinta**: cada `Catalog`
+   declara sus `columns` (`key`, `label`, `mono?`) y `rows` como
+   `Record<string, string>` — un tributo, una cuenta contable y una
+   homologación no comparten columnas, así que el drawer arma `th`/`td` desde
+   esa definición en vez de un template por lista. El número de registros
+   se deriva SIEMPRE de `rows.length`, nunca de un campo guardado aparte.
+3. **Cuatro tipos (`CatalogKind`)**, los que distingue el DED: catálogo fijo
+   de la autoridad fiscal (`'fiscal'`, etiqueta "Catálogo fijo SAT" / "…DIAN"
+   según el país), homologación, sincronizado desde NetSuite y dato maestro (plantilla
+   de carga inicial). Se muestran como texto, no como `nz-tag`: el tipo no es
+   un estado, y los colores de tag (`success`/`error`/`warning`) quedan
+   reservados a estados (ver "Colores de tag"); el `nz-tag` sin preset no
+   está puenteado para modo oscuro.
+4. **Vacío con `nzNoResult`, no con una fila `@empty`**: con `nzData` vacío,
+   `nz-table` pinta además su propio "No hay datos", y el mensaje saldría
+   duplicado (le pasa hoy a `user-audit`, que usa `@empty`). El texto propio
+   va en `nzNoResult="..."`.
+5. **Datos mock del cliente, no del resto de la app**: tender media
+   (100/102/108/201/205), Major/Family Group y los 8 prefijos de ubicación
+   salen del DED (7.21 y 7.23); cuentas contables, códigos de establecimiento
+   e ids de tienda Rappi son ilustrativos. Los catálogos fiscales, la
+   homologación de impuestos y los códigos de impuesto de NetSuite dependen
+   del país (`country-catalogs.mx.ts`: SAT / `country-catalogs.co.ts`: DIAN);
+   el resto es común.
+6. **Permisos (matriz 7.16)**: `view_catalogs` (grupo "Catálogos" en el grid
+   de permisos de `user-detail`) por defecto en `ADMIN`, `CONTABILIDAD`,
+   `TESORERIA` y `COSTOS`; NO en `ALTAS`. Es la primera pantalla transversal
+   (varios roles la comparten) en vez de exclusiva de un rol. `COSTOS` dejó
+   de tener `defaultPermissions: []`: aterriza en `/catalogos`
+   (`homeRoute()`: dashboard → conciliación → catálogos → usuarios, mismo
+   orden que el menú). En esta rama no hay cuenta demo de Costos: una cuenta
+   real del backend con rol `COSTOS` y sin `AppUser` vinculado recibe
+   `view_catalogs` vía `defaultPermissionsForRoles`. La consulta/exportación de ventas que la matriz también da
+   a Costos y Tesorería sigue pendiente.
+
 ## Pendientes / deuda conocida al cerrar este módulo
 
 1. Borde de `nz-range-picker` no refleja `--color-border` (ver arriba).

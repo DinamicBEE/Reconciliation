@@ -22,6 +22,12 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
     permission: 'view_reconciliation',
   },
   {
+    label: 'Catálogos cargados',
+    path: '/catalogos',
+    keywords: ['catalogos', 'listas', 'homologaciones', 'dian', 'netsuite', 'maestros'],
+    permission: 'view_catalogs',
+  },
+  {
     label: 'Usuarios',
     path: '/usuarios',
     keywords: ['administración', 'administracion', 'cuentas'],

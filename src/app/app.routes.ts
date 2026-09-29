@@ -50,6 +50,14 @@ export const routes: Routes = [
           import('./features/difference-management/difference-management').then((m) => m.DifferenceManagement),
       },
       {
+        // Solo lectura para todos los roles que la ven (CU14 / matriz 7.16
+        // del DED) — no hay acciones de modificación en la pantalla.
+        path: 'catalogos',
+        canActivate: [permissionGuard],
+        data: { permission: 'view_catalogs' },
+        loadComponent: () => import('./features/catalogs/catalogs').then((m) => m.Catalogs),
+      },
+      {
         // Sin `data.permission` — el propio perfil es visible para
         // cualquier usuario autenticado, sin importar su rol.
         path: 'perfil',
