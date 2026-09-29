@@ -281,6 +281,16 @@ nz-tabs,
   font-size: 12px;
 }
 
+// "Contraseña temporal" (Organización) — botón de copiar pegado al valor,
+// color de marca como el resto de botones-icono (`.row-actions`).
+.temp-password__copy {
+  color: var(--color-primary) !important;
+}
+
+.temp-password__hint {
+  font-size: 12px;
+}
+
 .user-detail__empty-audit {
   padding: 16px;
   margin: 0;

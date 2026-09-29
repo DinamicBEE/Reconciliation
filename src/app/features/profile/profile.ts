@@ -12,6 +12,7 @@ import { AuthService } from '../auth/data/auth.service';
 import { UserManagementService } from '../user-management/data/user-management.service';
 import { AppUser, GENDER_OPTIONS, PHONE_PATTERN, ROLE_LABEL, fullName } from '../user-management/data/user-management.model';
 import { avatarTokensFor, initialsFor } from '../../shared/utils/avatar-color.util';
+import { COUNTRY_PROFILE } from '../../core/country/active-country';
 
 // `nz-date-picker` trabaja con `Date | null` — el model guarda la fecha
 // (sin hora) como ISO string (`'yyyy-MM-dd'`) o `null`. Mismo cruce de
@@ -59,6 +60,8 @@ export class Profile {
   private readonly auth = inject(AuthService);
   private readonly userMgmt = inject(UserManagementService);
   private readonly fb = inject(NonNullableFormBuilder);
+  // Vocabulario del país activo: identificación personal, dirección, teléfono.
+  protected readonly country = inject(COUNTRY_PROFILE);
   private readonly message = inject(NzMessageService);
 
   protected readonly fullName = fullName;

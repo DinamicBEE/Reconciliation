@@ -71,11 +71,11 @@ export class AccessControlService {
   homeRoute(): string {
     if (this.hasPermission('view_dashboard')) return '/dashboard';
     if (this.hasPermission('view_reconciliation')) return '/conciliacion';
+    if (this.hasPermission('view_catalogs')) return '/catalogos';
     if (this.hasPermission('manage_users')) return '/usuarios';
-    // Pasa con `COSTOS` (sin módulo propio, ver `ROLES`) y con cualquier
-    // sesión sin `AppUser` vinculado y sin rol reconocido — de vuelta a
-    // login en vez de un bucle de redirects entre rutas que tampoco puede
-    // ver.
+    // Sesión sin ningún permiso reconocido (p. ej. sin `AppUser` vinculado y
+    // con un rol que este frontend no conoce) — de vuelta a login en vez de
+    // un bucle de redirects entre rutas que tampoco puede ver.
     return '/login';
   }
 }

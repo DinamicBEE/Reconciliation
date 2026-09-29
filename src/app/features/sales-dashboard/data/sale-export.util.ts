@@ -4,7 +4,18 @@ import { saleReconciliationStatus, saleSubtotal, saleTaxAmount, saleTotal } from
 
 // Mismo orden/contenido que las columnas de la tabla de "Resumen de venta"
 // (ver sales-dashboard.html) — "Acciones" no es dato, se excluye.
-const CSV_HEADER = ['Fecha', 'Tienda', 'Cliente', 'Medio de pago', 'Estado', 'Subtotal', 'Impuestos', 'Total'];
+// La columna del punto de venta toma el vocabulario del país
+// (`SalesCsvLabels.location`: "Sucursal" / "Ubicación").
+const csvHeader = (location: string): string[] => [
+  'Fecha',
+  location,
+  'Cliente',
+  'Medio de pago',
+  'Estado',
+  'Subtotal',
+  'Impuestos',
+  'Total',
+];
 
 // Escapado CSV (RFC 4180): solo se envuelve en comillas el campo que
 // realmente las necesita (coma, comilla o salto de línea) — comillas
@@ -24,6 +35,7 @@ function formatCsvDate(isoDate: string): string {
 // para no duplicar los mismos `Record` que ya usa la plantilla
 // (`storeLabel`/`tenderMediaLabel`/`statusLabel` en sales-dashboard.ts).
 export interface SalesCsvLabels {
+  location: string;
   store: Record<Store, string>;
   tenderMedia: Record<TenderMedia, string>;
   status: Record<ReconciliationStatus, string>;
@@ -46,5 +58,5 @@ export function buildSalesCsv(sales: Sale[], labels: SalesCsvLabels): string {
     saleTotal(sale).toFixed(2),
   ]);
 
-  return [CSV_HEADER, ...rows].map((row) => row.map(escapeCsvField).join(',')).join('\r\n');
+  return [csvHeader(labels.location), ...rows].map((row) => row.map(escapeCsvField).join(',')).join('\r\n');
 }

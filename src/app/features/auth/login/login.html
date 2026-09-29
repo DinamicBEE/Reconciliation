@@ -57,6 +57,8 @@
 
       @if (loginError()) {
         <nz-alert class="login-card__alert" nzType="error" [nzMessage]="loginError()" nzShowIcon />
+      } @else if (sessionNotice(); as notice) {
+        <nz-alert class="login-card__alert" nzType="warning" [nzMessage]="notice" nzShowIcon />
       }
 
       <form nz-form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
@@ -176,6 +178,10 @@
           <li>
             <span class="login-card__demo-role">Tesorería</span>
             <code>tesoreria</code> / <code>Tesoreria2026</code>
+          </li>
+          <li>
+            <span class="login-card__demo-role">Costos</span>
+            <code>costos</code> / <code>Costos2026</code>
           </li>
         </ul>
       </div>

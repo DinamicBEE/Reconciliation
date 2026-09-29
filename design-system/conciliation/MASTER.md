@@ -19,7 +19,7 @@
 | Gestor de paquetes | pnpm |
 | UI kit | ng-zorro-antd v22 (MIT, sin license key) |
 | Animaciones | API nativa de Angular (`animate.enter`/`animate.leave`) — **no** `@angular/animations` (deprecado en v22) |
-| Locale | `es-MX` (`LOCALE_ID`), ng-zorro en `es_ES` (no hay `es_MX` en ng-zorro todavía) |
+| Locale | Según el país (`environment.country`, ver "Patrón: país de trabajo"): `es-MX` o `es-CO` (`LOCALE_ID`); ng-zorro en `es_ES` (no tiene `es_MX` ni `es_CO`) |
 | Ruteo | `provideRouter(routes, withComponentInputBinding())` — un param de ruta (p. ej. `:tenderMedia`/`:orderId`) se recibe como `input<string>()` en el componente, sin `ActivatedRoute`/`paramMap` manual (ver `difference-management.ts`). Un param ausente llega como `undefined` al input — el componente decide qué hacer (validar, redirigir, default). |
 
 ## Estructura de carpetas (por feature)
@@ -2255,6 +2255,141 @@ anterior).
    propósito, son cuentas de demostración). Se pierde con
    `docker compose down -v`, igual que las 4 cuentas — hay que re-sembrar
    ambos scripts si el volumen se recrea.
+
+### Actualización: acuerdos con backend — inactividad y contraseña temporal
+
+**Expiración de sesión por inactividad** (DED 7.2 paso 5). Contrato:
+`POST /auth/refresh` con un refresh token que lleva más de 30 minutos sin
+actividad (parámetro del backend) responde `401` con body
+`{ "error": "Sesion expirada por inactividad…", "code": "SESSION_IDLE_TIMEOUT" }`.
+
+1. **Se decide SOLO por `code`**, nunca por el texto de `error`:
+   `isSessionIdleTimeout(err)` (`features/auth/data/auth-errors.ts`) valida
+   `status === 401 && error.code === 'SESSION_IDLE_TIMEOUT'` sobre la misma
+   forma que `HttpErrorResponse`, así el mock y la llamada HTTP real se
+   validan con el mismo código.
+2. **Cierre completo + motivo**: `AuthService.refreshAccessToken` (ahora
+   privado, consume un `Observable` como lo haría con `HttpClient`) llama
+   `expireSession('idle_timeout')`: limpia timer, sesión, sessionStorage y
+   deja `sessionEndReason` en `idle_timeout`. `logout()` manual y el login
+   exitoso lo limpian.
+3. **Redirección en `App`, no en `Shell`**: un `effect` en el componente raíz
+   navega a `/login` cuando `sessionEndReason()` es `idle_timeout` — los
+   guards solo actúan al navegar, y `/cambiar-password` está fuera de `Shell`.
+   `Login` muestra un `nz-alert` `warning` ("Tu sesión se cerró por
+   inactividad…"); un error de credenciales tiene prioridad en ese lugar.
+4. **Solo mock** (`mock-session-activity.ts`, se borra al conectar el
+   backend): sin peticiones reales que cuenten como actividad, `AuthService`
+   registra clics, teclas, scroll y toques (a lo más una escritura cada
+   10 s) en sessionStorage, y el refresh mock responde el mismo 401 cuando
+   pasan más de `MOCK_SESSION_IDLE_TIMEOUT_MS` (30 min). Para probarlo sin
+   esperar: poner `conciliation-mock-session-activity` en
+   `Date.now() - 31 * 60000` y esperar el siguiente refresh (~37 s).
+
+**Contraseña inicial generada por el backend** (DED 7.3 paso 2). El detalle
+del usuario trae la key `temporaryPassword`; si llega y no está vacía, se
+muestra en la sección "Organización" de `user-detail` (solo lectura también
+en modo edición, con botón de copiar). `AppUser.temporaryPassword: string |
+null`. El frontend nunca la genera: en esta rama la simula el mock de
+`UserManagementService` — `createUser` y `resetPassword` generan una (la de
+reset reemplaza a la anterior) y `clearMustChangePassword` la vacía. La cuenta
+demo `u0018` (Contabilidad, pendiente de cambio) trae la suya.
+
+## Patrón: país de trabajo (`environment.country`)
+
+`src/environments/environment.ts` define `country: 'MX' | 'CO'` (México por
+defecto). La configuración de build `co` lo reemplaza por
+`environment.co.ts` (`fileReplacements` en `angular.json`): `pnpm start:co` /
+`pnpm build:co` (= `ng build -c production,co`). Agregar un país = un
+`CountryProfile` más en `core/country/country-profiles.ts`, su
+`environment.<país>.ts` y su configuración de build.
+
+1. **Se lee una sola vez, al arrancar**: `core/country/active-country.ts`
+   resuelve `ACTIVE_COUNTRY` desde `environment.country` al cargar la app y
+   lanza un error claro si el valor no es un país soportado.
+   `provideCountry()` (en `app.config.ts`) registra el locale y provee
+   `COUNTRY_PROFILE`, `LOCALE_ID`, `DEFAULT_CURRENCY_CODE` y `<html lang>`.
+2. **`CountryProfile` (`core/country/country.model.ts`) concentra todo lo que
+   cambia entre países**: locale y moneda, offset horario fiscal, autoridad
+   (SAT / DIAN), identificación tributaria (RFC / NIT, con el id genérico
+   XAXX010101000 / 222222222222), tipo de persona (física-moral /
+   natural-jurídica), catálogo de régimen fiscal, impuestos de venta (IVA 16 % /
+   19 %), etiquetas del comprobante (CFDI: serie, folio, UUID, fecha de
+   timbrado, uso del CFDI y método de pago / factura electrónica: prefijo,
+   folio, CUFE, fecha de facturación) con su enlace de verificación, y
+   vocabulario general (Sucursal / Ubicación; NSS / Número de cédula;
+   Estado-Ciudad / Departamento-Municipio; formato de teléfono).
+3. **Componentes vía DI, funciones puras vía constante**: los componentes
+   hacen `protected readonly country = inject(COUNTRY_PROFILE)` y leen de ahí
+   en la plantilla — nunca un texto fiscal fijo. Las funciones puras y los
+   mocks (sin DI) usan `ACTIVE_COUNTRY` como valor por defecto de un
+   parámetro (`saleTaxLines(sale, taxes = ACTIVE_COUNTRY.salesTaxes)`), así
+   siguen siendo testeables con otro país.
+4. **Moneda con el pipe `money`** (`core/country/money.pipe.ts`), no con
+   `currency: 'MXN' : …`: formato y moneda del país activo, `'1.2-2'` por
+   defecto (`money: '1.0-0'` para cifras redondas).
+5. **Modelo de venta con nombres neutros**: `ElectronicInvoice` usa
+   `series`/`fiscalId` (antes `prefix`/`cufe`); `cfdiUse`/`paymentMethod`
+   solo existen en México (`invoice.hasCfdiFields`). `SaleCustomer` suma
+   `taxId` y su `taxRegime` es el código del catálogo del país. El mock
+   (`withFiscalData()` en `sales-mock.data.ts`) arma serie, UUID o CUFE,
+   RFC o NIT con formato real, régimen y offset horario según el país.
+6. **Lo que NO cambia con el país (a propósito, por ahora)**: los datos mock
+   operativos (sucursales de CDMX, medios de pago BBVA/DiDi, usuarios y sus
+   direcciones) y los textos internos de ng-zorro. El CSV exportado usa
+   punto decimal en ambos países.
+
+## Patrón: catálogos cargados (consulta de solo lectura, CU14 del DED)
+
+`features/catalogs/` (`/catalogos`, permiso `view_catalogs`) — primera
+pantalla construida contra el DED de Cóctel del Mar (sección 7.14, prueba 30
+de la matriz). Relación de catálogos con su número de registros y fecha de
+actualización; abrir uno muestra sus filas con búsqueda. **Sin ninguna acción
+de modificación para ningún rol** (DED 2.2: no hay pantallas de
+mantenimiento, las correcciones van por soporte) — el propio
+`CatalogsService` no expone escritura.
+
+1. **Mismos patrones de siempre, sin nada nuevo**: `.table-card` con toolbar
+   (texto libre sobre nombre/descripción + select de tipo + contador a la
+   derecha con `.toolbar__spacer`), fila clickeable + botón-icono "Ver" en
+   `.row-actions`, y detalle en **Drawer** al 50 % (no ruta: es de solo
+   lectura y sin flujo propio, ver "Patrón: Drawer de detalle"). El drawer
+   abre con `.info-fields` (Tipo, Origen, Registros, Última actualización) y
+   debajo la tabla de la lista con su propia búsqueda, envuelta en
+   `.table-bleed` igual que las tablas del drawer de ventas.
+2. **Una sola tabla genérica para listas de forma distinta**: cada `Catalog`
+   declara sus `columns` (`key`, `label`, `mono?`) y `rows` como
+   `Record<string, string>` — un tributo, una cuenta contable y una
+   homologación no comparten columnas, así que el drawer arma `th`/`td` desde
+   esa definición en vez de un template por lista. El número de registros
+   se deriva SIEMPRE de `rows.length`, nunca de un campo guardado aparte.
+3. **Cuatro tipos (`CatalogKind`)**, los que distingue el DED: catálogo fijo
+   de la autoridad fiscal (`'fiscal'`, etiqueta "Catálogo fijo SAT" / "…DIAN"
+   según el país), homologación, sincronizado desde NetSuite y dato maestro (plantilla
+   de carga inicial). Se muestran como texto, no como `nz-tag`: el tipo no es
+   un estado, y los colores de tag (`success`/`error`/`warning`) quedan
+   reservados a estados (ver "Colores de tag"); el `nz-tag` sin preset no
+   está puenteado para modo oscuro.
+4. **Vacío con `nzNoResult`, no con una fila `@empty`**: con `nzData` vacío,
+   `nz-table` pinta además su propio "No hay datos", y el mensaje saldría
+   duplicado (le pasa hoy a `user-audit`, que usa `@empty`). El texto propio
+   va en `nzNoResult="..."`.
+5. **Datos mock del cliente, no del resto de la app**: tender media
+   (100/102/108/201/205), Major/Family Group y los 8 prefijos de ubicación
+   salen del DED (7.21 y 7.23); cuentas contables, códigos de establecimiento
+   e ids de tienda Rappi son ilustrativos. Los catálogos fiscales, la
+   homologación de impuestos y los códigos de impuesto de NetSuite dependen
+   del país (`country-catalogs.mx.ts`: SAT / `country-catalogs.co.ts`: DIAN);
+   el resto es común.
+6. **Permisos (matriz 7.16)**: `view_catalogs` (grupo "Catálogos" en el grid
+   de permisos de `user-detail`) por defecto en `ADMIN`, `CONTABILIDAD`,
+   `TESORERIA` y `COSTOS`; NO en `ALTAS`. Es la primera pantalla transversal
+   (varios roles la comparten) en vez de exclusiva de un rol. `COSTOS` dejó
+   de tener `defaultPermissions: []`: aterriza en `/catalogos`
+   (`homeRoute()`: dashboard → conciliación → catálogos → usuarios, mismo
+   orden que el menú). Cuenta demo nueva `costos` / `Costos2026` (`u0027`,
+   Laura Pineda). La consulta/exportación de ventas que la matriz también da
+   a Costos y Tesorería sigue pendiente.
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

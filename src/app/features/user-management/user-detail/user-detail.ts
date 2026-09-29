@@ -12,6 +12,7 @@ import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
+import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import {
@@ -35,6 +36,7 @@ import { AREAS, DEPARTMENTS, JOB_TITLES } from '../data/organization-catalog';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
 import { CatalogService } from '../../../core/services/catalog.service';
+import { COUNTRY_PROFILE } from '../../../core/country/active-country';
 
 // Agrupación estática de PERMISSIONS por `group` — se calcula una sola vez
 // al cargar el módulo (la lista de permisos no cambia en runtime), no en
@@ -80,6 +82,7 @@ function toIsoDateOrNull(value: Date | null): string | null {
     NzCheckboxModule,
     NzTagModule,
     NzTabsModule,
+    NzTooltipModule,
     NzModalModule,
     StatusChip,
   ],
@@ -95,6 +98,8 @@ export class UserDetail {
 
   protected readonly service = inject(UserManagementService);
   protected readonly catalog = inject(CatalogService);
+  // Vocabulario del país activo: identificación personal, dirección, teléfono.
+  protected readonly country = inject(COUNTRY_PROFILE);
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly message = inject(NzMessageService);
   private readonly modal = inject(NzModalService);
@@ -439,6 +444,18 @@ export class UserDetail {
     });
   }
 
+  // Copia la contraseña temporal (generada por el backend, ver
+  // `AppUser.temporaryPassword`) para entregarla al usuario por el medio
+  // acordado con el cliente (DED, CU3 paso 2).
+  protected async onCopyTemporaryPassword(value: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(value);
+      this.message.success('Contraseña temporal copiada.');
+    } catch {
+      this.message.error('No se pudo copiar. Selecciona la contraseña y cópiala manualmente.');
+    }
+  }
+
   protected onDeleteClick(): void {
     const user = this.user();
     if (!user) return;
@@ -483,7 +500,7 @@ export class UserDetail {
       subsidiariaId: this.createSubsidiariaId(),
       ubicacionId: this.createUbicacionId(),
     });
-    this.message.success(`Usuario ${fullName(user)} creado.`);
+    this.message.success(`Usuario ${fullName(user)} creado. Su contraseña temporal aparece en "Organización".`);
     this.router.navigate(['/usuarios', user.id]);
   }
 }

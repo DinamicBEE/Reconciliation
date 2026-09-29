@@ -58,6 +58,24 @@
       </a>
     }
 
+    @if (access.hasPermission('view_catalogs')) {
+      <a
+        class="app-menu__link"
+        routerLink="/catalogos"
+        routerLinkActive="app-menu__link--active"
+        [attr.title]="!menu.expanded() ? 'Catálogos' : null"
+      >
+        <span class="app-menu__icon">
+          <!-- libro abierto: listas de consulta -->
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z" />
+          </svg>
+        </span>
+        <span class="app-menu__label">Catálogos</span>
+      </a>
+    }
+
     @if (access.hasPermission('manage_users')) {
       <a
         class="app-menu__link"

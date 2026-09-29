@@ -20,7 +20,7 @@ export interface MockUser {
 // esta lista desaparece y `AuthService.login` pasa a llamar al endpoint real
 // (la integración vive en `feature/login-coctel-del-mar-integration`).
 //
-// Una cuenta por rol con módulo propio (ver `RoleId`/`ROLES` en
+// Una cuenta por rol (ver `RoleId`/`ROLES` en
 // user-management.model.ts), tomada de `MOCK_USERS` en
 // user-management-mock.data.ts — así se puede entrar a la app con cada rol y
 // comprobar en vivo que cada uno ve solo su módulo
@@ -46,15 +46,22 @@ export const MOCK_USERS: MockUser[] = [
     username: 'contabilidad',
     password: 'Contabilidad2026',
     displayName: 'Gabriela Vargas',
-    appUserId: 'u0018', // Contabilidad — solo Resumen de venta.
+    appUserId: 'u0018', // Contabilidad — Resumen de venta + Catálogos.
     roles: ['CONTABILIDAD'],
   },
   {
     username: 'tesoreria',
     password: 'Tesoreria2026',
     displayName: 'Roberto Sánchez',
-    appUserId: 'u0011', // Tesorería — solo Conciliación bancaria.
+    appUserId: 'u0011', // Tesorería — Conciliación bancaria + Catálogos.
     roles: ['TESORERIA'],
+  },
+  {
+    username: 'costos',
+    password: 'Costos2026',
+    displayName: 'Laura Pineda',
+    appUserId: 'u0027', // Costos — solo Catálogos cargados.
+    roles: ['COSTOS'],
   },
 ];
 

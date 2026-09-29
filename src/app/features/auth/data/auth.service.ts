@@ -1,8 +1,17 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { Observable, of, throwError } from 'rxjs';
 import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
 import { RoleId } from '../../user-management/data/user-management.model';
+import { AuthErrorResponse, SESSION_IDLE_TIMEOUT_CODE, SessionEndReason, isSessionIdleTimeout } from './auth-errors';
 import { MOCK_SUBSIDIARIAS, MOCK_UBICACIONES, MOCK_USERS } from './auth-mock.data';
-import { issueMockTokenPair } from './mock-token.util';
+import {
+  MOCK_SESSION_IDLE_TIMEOUT_MS,
+  clearMockSessionActivity,
+  mockSessionIdleMs,
+  touchMockSessionActivity,
+} from './mock-session-activity';
+import { MockTokenPair, issueMockTokenPair } from './mock-token.util';
 
 const STORAGE_KEY = 'conciliation-auth';
 
@@ -16,6 +25,11 @@ const ACCESS_TOKEN_TTL_MS = 45_000;
 // no dejar una ventana donde el accessToken ya venció y la siguiente
 // petición todavía no tiene uno nuevo.
 const REFRESH_MARGIN_MS = 8_000;
+// Cada cuánto, como mucho, una interacción del usuario se registra como
+// actividad de la sesión (ver `onUserActivity`) — no hace falta escribir en
+// sessionStorage en cada clic para una ventana de 30 minutos.
+const ACTIVITY_WRITE_THROTTLE_MS = 10_000;
+const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
 
 export interface AuthUser {
   username: string;
@@ -70,8 +84,16 @@ interface AuthSession {
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
+  private readonly document = inject(DOCUMENT);
   private readonly session = signal<AuthSession | null>(this.resolveInitialSession());
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastActivityWriteAt = 0;
+
+  // Por qué se cerró la última sesión SIN que el usuario lo pidiera — hoy
+  // solo inactividad. Lo leen `App` (redirige a /login) y `Login` (muestra
+  // el aviso); se limpia al iniciar sesión de nuevo o con logout manual.
+  private readonly endReason = signal<SessionEndReason | null>(null);
+  readonly sessionEndReason = this.endReason.asReadonly();
 
   readonly isAuthenticated = computed(() => this.session() !== null);
   readonly currentUser = computed<AuthUser | null>(() => this.session()?.user ?? null);
@@ -88,6 +110,12 @@ export class AuthService {
     const initial = this.session();
     if (initial) {
       this.scheduleRefresh(initial.accessTokenExpiresAt);
+    }
+
+    // Solo para el mock: registra la actividad del usuario que en el backend
+    // real contarían sus propias peticiones (ver mock-session-activity.ts).
+    for (const type of ACTIVITY_EVENTS) {
+      this.document.addEventListener(type, this.onUserActivity, { capture: true, passive: true });
     }
   }
 
@@ -123,14 +151,16 @@ export class AuthService {
       subsidiarias: MOCK_SUBSIDIARIAS,
       ubicaciones: MOCK_UBICACIONES,
     };
+    this.endReason.set(null);
+    touchMockSessionActivity();
     this.setSession({ user: authUser, ...issueMockTokenPair(match.username, ACCESS_TOKEN_TTL_MS) });
     return true;
   }
 
+  // Logout pedido por el usuario — no deja ningún aviso pendiente.
   logout(): void {
-    this.clearRefreshTimer();
-    this.session.set(null);
-    sessionStorage.removeItem(STORAGE_KEY);
+    this.endReason.set(null);
+    this.closeSession();
   }
 
   // Rota el accessToken/refreshToken — el llamador presenta el refreshToken
@@ -139,23 +169,77 @@ export class AuthService {
   // invalidado por una rotación anterior: un backend real trataría eso como
   // señal de robo de token y cerraría la sesión por completo, no solo
   // rechazaría esta llamada — mismo criterio aquí (`logout()`, no solo
-  // `return false`). El propio timer de refresco automático (`scheduleRefresh`)
+  // ignorar el intento). El propio timer de refresco automático (`scheduleRefresh`)
   // pasa por este mismo método con el token vigente, así que hay un solo
   // camino de código para "renovar", nunca dos implementaciones distintas.
-  refreshAccessToken(presentedRefreshToken: string): boolean {
+  //
+  // Sesión expirada por inactividad (acuerdo con backend, ver
+  // `auth-errors.ts`): el refresh responde 401 con `code:
+  // SESSION_IDLE_TIMEOUT`. Se valida SOLO por `code`; si coincide, se cierra
+  // la sesión por completo y se deja `sessionEndReason` en `idle_timeout`
+  // para que `App` redirija a /login y `Login` muestre el aviso. Cualquier
+  // otro rechazo del refresh también cierra sesión (no se puede renovar),
+  // pero sin ese aviso.
+  private refreshAccessToken(presentedRefreshToken: string): void {
     const current = this.session();
     if (!current) {
-      return false;
+      return;
     }
 
     if (presentedRefreshToken !== current.refreshToken) {
       this.logout();
-      return false;
+      return;
     }
 
-    this.setSession({ user: current.user, ...issueMockTokenPair(current.user.username, ACCESS_TOKEN_TTL_MS) });
-    return true;
+    this.requestTokenRefresh(current.user.username).subscribe({
+      next: (pair) => this.setSession({ user: current.user, ...pair }),
+      error: (err: unknown) => {
+        if (isSessionIdleTimeout(err)) {
+          this.expireSession('idle_timeout');
+          return;
+        }
+        this.logout();
+      },
+    });
   }
+
+  // Equivalente mock de `POST /auth/refresh` — misma respuesta de error que
+  // el backend real ante inactividad (status 401 + body con `code`), así el
+  // manejo de arriba no cambia al conectar la llamada HTTP.
+  private requestTokenRefresh(username: string): Observable<MockTokenPair> {
+    if (mockSessionIdleMs() > MOCK_SESSION_IDLE_TIMEOUT_MS) {
+      const response: AuthErrorResponse = {
+        status: 401,
+        error: { error: 'Sesion expirada por inactividad. Debe iniciar sesion de nuevo.', code: SESSION_IDLE_TIMEOUT_CODE },
+      };
+      return throwError(() => response);
+    }
+    return of(issueMockTokenPair(username, ACCESS_TOKEN_TTL_MS));
+  }
+
+  // Cierre NO pedido por el usuario — igual de completo que `logout()`, pero
+  // deja registrado el motivo para avisarle.
+  private expireSession(reason: SessionEndReason): void {
+    this.closeSession();
+    this.endReason.set(reason);
+  }
+
+  // Cierra la sesión por completo: timer de refresco, sesión en memoria,
+  // sessionStorage y la actividad registrada del mock.
+  private closeSession(): void {
+    this.clearRefreshTimer();
+    this.session.set(null);
+    sessionStorage.removeItem(STORAGE_KEY);
+    clearMockSessionActivity();
+  }
+
+  private readonly onUserActivity = (): void => {
+    if (!this.session()) return;
+    const now = Date.now();
+    if (now - this.lastActivityWriteAt < ACTIVITY_WRITE_THROTTLE_MS) return;
+    this.lastActivityWriteAt = now;
+    touchMockSessionActivity(now);
+  };
 
   // Verifica la contraseña actual contra `MOCK_USERS` y, si coincide,
   // actualiza el registro en el mismo lugar — es el equivalente mock de
