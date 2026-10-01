@@ -27,6 +27,7 @@ import {
   summarizeBankImport,
 } from './data/bank-import.util';
 import { MoneyPipe } from '../../core/country/money.pipe';
+import { AccessControlService } from '../auth/data/access-control.service';
 
 // Tiempo simulado de la llamada al backend (ver `onImportFileSelected`) —
 // deliberadamente perceptible para que el spinner/estado "Conectando con el
@@ -67,6 +68,7 @@ export class ReconciliationDashboard {
   protected readonly service = inject(ReconciliationService);
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
+  protected readonly access = inject(AccessControlService);
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
 
   protected readonly statusOptions: { value: StatusFilter; label: string }[] = [
@@ -230,6 +232,12 @@ export class ReconciliationDashboard {
   private importAttempts = 0;
 
   protected openImportModal(): void {
+    // Matriz 7.16 del DED: "Carga de extractos y liquidaciones" requiere
+    // `import_settlements` propio — hoy coincide con quien ve la pantalla
+    // (`view_reconciliation`, solo Admin/Tesorería tienen ambos), pero ahora
+    // se evalúa de verdad en vez de depender de esa coincidencia. El botón
+    // en el template ya lo oculta; este guard es defensa en profundidad.
+    if (!this.access.hasPermission('import_settlements')) return;
     this.importModalOpen.set(true);
   }
 

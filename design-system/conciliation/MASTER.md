@@ -2088,11 +2088,14 @@ resto de esta sección siguen vigentes tal cual.
    simulación); un error de red/conexión (status 0, p. ej. el stack de
    Docker no está levantado) muestra un mensaje aparte, no "usuario
    inválido".
-6. **`UserSummaryDto.permissions` del backend real NO se usa** — el
-   catálogo de permisos (`app_permission`/`app_role_permission`) no tiene
-   filas sembradas en ningún backend probado hasta ahora, así que esa lista
-   siempre llega vacía. `UserSummaryDto.roles` SÍ se usa — ver siguiente
-   actualización.
+6. **`UserSummaryDto.permissions` del backend real NO se usa (actualizado
+   más abajo)** — en su momento el catálogo de permisos
+   (`app_permission`/`app_role_permission`) no tenía filas sembradas en
+   ningún backend probado, así que esa lista siempre llegaba vacía.
+   `UserSummaryDto.roles` SÍ se usa — ver siguiente actualización. **Esto
+   cambió**: coctel_midd sembró ese catálogo citando el PDF de permisos de
+   este mismo frontend — ver "Actualización: endpoints de administración de
+   usuarios + manejo de errores" más abajo, punto sobre `UserSummaryDto`.
 
 ### Actualización: unificación de roles con el backend real
 
@@ -2367,10 +2370,463 @@ mantenimiento, las correcciones van por soporte) — el propio
    (varios roles la comparten) en vez de exclusiva de un rol. `COSTOS` dejó
    de tener `defaultPermissions: []`: aterriza en `/catalogos`
    (`homeRoute()`: dashboard → conciliación → catálogos → usuarios, mismo
-   orden que el menú). En esta rama no hay cuenta demo de Costos: una cuenta
-   real del backend con rol `COSTOS` y sin `AppUser` vinculado recibe
-   `view_catalogs` vía `defaultPermissionsForRoles`. La consulta/exportación de ventas que la matriz también da
-   a Costos y Tesorería sigue pendiente.
+   orden que el menú). **Actualizado**: esta rama SÍ tiene ya una cuenta demo
+   de Costos (`u0027`, Laura Pineda, sembrada también en el backend real —
+   ver "Actualización: endpoints de administración de usuarios + manejo de
+   errores" más abajo); una cuenta real del backend con rol `COSTOS` y sin
+   `AppUser` vinculado sigue recibiendo `view_catalogs` vía
+   `defaultPermissionsForRoles` igual que antes. La consulta/exportación de
+   ventas que la matriz también da a Costos y Tesorería sigue pendiente.
+
+### Actualización: endpoints de administración de usuarios + manejo de errores
+
+Tras el pull de `coctel_midd` `feature/login` (commits "add feature login
+users lists" / "add close session feature, view first pwd..."): el backend
+implementó CU3 completo (alta/lista/edición/estado/verificación de correo de
+usuarios) y expandió el contrato de errores. Ver también el mensaje de chat
+donde se listaron los endpoints nuevos — este bloque documenta lo que
+CAMBIÓ en el frontend a partir de ahí.
+
+1. **`UserSummaryDto` (interface local, `auth.service.ts`) actualizada** a
+   la forma real que ahora devuelven `/auth/login`, `/auth/me` y los nuevos
+   endpoints de `/users` — agrega `phone`, `status`, `lastLoginAt`,
+   `emailVerified`. Se corrigió la FORMA del DTO porque ahora es correcta;
+   no se propagaron esos 4 campos a `AuthUser`/`LoginResult` (nadie los
+   consume todavía) — agregarlos sin un consumidor real sería especular.
+2. **`permissions` del login real DEJÓ de llegar vacío** — coctel_midd
+   sembró `app_permission`/`app_role_permission` citando el PDF de permisos
+   de este frontend (ver la actualización anterior sobre `UserSummaryDto`,
+   punto 6, ahora corregido). Aun así, `AccessControlService.permissions`
+   SIGUE calculando con `defaultPermissionsForRoles(roles)` en vez de leer
+   `UserSummaryDto.permissions` directo — mismo resultado hoy, pero son dos
+   fuentes independientes; no se cambió la arquitectura porque no se pidió y
+   el backend todavía no conoce `view_catalogs` (ver punto 4).
+3. **Catálogo de error `{error, code}` expandido** (`auth-errors.ts`,
+   `ERROR_CODE_MESSAGES`) con los 13 códigos que expone
+   `GlobalExceptionHandler`/`InvalidTokenException` del backend real:
+   `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `PASSWORD_CHANGE_REQUIRED`,
+   `USER_NOT_FOUND`, `EMAIL_ALREADY_REGISTERED`, `INVALID_ROLE`,
+   `INVALID_USER_STATUS`, `ROLE_ASSIGNMENT_FORBIDDEN`,
+   `INVALID_REFRESH_TOKEN`, `REFRESH_TOKEN_REUSED`, `REFRESH_TOKEN_EXPIRED`,
+   `SESSION_IDLE_TIMEOUT`, `USER_LOCKED_OR_INACTIVE`.
+4. **Nuevo `httpErrorAlertInterceptor`** (`core/interceptors/`, registrado en
+   `app.config.ts` vía `provideHttpClient(withInterceptors([...]))`) —
+   intercepta CUALQUIER llamada al backend real y muestra un toast
+   (`NzMessageService.error`) para cualquier código del catálogo de arriba
+   que NO tenga ya su propia UI dedicada (`CODES_WITH_OWN_UI`:
+   `INVALID_CREDENTIALS`/`ACCOUNT_LOCKED` → alerta inline de `Login`;
+   `SESSION_IDLE_TIMEOUT` → aviso inline vía `sessionEndReason`) — evita
+   avisar DOS veces el mismo error. Un código que el backend agregue mañana
+   y que `ERROR_CODE_MESSAGES` todavía no liste cae a un mensaje genérico
+   (`Ocurrió un error inesperado (CODE)`), no desaparece sin avisar nada.
+   Siempre re-lanza el error después de mostrar el toast — el
+   `.subscribe({ error })` de quien hizo la llamada sigue corriendo igual.
+5. **Se sembró la 5ª cuenta demo (Costos) en el backend real** — mismo
+   patrón de SQL directo contra el contenedor (nunca migración en el repo
+   del backend) que las otras 4: `laura.pineda@conciliacion.mx` /
+   `Costos2026`, rol `COSTOS`. También se agregó `view_catalogs` a
+   `app_permission`/`app_role_permission` (ADMIN/CONTABILIDAD/TESORERIA/
+   COSTOS) porque el backend todavía no lo conocía — sin esto, las 5 cuentas
+   demo real tendrían menos permisos de los que su rol otorga en
+   `user-management.model.ts`. Se hizo backfill de `app_user_permission`
+   para las 5 (efectivo = default de su rol): las 4 anteriores se habían
+   sembrado ANTES de que `app_role_permission` existiera, así que
+   `permissions` les llegaba vacío pese a tener rol asignado — verificado
+   con las 5 vía `/auth/login` real, cada una devuelve exactamente los
+   permisos que su rol otorga en `ROLES` (`user-management.model.ts`).
+   **Nota operativa**: el volumen de Postgres tuvo que reconstruirse desde
+   cero en este pase — `V1__init_schema.sql` del backend se había EDITADO in
+   place (no un squash a un archivo nuevo) entre dos pulls de esta rama, y
+   Flyway ya la tenía marcada como aplicada con el checksum VIEJO; el
+   contenedor de `auth-service` además seguía corriendo la imagen vieja
+   (nunca se reconstruyó tras el `git merge` de esta sesión) — dos causas
+   independientes que hicieron parecer que `/users` devolvía datos
+   incompletos cuando en realidad el backend ni siquiera había arrancado con
+   el código nuevo. Si esto vuelve a pasar: reconstruir la imagen
+   (`docker compose build`) es obligatorio después de CUALQUIER `git pull`/
+   `merge` en `coctel_midd`, `docker start` sobre un contenedor existente
+   NO recoge cambios de código.
+6. **Se eliminó la opción "Eliminar usuario" del frontend** (botón en
+   `user-detail` y en cada fila de `user-list`, más
+   `UserManagementService.deleteUser()`) — el backend real no tiene
+   `DELETE /users/{id}` (ver la lista de endpoints en el chat), así que la
+   opción prometía algo que ningún backend real puede cumplir. El
+   `AuditAction` `'deleted'` y la entrada histórica de auditoría que lo
+   ejemplifica (`'u0009'`, ver `user-management-mock.data.ts`) se
+   conservaron — son historial, no la funcionalidad viva que se quitó.
+
+### Actualización: `POST /users`, `GET /users`, `GET /users/{id}` conectados al backend real
+
+Petición: "Implementa los endpoints 1) POST /users — expande el select para
+soportar multi subsidiaria y multi ubicación como lo tiene el back; 2) GET
+/users — agrega a la DB los usuarios que se tienen en el mock, respetando
+las estructuras actuales de la DB y el back-end; 3) GET /users/{id}". Ningún
+archivo ni migración de `coctel_midd` se tocó — todo lo de abajo es
+seed/lectura en tiempo de ejecución.
+
+1. **Discrepancia de conteo con lo pedido**: el mock tiene **26** usuarios
+   (`user-management-mock.data.ts`), no 59 como se mencionó en la petición
+   — verificado contando los registros del archivo. Se sembraron los 26
+   reales en vez de inventar usuarios ficticios para llegar a 59.
+2. **`AppUser.subsidiariaId`/`ubicacionId` (single) → `subsidiariaIds`/
+   `ubicacionIds: number[]`** en todo el frontend (`user-management.model.ts`
+   y cada call site) — el backend modela `empleado_subsidiaria`/
+   `empleado_ubicacion` como relación N:M desde siempre
+   (`CreateUserRequest.subsidiariaIds/ubicacionIds: List<Long>`,
+   `UserDetailDto.subsidiarias/ubicaciones: List<...>`); el frontend
+   simplificaba a un solo valor y ahora deja de hacerlo. Los `nz-select` de
+   Subsidiaria/Ubicación (creación y edición, `user-detail.html`) son ahora
+   `nzMode="multiple"`; la vista de solo lectura une los nombres con `, `
+   (`UserDetail.subsidiariaNames()`/`ubicacionNames()`, vía
+   `CatalogService.findSubsidiaria/findUbicacion` por id).
+3. **`UserManagementService.createUser()` reescrito para llamar al backend
+   real** (`POST /users` vía `AuthService.createUser()`) en vez de solo
+   empujar al signal local — construye el `AppUser` resultante con el `id`
+   real como `backendUserId`, los roles/permisos que confirma el backend y
+   la `temporaryPassword` que devuelve. Errores (`EMAIL_ALREADY_REGISTERED`,
+   `INVALID_ROLE`, `ROLE_ASSIGNMENT_FORBIDDEN`, etc.) los maneja el
+   `httpErrorAlertInterceptor` ya existente — `onCreateSubmit()` no duplica
+   ese manejo, solo apaga el spinner del botón (`submittingCreate`) si falla.
+4. **`UserManagementService.syncFromBackend()` (nuevo)** — llama
+   `AuthService.listUsers({ size: 100 })` (`GET /users`) y reconcilia cada
+   usuario local que ya tiene `backendUserId` con los datos reales
+   (roles, permisos, estado, `emailVerified`, último acceso,
+   `mustChangePassword`, subsidiarias/ubicaciones). Best-effort
+   (`error: () => {}`, nunca bloquea la lista si el backend no responde). Se
+   invoca desde el constructor de `UserList` — cada vez que se entra a
+   `/usuarios` se reconcilia contra el backend real.
+5. **`UserDetail` ahora pide `GET /users/{id}`** para cualquier usuario con
+   `backendUserId` y hace merge campo por campo sobre el registro mock base
+   (`mergeBackendDetail()`) — incluye resolver el `manager` real
+   (`UserDetailDto.manager.id` → `UserManagementService.findByBackendUserId()`
+   → `managerId` local) y aplanar `AddressDto` (`postalCode` del backend →
+   `zipCode` local). Arquitectura de signals: `backendDetail` se obtiene con
+   un `effect` que lee el `backendUserId` vía `untracked()` (evita el ciclo
+   `user() computed` → `effect` → `backendDetail` → `user()`); el `computed
+   user()` hace el merge; el `effect` que puebla los formularios de
+   edición/creación lee `user()` SIN `untracked` a propósito, para que los
+   forms se refresquen solos en cuanto el detalle real llega de forma
+   asíncrona.
+6. **Se sembraron 21 usuarios adicionales en el backend real** (sumados a
+   los 5 ya sembrados en la actualización anterior = 26 de 26 del mock
+   bridged), mismo patrón de SQL directo contra el contenedor de Postgres
+   (nunca un archivo/migración en `coctel_midd`): `empleado` + `app_user` +
+   `app_user_role` por usuario, `empleado_subsidiaria`/`empleado_ubicacion`
+   (una subsidiaria y una de 4 ubicaciones round-robin, igual que el mock),
+   un segundo pase de `UPDATE empleado SET supervisor_id = ...` resuelto por
+   email del manager (evita el problema de referencias hacia adelante —
+   varios managers aparecen DESPUÉS que sus reportes en el array del mock),
+   y un backfill de `app_user_permission` a partir de `app_role_permission`
+   (igual que en la actualización anterior — un INSERT directo NO dispara la
+   lógica de Java que copia permisos default al crear por `POST /users`).
+   Password placeholder para estos 21 (no pensados para login individual):
+   `Demo2026!`. `BACKEND_USER_ID` (`user-management-mock.data.ts`) mapea los
+   26 emails a sus ids reales (2–27; el id 1 es la cuenta bootstrap del
+   backend, fuera del mock).
+7. **Verificado end-to-end en navegador** (login real como
+   `admin@conciliacion.mx`): alta de usuario de prueba con 1 subsidiaria + 2
+   ubicaciones vía el form multi-select → `POST /users` 201 → detalle
+   `GET /users/{id}` 200 mostrando "Sucursal Polanco, Sucursal Condesa"
+   correctamente unidas; lista `/usuarios` dispara `GET /users?page=0&size=100`
+   al entrar; detalle de un usuario bridged preexistente (Daniela Torres)
+   muestra el manager resuelto ("Administrador Principal") y sus
+   subsidiaria/ubicación reales. El usuario de prueba se borró de la DB
+   (SQL directo) tras la verificación para no dejar basura en el dataset
+   real.
+
+### Actualización: `PATCH /users/{id}`, `PATCH /users/{id}/status`, `POST /users/{id}/verify-email` conectados al backend real
+
+Petición: "Implementa los endpoints 1) PATCH /users/{id}; 2) PATCH
+/users/{id}/status; 3) POST /users/{id}/verify-email". Los 3 ya tenían
+equivalente LOCAL en `UserManagementService` (`updateUserProfile`,
+`setStatus`, `setEmailVerified`) desde antes de conectar ningún backend
+real — esta actualización los reescribe para llamar al backend real
+conservando la misma firma de uso desde los componentes en la medida de lo
+posible (ahora devuelven `Observable<AppUser>` en vez de `void`). Ningún
+archivo ni migración de `coctel_midd` se tocó.
+
+1. **`PATCH /users/{id}` (`AuthService.updateUser`) NO modela
+   subsidiarias/ubicaciones** (ver `UpdateUserRequest.java`, mismo comentario
+   que ya cubre roles/estado: "se manejan en sus propios endpoints, no
+   aqui") — a diferencia de `POST /users` (alta), que sí las acepta. Por
+   eso `UserManagementService.updateUserProfile()` construye el `AppUser`
+   resultante con `subsidiariaIds`/`ubicacionIds` de la RESPUESTA
+   (`UserSummaryDto.subsidiarias`/`.ubicaciones`, sin cambios reales),
+   ignorando lo que el form de edición pudiera haber traído — y
+   **`user-detail.html` ya NO ofrece un `nz-select` editable para esos 2
+   campos ni siquiera en modo edición** (antes de este cambio sí lo hacía,
+   ver la actualización anterior): mostrar un multi-select que el guardado
+   descarta en silencio habría sido un bug de UX, no una mejora. Quedan de
+   solo lectura siempre (igual que en modo NO edición), con una nota en el
+   HTML explicando por qué. Si el backend agrega algún día un endpoint para
+   editarlas post-alta, ahí se vuelve a habilitar el select.
+2. **La respuesta de `PATCH /users/{id}` es `UserSummaryDto`, NO
+   `UserDetailDto`** — no repite los campos que se acaban de mandar (nombre,
+   dirección, organización...), solo el estado compartido con el resto de
+   `/users` (roles, permisos, estado, subsidiarias/ubicaciones,
+   mustChangePassword, emailVerified). `updateUserProfile()` combina AMBAS
+   fuentes: lo que el `input` acaba de guardar (eco local, confiado porque
+   el backend no lo rechazó) + lo que la respuesta SÍ trae (autoritativo).
+3. **`UserDetail.refreshBackendDetail()` (nuevo, privado)** — tras las 3
+   mutaciones, re-pide `GET /users/{id}` y reemplaza `backendDetail`. Sin
+   esto, `user()` seguiría fusionando el `UserDetailDto` VIEJO (cargado al
+   entrar a la pantalla) sobre el `usersSignal` recién actualizado, y el
+   merge pisaría justo los campos que la mutación acaba de guardar con los
+   valores desactualizados — un bug sutil que solo se nota si se guarda dos
+   veces seguidas sin recargar la página.
+4. **403 de `/users/**` sin rol suficiente (ADMIN/ALTAS) no trae `code`**
+   — lo bloquea `SecurityConfig` antes de llegar al controller/
+   `GlobalExceptionHandler` (a diferencia de `ROLE_ASSIGNMENT_FORBIDDEN` al
+   crear, que sí es una excepción de negocio con código), así que
+   `httpErrorAlertInterceptor` no muestra nada para ese caso — mismo gap que
+   ya tenía `UserDetail.onUnlockBackendClick`. Se agregó
+   `forbiddenRoleMessage(status)` (`user-management.service.ts`, exportado)
+   como el único mensaje manual que faltaba; cualquier otro código (404
+   `USER_NOT_FOUND`, 400 `INVALID_USER_STATUS`, etc.) ya lo cubre el
+   interceptor sin duplicar el aviso.
+5. **`onStatusChangeRequest` (en `user-detail.ts` Y `user-list.ts`,
+   `onVerifyEmailClick`, `onSaveProfile`)** ahora son asíncronos — el modal
+   de confirmación se queda abierto/girando (`nzOnOk` devuelve una Promise)
+   hasta que el backend responde, mismo patrón que ya usaba
+   `onUnlockBackendClick`; "Guardar cambios" (perfil) tiene su propio
+   `savingProfile` signal para el loading del botón, igual que
+   `submittingCreate` en la creación.
+6. **Verificado end-to-end en navegador** (login real como
+   `admin@conciliacion.mx`): cambio de "Cargo o puesto" de Ana Martínez →
+   `PATCH /users/7` 200 → persiste tras una recarga dura (no solo en el
+   signal local) → revertido; cambio de estado de Ana Martínez a Inactivo
+   y de vuelta a Activo desde la LISTA → `PATCH /users/7/status` 200 en
+   ambos sentidos, chip actualizado en tiempo real; verificación manual de
+   correo de Paola Aguilar (antes `email_verified=false` en la DB real) →
+   `POST /users/23/verify-email` → confirmado `email_verified=true`
+   directamente en la DB tras la llamada.
+
+### Actualización: matriz de roles y permisos (7.16) completa + interceptor de token automático
+
+Petición: "Termina de implementar la 'Matriz de roles y permisos' del lado
+del front, ignora la desviación existente en 'Asignación y cambio de rol'.
+Crea el interceptor HTTP para cubrir el punto 'Token validado en cada
+petición (API Gateway)'." Ambos puntos vienen de
+`docs/avances/comparativa-DED-vs-portal-conciliacion_v2.pdf` (secciones 5 y
+6) — ver también la v3 de ese documento, que refleja este mismo cambio.
+
+**Matriz de roles y permisos (7.16):**
+
+1. **`ROLES.defaultPermissions` (user-management.model.ts) ampliado** —
+   Tesorería y Costos ahora también tienen `view_dashboard` (consultan
+   ventas); Contabilidad y Costos también tienen `export_reports` (exportan
+   el listado). Población resultante por función, calcada del DED: Consulta
+   de ventas = Admin/Contab/Tesor/Costos; Exportación = los mismos 4;
+   Reproceso = Admin/Contab únicamente (ver punto 3); el resto sin cambio.
+   **A propósito NO se tocó "Asignación y cambio de rol"** (Altas conserva
+   `manage_roles`, sigue sin evaluarse en ningún guard, y el modelo sigue
+   permitiendo varios roles por usuario) — es la desviación que esta tarea
+   pidió explícitamente ignorar.
+2. **`AccessControlService.permissions` deja de ignorar el arreglo real del
+   backend** — antes SIEMPRE se recalculaba con `defaultPermissionsForRoles`
+   a partir de `AppUser.permissions` (el registro mock, editable a mano en
+   "Seguridad y acceso" sin persistir en ningún backend real — ver
+   `UserManagementService.changeRoles`, sigue siendo local-only, no es parte
+   de esta tarea) o de `auth.currentUser()?.roles`. Ahora la fuente ÚNICA es
+   `AuthUser.permissions` (`UserSummaryDto.permissions`, lo que el login/
+   `GET /auth/me` real devuelve), con `defaultPermissionsForRoles` solo como
+   fallback si llegara vacío. Esto cierra la desviación "el arreglo
+   `permissions` que devuelve el backend en el login se ignora" — la otra
+   mitad de la matriz, junto con el punto 1.
+3. **"Reproceso de ventas" sigue sin permiso propio, a propósito** — el DED
+   lo limita a Admin/Contabilidad, un subconjunto MÁS ANGOSTO que
+   `view_dashboard` ahora que este también incluye Tesorería/Costos: no se
+   puede expresar con un solo `hasPermission(...)`. Se agregó
+   `AccessControlService.canReprocessSales` (por rol REAL del backend, no el
+   mock) y se gatea el botón "Reprocesar" en `sales-dashboard.html`/`.ts`
+   con él — antes "coincidía por accidente" (compartía guard con la vista de
+   ventas, que solo veían Admin/Contab); ahora es una regla explícita e
+   independiente que sigue dando el mismo resultado aunque la población de
+   `view_dashboard` haya crecido.
+4. **`export_reports`, `import_settlements` y `manage_differences` pasan de
+   "definidos pero nunca evaluados" a evaluados de verdad**:
+   - `export_reports` → botón "Exportar" en `sales-dashboard` (antes
+     exportaba cualquiera que pudiera VER la pantalla).
+   - `import_settlements` → botón "Importar movimientos bancarios" en
+     `reconciliation-dashboard` (antes solo dependía de `view_reconciliation`
+     a nivel de ruta).
+   - `manage_differences` → botón "Guardar match" en `difference-management`
+     (antes solo `service.canSave()`, una regla de negocio sin relación con
+     permisos).
+   En los 3 casos la POBLACIÓN accesible no cambia (Tesorería ya tenía los
+   3, Admin también) — lo que cambia es que ahora un usuario CON el permiso
+   "padre" (`view_reconciliation`) pero SIN el permiso específico ya no
+   tendría acceso, algo que antes era imposible de lograr.
+5. **`view_audit_log` pasa a gatear `/usuarios/auditoria`** (antes
+   colapsaba en `manage_users`, igual que el resto de `/usuarios/*`) — ver
+   `app.routes.ts` y `header-search.util.ts`. Admin/Altas tienen ambos
+   permisos, así que la población no cambió, solo qué permiso se evalúa.
+6. **Backfill en la DB real** (SQL directo contra el contenedor, nunca
+   migración en `coctel_midd`): `app_role_permission` ganó
+   (TESORERIA, view_dashboard), (COSTOS, view_dashboard), (COSTOS,
+   export_reports), (CONTABILIDAD, export_reports); `app_user_permission` se
+   respobló para todos los usuarios YA sembrados con esos 3 roles (21 filas)
+   — sin este paso, `AccessControlService.permissions` (que desde el punto 2
+   prefiere el arreglo REAL del backend) habría seguido mostrando la matriz
+   VIEJA para las cuentas demo ya creadas, aunque el modelo del frontend ya
+   dijera otra cosa.
+7. **Verificado en navegador**: login real como Tesorería
+   (`roberto.sanchez@conciliacion.mx`) aterriza en `/dashboard` con
+   "Exportar" visible y SIN "Reprocesar"; Costos
+   (`laura.pineda@conciliacion.mx`) igual, y `/conciliacion` por URL directa
+   rebota a `/dashboard` (`permissionGuard` + `homeRoute()`); Admin conserva
+   "Reprocesar" + "Exportar" + acceso a `/usuarios/auditoria` y a
+   "Importar" en conciliación.
+
+**Interceptor HTTP — "Token validado en cada petición (API Gateway)":**
+
+8. **`authTokenInterceptor` (nuevo, `core/interceptors/auth-token.interceptor.ts`,
+   registrado en `app.config.ts` ANTES que `httpErrorAlertInterceptor`)** —
+   agrega `Authorization: Bearer <token>` automáticamente a CUALQUIER
+   petición a `environment.apiUrl`, salvo `/auth/login`, `/auth/refresh` y
+   `/auth/logout` (`permitAll()` en `SecurityConfig.java` — no necesitan uno,
+   o no lo requieren). Antes cada método de `AuthService` lo armaba a mano
+   (`headers: { Authorization: ... }` + un guard `if (!accessToken)
+   return throwError(...)` repetido 8 veces) — ahora ESE código desapareció
+   de `changePassword`, `unlockUser`, `getUserDetail`, `createUser`,
+   `listUsers`, `updateUser`, `changeStatus` y `verifyEmail`: todos quedaron
+   en una sola línea (`this.http.xxx(url, body)`), el interceptor es la
+   única fuente de verdad.
+9. **Manejo global de 401** — el mismo interceptor invalida la sesión
+   (`AuthService.invalidateSession('invalid_token')`) ante un 401 en
+   CUALQUIER llamada autenticada que no sea `/auth/refresh` (ese 401 ya lo
+   maneja `refreshAccessToken` aparte, distinguiendo `SESSION_IDLE_TIMEOUT`
+   de cualquier otro rechazo — manejarlo también aquí duplicaría el cierre
+   de sesión). El interceptor NO navega: solo limpia la sesión;
+   `App`'s `effect()` que ya observaba `sessionEndReason` para
+   `idle_timeout` ahora reacciona a CUALQUIER motivo no nulo — un solo lugar
+   que decide cuándo redirigir a `/login`, no dos. `SessionEndReason` ganó el
+   valor `'invalid_token'` (`auth-errors.ts`) y `Login.sessionNotice` su
+   propio texto para ese caso.
+10. **`GET /auth/me` deja de estar sin usar** — `AuthService` lo expone
+    (`me()`) y lo llama al arrancar SI hay una sesión restaurada de
+    `sessionStorage` (`validateResumedSession()`, constructor): de paso
+    refresca `roles`/`permissions`/`subsidiarias`/`ubicaciones` por si
+    cambiaron desde el último login (p. ej. un admin le quitó un rol a esa
+    misma cuenta mientras la pestaña seguía abierta). Best-effort: un error
+    que no sea 401 deja la sesión como estaba; un 401 real de todas formas
+    lo cierra el mismo `authTokenInterceptor` en la primera petición
+    protegida que seguiría al fallo de `/auth/me`.
+11. **`AuthUser`/`LoginResult` ganan `permissions: PermissionKey[]`** —
+    mapeado desde `UserSummaryDto.permissions` en `login()` y en
+    `validateResumedSession()`; `resolveInitialSession()` ahora exige este
+    campo para aceptar una sesión vieja de `sessionStorage` (mismo criterio
+    que los campos añadidos en actualizaciones anteriores — una sesión sin
+    él se considera de forma antigua, de vuelta a login).
+12. **[`docs/avances/comparativa-DED-vs-portal-conciliacion_v3.pdf`](../../docs/avances/comparativa-DED-vs-portal-conciliacion_v3.pdf)**
+    (copia también en `docs/comparativa-DED-vs-portal-conciliacion.pdf`,
+    la "última versión") — actualiza la v2.0 con los cambios de este
+    bloque: 18 implementados/21 parciales/1 desviación/23 faltantes sobre
+    63 requisitos (antes 13/25/1/23 sobre 62 — la fila de edición de
+    usuarios se dividió en dos, ver su sección 2). Generada con HTML/CSS
+    propio impreso a PDF vía Edge headless (`msedge --headless
+    --print-to-pdf`) — no existía ningún generador de las versiones
+    anteriores en ningún repo del proyecto (verificado); la fuente HTML de
+    esta versión no se versiona, solo el PDF resultante, igual que v1/v2.
+
+### Actualización: supervisor en el alta, filtro "Empresa" en ventas, referencias NetSuite/conciliación
+
+1. **Alta de usuario: campo "Supervisor" (select simple)** — `UserDetail`
+   ganó `createManagerId` (signal, único valor, a diferencia de
+   roles/subsidiarias/ubicaciones que sí aceptan varias) y un
+   `<nz-select>` en el form de creación que reusa `managerOptions()` (el
+   mismo cómputo que ya alimentaba "Administrador responsable" en modo
+   edición — en modo creación `userId()` es `undefined`, así que el
+   filtro `m.id !== id` no excluye a nadie, funciona sin ajustes).
+   `CreateUserInput` ganó `managerId: string | null`;
+   `UserManagementService.createUser()` ya NO manda `supervisorId: null`
+   fijo — lo resuelve al `backendUserId` real (mismo bridge que
+   `updateUserProfile`) antes de mandarlo a `POST /users`. Verificado en
+   navegador: alta con supervisor → `empleado.supervisor_id` correcto en
+   la DB real.
+2. **Ventas: filtro "Empresa" (subsidiaria)** — `Sale` ganó
+   `subsidiariaId: number | null` (todas las ventas del mock apuntan a la
+   única subsidiaria real sembrada, id 1 — `DEFAULT_SUBSIDIARIA_ID` en
+   `sales-mock.data.ts`). Nuevo `SubsidiariaFilter`/`subsidiariaFilter` en
+   `SalesDashboardService` (mismo patrón que `StoreFilter`/`storeFilter`,
+   pero SIN la indirección por nombre que usa `storeOptions` — aquí hay
+   id real que comparar 1:1). El select nuevo y el de "Ubicación"
+   (ya existente) se llenan ambos desde `CatalogService.subsidiarias()`/
+   `.ubicaciones()` — que YA son, desde que existen, una lectura directa
+   de `AuthUser.subsidiarias`/`.ubicaciones` (el arreglo que llega en el
+   login), confirmado al leer `CatalogService` — no fue necesario
+   bypasearlo. Etiqueta "Empresa" hardcodeada (no vive en
+   `CountryProfile.vocabulary`): es un término neutro que no cambia entre
+   México y Colombia, a diferencia de "Sucursal"/"Ubicación".
+3. **Ventas: referencia NetSuite y conciliación relacionada** — `Sale`
+   ganó `netsuite: NetSuiteReference | null` (`entryId`, `postedAt`) y
+   `reconciliation: SaleReconciliationReference | null` (`id`, `date`),
+   mismo patrón que `ElectronicInvoice` (objeto nombrado, no campos
+   sueltos). Valores reales solo en las primeras 3 ventas del mock
+   (V-2001/2/3, `sales-mock.data.ts`) — el resto (generadas por
+   `buildDay()` o las demás `TODAY_SALES`) se queda en `null`. Decisión
+   deliberada: V-2002 (`reconciliationStatus: 'sale_only'`) recibió
+   `netsuite` pero NO `reconciliation` — darle una referencia de
+   conciliación a una venta marcada explícitamente como "aún no
+   conciliada" habría sido una inconsistencia visible en el mismo Drawer
+   (su propio tag de estado diría lo contrario). Renderizado en el Drawer
+   con el mismo patrón `@if (sale.X; as y) {...} @else {muted}` que el
+   resto de campos opcionales ahí.
+4. **Vercel + país**: sin cambios de código — `environment.country` se
+   resuelve en BUILD TIME vía `fileReplacements` de Angular (ver
+   `angular.json`, configuración `co`), no en runtime, así que una
+   variable de entorno de Vercel por sí sola no cambia el país. El
+   proyecto ya tiene `build:co` listo (`ng build --configuration
+   production,co`) — para CO en Vercel, la vía más simple es importar el
+   mismo repo como un SEGUNDO proyecto de Vercel y, en ESE proyecto,
+   sobreescribir el Build Command a `pnpm run build:co` (Settings →
+   General → Build & Development Settings). El proyecto MX existente no
+   se toca.
+
+### Actualización: fix — `GET /users` no mostraba cuentas creadas fuera de esta sesión + `createdAt` real en el detalle
+
+**Bug reportado**: dos usuarios dados de alta contra el backend real
+(`CPrueb@gamil.com`, `test@user.com`) no aparecían en "Administración de
+usuarios" pese a que `GET /users` sí los devolvía.
+
+1. **Causa raíz**: `usersSignal` arranca SIEMPRE desde `MOCK_USERS` (26
+   cuentas fijas) en cada bootstrap de la app — no persiste entre recargas
+   (ver el punto de "Pendientes" de más abajo, "Ningún estado de
+   `UserManagementService` sobrevive una recarga dura"). `syncFromBackend()`
+   solo RECONCILIABA filas del mock que YA tenían `backendUserId` — una
+   cuenta creada en una sesión anterior (el alta de create sí la agrega al
+   signal al instante, pero eso no sobrevive la siguiente recarga) o desde
+   fuera de este frontend nunca tenía con qué hacer match, así que el
+   `.map()` la descartaba en silencio para siempre, aunque `GET /users` la
+   siguiera devolviendo.
+2. **Fix**: `syncFromBackend()` ahora, además de reconciliar lo que ya
+   conoce, detecta los `id` del backend que NO tienen ningún
+   `backendUserId` local y los inserta como `AppUser` nuevos — vía
+   `fetchAndInsertUser()`/`buildUserFromDetail()` (nuevos, privados), que
+   piden el detalle COMPLETO (`GET /users/{id}`, no solo `UserSummaryDto` de
+   la lista — ahí no vienen `firstName`/`lastName`/`createdAt`/organización)
+   y arman el registro igual que `UserDetail.mergeBackendDetail`. Guard de
+   carrera: si para cuando responde esa llamada la cuenta ya tiene registro
+   local, no duplica.
+3. **Segundo bug encontrado al auditar el detalle contra `GET
+   /users/{id}`** (pedido explícito: "lista de los campos que no se están
+   llenando con la info que regresa el endpoint") — comparé cada campo de
+   `UserDetailDto` contra `UserDetail.mergeBackendDetail` y cada binding
+   `u.*` de `user-detail.html`. Único campo que el endpoint SÍ devuelve y
+   el merge descartaba: **`createdAt`** — `mergeBackendDetail` nunca lo
+   sobreescribía, así que "Fecha de creación" se quedaba con la fecha
+   FABRICADA del mock para cualquier cuenta ya sembrada, en vez de la real.
+   Corregido (una línea). El resto de campos que siguen en su default del
+   mock (`avatarUrl`, `activeSessions`, `failedLoginAttempts`,
+   `lastActivityAt`, `twoFactorEnabled`) NO son un bug — el backend
+   simplemente no los modela todavía en este endpoint, no hay nada que
+   `mergeBackendDetail` pueda leer de ahí.
+4. **Verificado en navegador**: sembré una cuenta directo en la DB real
+   (sin pasar por el frontend, replicando el reporte) → apareció en la
+   lista tras recargar. Abrí el detalle de una cuenta YA sembrada
+   (`analista@conciliacion.mx`, `created_at` real 30-Sep-2026 en la DB) →
+   "Fecha de creación" ahora muestra 30/09/2026 (antes mostraba la fecha
+   fija del mock).
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

@@ -18,11 +18,13 @@ import { ReconciliationStatus, TENDER_MEDIA_LABEL } from '../../shared/models/re
 import { Sale, STORE_LABEL, Store } from '../../shared/models/sale.model';
 import { COUNTRY_PROFILE } from '../../core/country/active-country';
 import { CatalogService } from '../../core/services/catalog.service';
+import { AccessControlService } from '../auth/data/access-control.service';
 import {
   DateRangeFilter,
   SalesDashboardService,
   StatusFilter,
   StoreFilter,
+  SubsidiariaFilter,
   TenderMediaFilter,
 } from './data/sales-dashboard.service';
 import {
@@ -72,6 +74,7 @@ export class SalesDashboard {
   private readonly catalog = inject(CatalogService);
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
+  protected readonly access = inject(AccessControlService);
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
   protected readonly storeLabel = STORE_LABEL;
   // Vocabulario fiscal y general del país activo (`environment.country`):
@@ -98,6 +101,16 @@ export class SalesDashboard {
       .filter((u) => LABEL_TO_STORE[u.nombre])
       .map((u) => ({ value: LABEL_TO_STORE[u.nombre], label: u.nombre }));
     return [{ value: 'all' as const, label: this.country.vocabulary.allLocations }, ...known];
+  });
+
+  // Filtro "Empresa" — a diferencia de `storeOptions` (que traduce por
+  // NOMBRE a un slug fijo del mock, ver LABEL_TO_STORE), aquí sí hay un id
+  // real (`Sale.subsidiariaId`) que comparar 1:1 contra
+  // `CatalogService.subsidiarias()` (arreglo que llega en el login vía
+  // `AuthUser.subsidiarias`), sin indirección por nombre.
+  protected readonly subsidiariaOptions = computed<{ value: SubsidiariaFilter; label: string }[]>(() => {
+    const known = this.catalog.subsidiarias().map((s) => ({ value: s.id, label: s.nombre }));
+    return [{ value: 'all' as const, label: 'Todas las empresas' }, ...known];
   });
 
   // Mismo vocabulario/orden que reconciliation-dashboard.ts (statusOptions)
@@ -142,6 +155,10 @@ export class SalesDashboard {
 
   protected onDateRangeChange(value: [Date, Date] | null): void {
     this.service.setDateRange(value as DateRangeFilter);
+  }
+
+  protected onSubsidiariaFilterChange(value: SubsidiariaFilter): void {
+    this.service.setSubsidiariaFilter(value);
   }
 
   protected onStoreFilterChange(value: StoreFilter): void {
@@ -205,6 +222,11 @@ export class SalesDashboard {
   // formato/fórmulas. BOM UTF-8 al inicio del Blob para que Excel respete los
   // acentos (nombres de cliente, "Sucursal ...") al abrirlo directamente.
   protected exportCsv(): void {
+    // Matriz 7.16 del DED: exportar requiere `export_reports` propio, no solo
+    // poder VER la pantalla (`view_dashboard`) — ver el botón en el template,
+    // que ya lo oculta; este guard es defensa en profundidad.
+    if (!this.access.hasPermission('export_reports')) return;
+
     const csv = buildSalesCsv(this.service.filteredSales(), {
       location: this.country.vocabulary.location,
       store: this.storeLabel,
@@ -232,6 +254,11 @@ export class SalesDashboard {
   // backend sin necesitar un spinner propio (mismo patrón de
   // `modal.confirm()` que "Desconciliar" en reconciliation-dashboard.ts).
   protected onReprocessClick(): void {
+    // Matriz 7.16 del DED: "Reproceso de ventas" es Admin/Contabilidad
+    // únicamente — sin permiso propio, por rol directo (ver
+    // AccessControlService.canReprocessSales); el botón en el template ya lo
+    // oculta, este guard es defensa en profundidad.
+    if (!this.access.canReprocessSales()) return;
     const target = this.service.reprocessTarget();
     if (!target) return;
 

@@ -7,7 +7,7 @@ import { AppUser, AppUserAddress, AuditLogEntry } from './user-management.model'
 // índice en vez de escribirlos 25 veces a mano. `mustChangePassword` tampoco
 // se declara por usuario aquí — se defaultea a `false` para los 25 al
 // construir `MOCK_USERS`, con UNA excepción a propósito (ver ese bloque).
-// `subsidiariaId`/`ubicacionId`/`backendUserId` (catálogo real + puente al
+// `subsidiariaIds`/`ubicacionIds`/`backendUserId` (catálogo real + puente al
 // backend) tampoco — mismo criterio, ver el `.map()` de más abajo.
 type MockUserSeed = Omit<
   AppUser,
@@ -20,8 +20,8 @@ type MockUserSeed = Omit<
   | 'contractEndDate'
   | 'mustChangePassword'
   | 'temporaryPassword'
-  | 'subsidiariaId'
-  | 'ubicacionId'
+  | 'subsidiariaIds'
+  | 'ubicacionIds'
   | 'backendUserId'
 >;
 
@@ -595,6 +595,33 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     jobTitle: 'Auditor de Procesos',
     managerId: 'u0001',
   },
+  // Cuenta demo de COSTOS (login "Costos", ver login.html) — el único
+  // usuario con ese rol, agregado junto con la pantalla de Catálogos
+  // cargados, que es hoy lo único que ese rol puede ver. Sembrada también en
+  // el backend real (ver BACKEND_USER_ID abajo y MASTER.md, "Actualización:
+  // endpoints de administración de usuarios + manejo de errores").
+  {
+    id: 'u0027',
+    firstName: 'Laura',
+    lastName: 'Pineda',
+    email: 'laura.pineda@conciliacion.mx',
+    phone: '+52 55 5678 0066',
+    avatarUrl: null,
+    status: 'active',
+    createdAt: '2026-09-01T09:00:00',
+    lastAccessAt: '2026-09-25T12:10:00',
+    roleIds: ['COSTOS'],
+    permissions: ['view_catalogs'],
+    emailVerified: true,
+    lastActivityAt: '2026-09-25T12:30:00',
+    failedLoginAttempts: 0,
+    twoFactorEnabled: false,
+    activeSessions: 0,
+    department: 'Finanzas',
+    area: 'Contabilidad',
+    jobTitle: 'Analista de Conciliación',
+    managerId: 'u0001',
+  },
 ];
 
 // Catálogos pequeños solo para derivar los campos de `extraProfileFields` —
@@ -653,15 +680,41 @@ function extraProfileFields(
   };
 }
 
-// Puente de las 4 cuentas demo hacia su `app_user.id` REAL en el backend
-// (ver docker exec directo contra Postgres al sembrarlas — MASTER.md,
-// "Actualización: unificación de roles con el backend real") — el resto de
-// este mock (21 usuarios sin cuenta real) no tiene equivalente, `null`.
+// Puente de LOS 26 hacia su `app_user.id` REAL en el backend — ver docker
+// exec directo contra Postgres al sembrarlos (MASTER.md, "Actualización:
+// endpoints de administración de usuarios (CRUD real) + multi-subsidiaria/
+// ubicación"). Ya no queda ninguno "solo mock": los 26 existen también en
+// el backend real. Un usuario creado DESPUÉS de este seed (vía
+// `UserManagementService.createUser`, que ahora llama a `POST /users`) no
+// pasa por aquí — su `backendUserId` llega directo en la respuesta del
+// alta, ver `AuthService.createUser`.
 const BACKEND_USER_ID: Partial<Record<string, number>> = {
   u0001: 2, // admin@conciliacion.mx
+  u0002: 7, // analista@conciliacion.mx
+  u0003: 8, // daniela.torres@conciliacion.mx
+  u0004: 9, // jorge.ramirez@conciliacion.mx
+  u0005: 10, // marina.lopez@conciliacion.mx
   u0006: 3, // carlos.medina@conciliacion.mx
+  u0007: 11, // sofia.hernandez@conciliacion.mx
+  u0008: 12, // luis.fernandez@conciliacion.mx
+  u0010: 13, // fernanda.cruz@conciliacion.mx
   u0011: 4, // roberto.sanchez@conciliacion.mx
+  u0012: 14, // patricia.gomez@conciliacion.mx
+  u0013: 15, // fernando.castillo@conciliacion.mx
+  u0014: 16, // alejandra.reyes@conciliacion.mx
+  u0015: 17, // diego.morales@conciliacion.mx
+  u0016: 18, // valeria.ortiz@conciliacion.mx
+  u0017: 19, // ricardo.jimenez@conciliacion.mx
   u0018: 5, // gabriela.vargas@conciliacion.mx
+  u0019: 20, // andres.molina@conciliacion.mx
+  u0020: 21, // karla.delgado@conciliacion.mx
+  u0021: 22, // emilio.navarro@conciliacion.mx
+  u0022: 23, // paola.aguilar@conciliacion.mx
+  u0023: 24, // hector.ibarra@conciliacion.mx
+  u0024: 25, // renata.campos@conciliacion.mx
+  u0025: 26, // ivan.salazar@conciliacion.mx
+  u0026: 27, // camila.rangel@conciliacion.mx
+  u0027: 6, // laura.pineda@conciliacion.mx
 };
 
 export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
@@ -674,16 +727,18 @@ export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   // demo", y MASTER.md "Patrón: refresh token de un solo uso + cambio
   // obligatorio de contraseña").
   mustChangePassword: seed.id === 'u0018',
-  // Valor mock solo para cuentas sin `backendUserId`; las 4 cuentas demo del
-  // backend lo leen de `GET /users/{id}` (ver user-detail).
+  // Valor mock de partida; para cualquier cuenta con `backendUserId`,
+  // `user-detail` la sobreescribe con lo que devuelva `GET /users/{id}` en
+  // caliente (ver `UserDetail`, efecto que llama `AuthService.getUserDetail`).
   temporaryPassword: null,
   // La única subsidiaria real sembrada hoy (id 1, "Conciliación Bancaria")
-  // para los 25; ubicación varía por índice entre las 4 reales sembradas
-  // (ids 1-4) solo para dar variedad visible en la UI — ninguno de los 21
-  // usuarios sin cuenta real tiene esto verificado contra el backend, es
-  // puramente decorativo para ellos.
-  subsidiariaId: 1,
-  ubicacionId: (index % 4) + 1,
+  // para los 26; ubicación varía por índice entre las 4 reales sembradas
+  // (ids 1-4) — mismos valores con los que se sembró cada uno en el backend
+  // real (ver el script de siembra, MASTER.md). Arreglo de UN elemento
+  // porque así se sembraron; nada impide que `POST /users`
+  // (`UserManagementService.createUser`) le asigne varias a alguien nuevo.
+  subsidiariaIds: [1],
+  ubicacionIds: [(index % 4) + 1],
   backendUserId: BACKEND_USER_ID[seed.id] ?? null,
 }));
 

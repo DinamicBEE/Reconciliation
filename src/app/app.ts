@@ -17,14 +17,17 @@ export class App {
   private readonly router = inject(Router);
 
   constructor() {
-    // Sesión cerrada por inactividad (el refresh respondió
-    // SESSION_IDLE_TIMEOUT, ver AuthService.refreshAccessToken): los guards
-    // solo actúan al navegar, así que sin esto la pantalla actual se
-    // quedaría abierta sin sesión. Vive aquí y no en Shell para cubrir
-    // también /cambiar-password, que está fuera de Shell. `Login` muestra el
-    // aviso al llegar.
+    // Sesión cerrada sin que el usuario lo pidiera — por inactividad (el
+    // refresh respondió SESSION_IDLE_TIMEOUT, ver
+    // AuthService.refreshAccessToken) o por un access token invalidado fuera
+    // de esa ventana (cualquier otro 401, ver `authTokenInterceptor` /
+    // AuthService.invalidateSession): los guards solo actúan al navegar, así
+    // que sin esto la pantalla actual se quedaría abierta sin sesión. Vive
+    // aquí y no en Shell para cubrir también /cambiar-password, que está
+    // fuera de Shell. `Login` muestra el aviso al llegar.
     effect(() => {
-      if (this.auth.sessionEndReason() === 'idle_timeout' && !this.router.url.startsWith('/login')) {
+      const reason = this.auth.sessionEndReason();
+      if (reason !== null && !this.router.url.startsWith('/login')) {
         this.router.navigateByUrl('/login');
       }
     });

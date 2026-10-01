@@ -31,13 +31,13 @@ import {
   defaultPermissionsForRoles,
   fullName,
 } from '../data/user-management.model';
-import { UserManagementService } from '../data/user-management.service';
+import { UserManagementService, backendStatusToLocal, forbiddenRoleMessage } from '../data/user-management.service';
 import { AREAS, DEPARTMENTS, JOB_TITLES } from '../data/organization-catalog';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
 import { CatalogService } from '../../../core/services/catalog.service';
 import { COUNTRY_PROFILE } from '../../../core/country/active-country';
-import { AuthService } from '../../auth/data/auth.service';
+import { AuthService, UserDetailDto } from '../../auth/data/auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
 
 // Agrupación estática de PERMISSIONS por `group` — se calcula una sola vez
@@ -119,25 +119,92 @@ export class UserDetail {
   protected readonly jobTitles = JOB_TITLES;
   protected readonly genderOptions = GENDER_OPTIONS;
 
+  protected subsidiariaNames(ids: number[]): string[] {
+    return ids
+      .map((id) => this.catalog.findSubsidiaria(id)?.nombre)
+      .filter((name): name is string => !!name);
+  }
+
+  protected ubicacionNames(ids: number[]): string[] {
+    return ids
+      .map((id) => this.catalog.findUbicacion(id)?.nombre)
+      .filter((name): name is string => !!name);
+  }
+
   protected readonly isCreate = computed(() => !this.userId());
+
+  // Detalle REAL del backend (`GET /users/{id}`) para la cuenta mostrada —
+  // `null` mientras no haya cargado o la cuenta no tenga `backendUserId`
+  // (ver el effect del constructor, que la llena). `user()` la fusiona
+  // sobre la base del mock: es la fuente de verdad para TODO lo que el
+  // backend SÍ modela (roles, permisos, estado, organización, teléfono...);
+  // lo que no modela (avatarUrl, 2FA, sesiones activas) se queda del mock.
+  private readonly backendDetail = signal<UserDetailDto | null>(null);
 
   protected readonly user = computed<AppUser | null>(() => {
     const id = this.userId();
-    return id ? (this.service.allUsers().find((u) => u.id === id) ?? null) : null;
+    const base = id ? (this.service.allUsers().find((u) => u.id === id) ?? null) : null;
+    if (!base) return null;
+    const detail = this.backendDetail();
+    // `detail.id !== base.backendUserId`: el detalle todavía es de la
+    // cuenta ANTERIOR (el effect que lo carga no ha terminado tras
+    // navegar) — no fusionar datos de alguien más mientras tanto.
+    if (!detail || detail.id !== base.backendUserId) return base;
+    return this.mergeBackendDetail(base, detail);
   });
 
-  // Contraseña temporal a mostrar en "Organización" (acuerdo con backend):
-  // para una cuenta del backend (`backendUserId`), la key `temporaryPassword`
-  // de `GET /users/{id}`; para una cuenta que solo existe en el mock, la que
-  // simula `UserManagementService`. Solo se muestra si no está vacía.
-  private readonly backendUserId = computed(() => this.user()?.backendUserId ?? null);
-  private readonly backendTemporaryPassword = signal<string | null>(null);
-  protected readonly temporaryPassword = computed(() => {
-    const user = this.user();
-    if (!user) return null;
-    const value = user.backendUserId ? this.backendTemporaryPassword() : user.temporaryPassword;
-    return value?.trim() || null;
-  });
+  // Contraseña temporal a mostrar en "Organización" — ya viene fusionada en
+  // `user()` (del backend real cuando hay `backendUserId`, del mock si no).
+  // Solo se muestra si no está vacía.
+  protected readonly temporaryPassword = computed(() => this.user()?.temporaryPassword?.trim() || null);
+
+  // Superpone `UserDetailDto` (backend real) sobre `base` (registro mock) —
+  // todo lo que el backend modela gana; lo que no (avatarUrl, 2FA, sesiones
+  // activas, `id` 'uXXXX' de este mock) se queda de `base`.
+  private mergeBackendDetail(base: AppUser, detail: UserDetailDto): AppUser {
+    // `manager.id` es un id REAL del backend — se resuelve de vuelta al
+    // 'uXXXX' de ESTE mock vía `backendUserId` (ver
+    // `UserManagementService.findByBackendUserId`); `null` si ese manager
+    // no tiene bridge conocido todavía.
+    const managerId = detail.manager ? (this.service.findByBackendUserId(detail.manager.id)?.id ?? null) : null;
+
+    return {
+      ...base,
+      firstName: detail.firstName,
+      lastName: detail.lastName,
+      email: detail.email,
+      phone: detail.phone ?? '',
+      status: backendStatusToLocal(detail.status),
+      roleIds: detail.roles as RoleId[],
+      permissions: detail.permissions as PermissionKey[],
+      emailVerified: detail.emailVerified,
+      lastAccessAt: detail.lastLoginAt,
+      createdAt: detail.createdAt,
+      mustChangePassword: detail.mustChangePassword,
+      temporaryPassword: detail.temporaryPassword,
+      birthDate: detail.birthDate ?? '',
+      ssn: detail.ssn ?? '',
+      gender: detail.gender ?? '',
+      address: {
+        city: detail.address.city ?? '',
+        state: detail.address.state ?? '',
+        zipCode: detail.address.postalCode ?? '',
+        street1: detail.address.street1 ?? '',
+        street2: detail.address.street2,
+        exteriorNumber: detail.address.exteriorNumber ?? '',
+        interiorNumber: detail.address.interiorNumber,
+      },
+      department: detail.department ?? '',
+      area: detail.area ?? '',
+      jobTitle: detail.jobTitle ?? '',
+      managerId,
+      employeeId: detail.employeeCode ?? '',
+      hireDate: detail.hireDate ?? '',
+      contractEndDate: detail.contractEndDate,
+      subsidiariaIds: detail.subsidiarias.map((s) => s.id),
+      ubicacionIds: detail.ubicaciones.map((u) => u.id),
+    };
+  }
 
   // Hay :userId en la ruta pero no hay usuario con ese id — eliminado o
   // inexistente. Distinto de isCreate() (sin :userId en absoluto).
@@ -213,8 +280,8 @@ export class UserDetail {
     employeeId: this.fb.control(''),
     hireDate: this.fb.control<Date | null>(null),
     contractEndDate: this.fb.control<Date | null>(null),
-    subsidiariaId: this.fb.control<number | null>(null),
-    ubicacionId: this.fb.control<number | null>(null),
+    subsidiariaIds: this.fb.control<number[]>([]),
+    ubicacionIds: this.fb.control<number[]>([]),
   });
 
   // --- Estado local de creación (solo aplica cuando isCreate()) ---
@@ -222,9 +289,19 @@ export class UserDetail {
   protected readonly createActive = signal(true);
   // A diferencia del resto de "Organización" (que solo se pide editando, ver
   // orgForm/onSaveProfile), subsidiaria/ubicación SÍ se piden al crear — ver
-  // AppUser.subsidiariaId/.ubicacionId.
-  protected readonly createSubsidiariaId = signal<number | null>(null);
-  protected readonly createUbicacionId = signal<number | null>(null);
+  // AppUser.subsidiariaIds/.ubicacionIds. El backend acepta varias de cada
+  // una (`CreateUserRequest.subsidiariaIds`/`.ubicacionIds`, N:M real).
+  protected readonly createSubsidiariaIds = signal<number[]>([]);
+  protected readonly createUbicacionIds = signal<number[]>([]);
+  // Supervisor — select SIMPLE (un solo responsable, a diferencia de
+  // roles/subsidiarias/ubicaciones que sí aceptan varias). `null` = sin
+  // asignar; se manda como `supervisorId` real en el alta (ver
+  // `CreateUserInput.managerId` / `UserManagementService.createUser`).
+  protected readonly createManagerId = signal<string | null>(null);
+  // `POST /users` es una llamada real — deshabilita el botón mientras está
+  // en vuelo (mismo criterio que `Login.submitting`), no instantáneo como
+  // antes cuando `createUser` solo tocaba el mock.
+  protected readonly submittingCreate = signal(false);
 
   // --- Borrador de "Seguridad y acceso" (solo aplica editando un usuario existente) ---
   protected readonly draftRoleIds = signal<RoleId[]>([]);
@@ -232,37 +309,48 @@ export class UserDetail {
 
   // --- Modo edición de "Información general" (datos personales +
   // organización) — de solo lectura por defecto; el botón "Editar" del
-  // header (junto a "Eliminar usuario") lo activa para AMBAS sub-cards a la
-  // vez, ya que viven bajo el mismo botón (ver user-detail.html). No aplica
-  // a "Seguridad y acceso" (roles/permisos ya tienen su propio flujo de
-  // edición directa, con su propio botón "Guardar permisos").
+  // header lo activa para AMBAS sub-cards a la vez (ver user-detail.html).
+  // No aplica a "Seguridad y acceso" (roles/permisos ya tienen su propio
+  // flujo de edición directa, con su propio botón "Guardar permisos").
   protected readonly isEditing = signal(false);
+  // `PATCH /users/{id}` es una llamada real — deshabilita "Guardar cambios"
+  // mientras está en vuelo, mismo criterio que `submittingCreate`.
+  protected readonly savingProfile = signal(false);
 
   constructor() {
-    // effect (no computed): reinicia formularios + borradores al entrar a un
-    // usuario distinto — tiene side-effects (patchValue, reset), mismo
-    // criterio que DifferenceManagement con tenderMedia()/orderId() (ver
-    // difference-management.ts). untracked() al leer el service evita que
-    // este effect se re-dispare cada vez que CUALQUIER usuario cambia (solo
-    // debe reaccionar a la navegación, no a los propios guardados que este
-    // mismo componente dispara).
-    // Consulta el detalle real del backend solo cuando cambia la cuenta
-    // mostrada. Si el backend no responde (o todavía no devuelve la key), no
-    // se muestra contraseña temporal para esa cuenta.
+    // Consulta el detalle REAL del backend (`GET /users/{id}`) solo cuando
+    // cambia la cuenta mostrada Y tiene `backendUserId` — keyed en el
+    // registro BASE del mock (`untracked`, no en `user()`) para no
+    // depender de su propia salida (`user()` se arma A PARTIR de
+    // `backendDetail`, ver el computed de arriba) y evitar así un ciclo.
+    // Si falla o la cuenta no tiene `backendUserId`, `user()` cae solo al
+    // mock — mismo criterio de siempre.
     effect((onCleanup) => {
-      const backendUserId = this.backendUserId();
-      this.backendTemporaryPassword.set(null);
+      const id = this.userId();
+      this.backendDetail.set(null);
+      const backendUserId = id ? untracked(() => this.service.findUser(id)?.backendUserId ?? null) : null;
       if (backendUserId === null) return;
       const sub = this.auth.getUserDetail(backendUserId).subscribe({
-        next: (detail) => this.backendTemporaryPassword.set(detail.temporaryPassword ?? null),
-        error: () => this.backendTemporaryPassword.set(null),
+        next: (detail) => this.backendDetail.set(detail),
+        error: () => this.backendDetail.set(null),
       });
       onCleanup(() => sub.unsubscribe());
     });
 
+    // effect (no computed): reinicia formularios + borradores al entrar a un
+    // usuario distinto, o cuando el detalle real del backend termina de
+    // cargar para ESA misma cuenta (`user()` cambia de valor en ambos
+    // casos, ver el computed de arriba) — tiene side-effects (patchValue,
+    // reset), mismo criterio que DifferenceManagement con
+    // tenderMedia()/orderId() (ver difference-management.ts). Lee `user()`
+    // reactivamente (NO `untracked`) a propósito: es lo que hace que el
+    // formulario se actualice solo cuando llega el detalle real, sin ese
+    // segundo disparo se quedaría con los valores (incompletos) del mock
+    // hasta la próxima navegación. Reaccionar también a un guardado propio
+    // (`onSaveProfile`) es inofensivo — deja el form con los mismos valores
+    // que ya tenía.
     effect(() => {
-      const id = this.userId();
-      const found = id ? untracked(() => this.service.allUsers().find((u) => u.id === id) ?? null) : null;
+      const found = this.user();
 
       if (found) {
         this.infoForm.reset({
@@ -283,8 +371,8 @@ export class UserDetail {
           employeeId: found.employeeId,
           hireDate: parseIsoDate(found.hireDate),
           contractEndDate: parseIsoDate(found.contractEndDate),
-          subsidiariaId: found.subsidiariaId,
-          ubicacionId: found.ubicacionId,
+          subsidiariaIds: [...found.subsidiariaIds],
+          ubicacionIds: [...found.ubicacionIds],
         });
         this.draftRoleIds.set([...found.roleIds]);
         this.draftPermissions.set(new Set(found.permissions));
@@ -307,13 +395,15 @@ export class UserDetail {
           employeeId: '',
           hireDate: null,
           contractEndDate: null,
-          subsidiariaId: null,
-          ubicacionId: null,
+          subsidiariaIds: [],
+          ubicacionIds: [],
         });
         this.createRoleIds.set([]);
         this.createActive.set(true);
-        this.createSubsidiariaId.set(null);
-        this.createUbicacionId.set(null);
+        this.createSubsidiariaIds.set([]);
+        this.createUbicacionIds.set([]);
+        this.createManagerId.set(null);
+        this.submittingCreate.set(false);
         this.draftRoleIds.set([]);
         this.draftPermissions.set(new Set());
       }
@@ -352,8 +442,8 @@ export class UserDetail {
         employeeId: user.employeeId,
         hireDate: parseIsoDate(user.hireDate),
         contractEndDate: parseIsoDate(user.contractEndDate),
-        subsidiariaId: user.subsidiariaId,
-        ubicacionId: user.ubicacionId,
+        subsidiariaIds: [...user.subsidiariaIds],
+        ubicacionIds: [...user.ubicacionIds],
       });
     }
     this.isEditing.set(false);
@@ -399,15 +489,28 @@ export class UserDetail {
 
     const info = this.infoForm.getRawValue();
     const org = this.orgForm.getRawValue();
-    this.service.updateUserProfile(id, {
-      ...info,
-      ...org,
-      birthDate: toIsoDate(info.birthDate),
-      hireDate: toIsoDate(org.hireDate),
-      contractEndDate: toIsoDateOrNull(org.contractEndDate),
-    });
-    this.message.success('Datos actualizados.');
-    this.isEditing.set(false);
+
+    this.savingProfile.set(true);
+    this.service
+      .updateUserProfile(id, {
+        ...info,
+        ...org,
+        birthDate: toIsoDate(info.birthDate),
+        hireDate: toIsoDate(org.hireDate),
+        contractEndDate: toIsoDateOrNull(org.contractEndDate),
+      })
+      .subscribe({
+        next: (updated) => {
+          this.savingProfile.set(false);
+          this.message.success('Datos actualizados.');
+          this.isEditing.set(false);
+          if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+        },
+        error: (err: unknown) => {
+          this.savingProfile.set(false);
+          this.showMutationError(err);
+        },
+      });
   }
 
   protected onSaveRolesAndPermissions(): void {
@@ -424,7 +527,10 @@ export class UserDetail {
   }
 
   // El chip emite la intención, la confirmación vive aquí — mismo patrón
-  // que UserList.onStatusChangeRequest (ver StatusChip).
+  // que UserList.onStatusChangeRequest (ver StatusChip). `PATCH
+  // /users/{id}/status` real (ver `UserManagementService.setStatus`) — el
+  // modal se queda abierto/girando (`nzOnOk` devuelve una Promise) hasta
+  // que el backend responde, mismo criterio que `onUnlockBackendClick`.
   protected onStatusChangeRequest(next: UserStatus): void {
     const user = this.user();
     if (!user) return;
@@ -434,19 +540,73 @@ export class UserDetail {
       nzTitle: 'Cambiar estado',
       nzContent: `¿Cambiar el estado de <b>${fullName(user)}</b> a <b>${label}</b>?`,
       nzOkText: 'Cambiar',
-      nzOnOk: () => {
-        this.service.setStatus(user.id, next);
-        this.message.success(`Estado actualizado a ${label}.`);
-      },
+      nzOnOk: () =>
+        new Promise<void>((resolve, reject) => {
+          this.service.setStatus(user.id, next).subscribe({
+            next: (updated) => {
+              this.message.success(`Estado actualizado a ${label}.`);
+              if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+              resolve();
+            },
+            error: (err: unknown) => {
+              this.showMutationError(err);
+              reject();
+            },
+          });
+        }),
     });
   }
 
+  // `POST /users/{id}/verify-email` real (ver
+  // `UserManagementService.setEmailVerified`) — sin modal de confirmación
+  // (mismo criterio que antes de conectar el backend real: es una acción de
+  // bajo riesgo, solo visible cuando el correo AÚN no está verificado, ver
+  // user-detail.html).
   protected onVerifyEmailClick(): void {
     const id = this.userId();
     if (!id) return;
 
-    this.service.setEmailVerified(id);
-    this.message.success('Correo marcado como verificado.');
+    this.service.setEmailVerified(id).subscribe({
+      next: (updated) => {
+        this.message.success('Correo marcado como verificado.');
+        if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+      },
+      error: (err: unknown) => this.showMutationError(err),
+    });
+  }
+
+  // Refresca `backendDetail` tras una mutación exitosa (`onSaveProfile`/
+  // `onStatusChangeRequest`/`onVerifyEmailClick`) — SIN esto, `user()`
+  // seguiría fusionando el detalle VIEJO (cargado al entrar a la pantalla,
+  // ver el effect del constructor) sobre el `usersSignal` recién
+  // actualizado, y el merge pisaría los campos que la mutación acaba de
+  // guardar con los valores desactualizados. Best-effort y silencioso: si
+  // falla, `user()` simplemente se queda con el detalle anterior (mismo
+  // criterio que el effect del constructor).
+  private refreshBackendDetail(backendUserId: number): void {
+    this.auth.getUserDetail(backendUserId).subscribe({
+      next: (detail) => this.backendDetail.set(detail),
+      error: () => {},
+    });
+  }
+
+  // Aviso genérico para las 3 mutaciones reales de este componente
+  // (`onSaveProfile`/`onStatusChangeRequest`/`onVerifyEmailClick`): un 403
+  // de `/users/**` sin código de negocio (bloqueado por `SecurityConfig`
+  // antes del `GlobalExceptionHandler`) no lo cubre
+  // `httpErrorAlertInterceptor` — ver `forbiddenRoleMessage`. Cualquier
+  // otro `HttpErrorResponse` (404 `USER_NOT_FOUND`, etc.) ya tiene su
+  // propio aviso vía el interceptor; un error LOCAL (guard de
+  // `UserManagementService` por usuario sin `backendUserId`, no debería
+  // pasar en la práctica) sí necesita mostrarse aquí, sea lo que sea.
+  private showMutationError(err: unknown): void {
+    if (err instanceof HttpErrorResponse) {
+      const text = forbiddenRoleMessage(err.status);
+      if (text) this.message.error(text);
+      return;
+    }
+    const text = err instanceof Error ? err.message : 'No se pudo completar la acción.';
+    this.message.error(text);
   }
 
   protected onCloseSessionsClick(): void {
@@ -528,23 +688,6 @@ export class UserDetail {
     }
   }
 
-  protected onDeleteClick(): void {
-    const user = this.user();
-    if (!user) return;
-
-    this.modal.confirm({
-      nzTitle: 'Eliminar usuario',
-      nzContent: `¿Eliminar a <b>${fullName(user)}</b>? Esta acción no se puede deshacer.`,
-      nzOkText: 'Eliminar',
-      nzOkDanger: true,
-      nzOnOk: () => {
-        this.service.deleteUser(user.id);
-        this.message.success('Usuario eliminado.');
-        this.router.navigateByUrl('/usuarios');
-      },
-    });
-  }
-
   protected onCreateSubmit(): void {
     if (this.infoForm.invalid || this.createRoleIds().length === 0) {
       this.infoForm.markAllAsTouched();
@@ -562,17 +705,32 @@ export class UserDetail {
       return;
     }
 
-    const user = this.service.createUser({
-      firstName,
-      lastName,
-      email,
-      phone,
-      roleIds: this.createRoleIds(),
-      status: this.createActive() ? 'active' : 'inactive',
-      subsidiariaId: this.createSubsidiariaId(),
-      ubicacionId: this.createUbicacionId(),
-    });
-    this.message.success(`Usuario ${fullName(user)} creado. Su contraseña temporal aparece en "Organización".`);
-    this.router.navigate(['/usuarios', user.id]);
+    this.submittingCreate.set(true);
+    this.service
+      .createUser({
+        firstName,
+        lastName,
+        email,
+        phone,
+        roleIds: this.createRoleIds(),
+        status: this.createActive() ? 'active' : 'inactive',
+        subsidiariaIds: this.createSubsidiariaIds(),
+        ubicacionIds: this.createUbicacionIds(),
+        managerId: this.createManagerId(),
+      })
+      .subscribe({
+        next: (user) => {
+          this.submittingCreate.set(false);
+          this.message.success(`Usuario ${fullName(user)} creado. Su contraseña temporal aparece en "Organización".`);
+          this.router.navigate(['/usuarios', user.id]);
+        },
+        error: () => {
+          // El texto ya lo muestra `httpErrorAlertInterceptor` (409
+          // EMAIL_ALREADY_REGISTERED, 400 INVALID_ROLE/INVALID_USER_STATUS,
+          // 403 ROLE_ASSIGNMENT_FORBIDDEN...) — aquí solo se reactiva el
+          // formulario para que la persona pueda corregir y reintentar.
+          this.submittingCreate.set(false);
+        },
+      });
   }
 }

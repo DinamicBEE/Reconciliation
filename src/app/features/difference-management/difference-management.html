@@ -204,7 +204,14 @@
           </span>
         </div>
 
-        <button nz-button nzType="primary" class="save-match-button" type="button" [disabled]="!service.canSave()" (click)="onSave()">
+        <button
+          nz-button
+          nzType="primary"
+          class="save-match-button"
+          type="button"
+          [disabled]="!service.canSave() || !access.hasPermission('manage_differences')"
+          (click)="onSave()"
+        >
           Guardar match
         </button>
       </div>

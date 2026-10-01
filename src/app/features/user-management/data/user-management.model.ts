@@ -109,13 +109,11 @@ export interface AppUser {
   // cambio obligatorio de contraseña".
   mustChangePassword: boolean;
   // Contraseña inicial GENERADA POR EL BACKEND al dar de alta la cuenta
-  // (acuerdo con backend: el detalle del usuario, `GET /users/{id}`, trae la
-  // key `temporaryPassword`). Si llega y no está vacía, `user-detail` la
-  // muestra en la sección "Organización" para que el administrador la
-  // entregue. `null` = sin contraseña temporal vigente. Para las cuentas con
-  // `backendUserId`, `user-detail` la toma de la respuesta real del backend;
-  // este campo solo la simula para las cuentas que viven únicamente en el
-  // mock (el alta todavía no llama a `POST /users`).
+  // (`POST /users` → `NewUserResponseDto.temporaryPassword`, o
+  // recalculada por `GET /users/{id}` mientras `mustChangePassword` siga en
+  // true). Si llega y no está vacía, `user-detail` la muestra en la sección
+  // "Organización" para que el administrador la entregue. `null` = sin
+  // contraseña temporal vigente.
   temporaryPassword: string | null;
 
   // "Organización" — todos opcionales/editables en cualquier momento; no se
@@ -127,24 +125,29 @@ export interface AppUser {
   employeeId: string; // ID empleado
   hireDate: string; // ISO date — Fecha de contratación
   contractEndDate: string | null; // ISO date — Fecha fin de contrato; null = contrato indefinido
-  // Subsidiaria (negocio/marca/empresa) y ubicación (tienda/store/punto de
-  // venta/sucursal) — a diferencia del resto de "Organización", SÍ se piden
-  // al crear la cuenta (ver CreateUserInput). `id` numérico porque referencia
-  // el catálogo REAL del backend (`CatalogService`, `core/services/`), no un
-  // valor propio de este mock — `null` = sin asignar. El backend modela
-  // acceso a VARIAS subsidiarias/ubicaciones por persona (`empleado_subsidiaria`/
-  // `empleado_ubicacion`, tablas de relación); esta pantalla simplifica a UNA
-  // sola de cada una, mismo criterio de single-select que el resto de esta
-  // sección (departamento/área/puesto tampoco son multi-valor aquí).
-  subsidiariaId: number | null;
-  ubicacionId: number | null;
-  // Id del `app_user` REAL en el backend (`AppUser.id` allá, un Long) — solo
-  // presente para las 4 cuentas demo sembradas ahí (ver
-  // `AuthService.unlockBackendUser`/`UserDetail.onUnlockBackendClick`); el
-  // resto de este mock (21 usuarios sin cuenta real) lo deja en `null`. NO
-  // confundir con `AppUser.id` (el id 'uXXXX' de ESTE registro mock) ni con
-  // `AuthUser.appUserId` (que apunta al revés, del `AuthUser` de sesión hacia
-  // este mismo `AppUser.id`).
+  // Subsidiaria(s) (negocio/marca/empresa) y ubicación(es) (tienda/store/
+  // punto de venta/sucursal) — a diferencia del resto de "Organización", SÍ
+  // se piden al crear la cuenta (ver CreateUserInput). `id`s numéricos
+  // porque referencian el catálogo REAL del backend (`CatalogService`,
+  // `core/services/`), no un valor propio de este mock. ARREGLOS, no un
+  // solo valor: el backend modela acceso a VARIAS subsidiarias/ubicaciones
+  // por persona (`empleado_subsidiaria`/`empleado_ubicacion`, tablas de
+  // relación N:M, ver `CreateUserRequest.subsidiariaIds`/`.ubicacionIds` en
+  // `AuthService`) — este frontend ya NO lo simplifica a una sola de cada
+  // una (ver MASTER.md, "Actualización: endpoints de administración de
+  // usuarios (CRUD real) + multi-subsidiaria/ubicación"). `[]` = sin
+  // asignar ninguna.
+  subsidiariaIds: number[];
+  ubicacionIds: number[];
+  // Id del `app_user` REAL en el backend (`AppUser.id` allá, un Long) —
+  // presente para cualquier cuenta sembrada/creada ahí (ver
+  // `UserManagementService.createUser`/`syncFromBackend`,
+  // `UserDetail.onUnlockBackendClick`); `null` para un registro que solo
+  // vive en este mock (no debería quedar ninguno tras sembrar los 26 en el
+  // backend, ver el mismo punto de MASTER.md). NO confundir con
+  // `AppUser.id` (el id 'uXXXX' de ESTE registro mock) ni con
+  // `AuthUser.appUserId` (que apunta al revés, del `AuthUser` de sesión
+  // hacia este mismo `AppUser.id`).
   backendUserId: number | null;
 }
 
@@ -233,26 +236,31 @@ export const ROLES: RoleDef[] = [
   {
     id: 'CONTABILIDAD',
     label: 'Contabilidad',
-    description: 'Acceso al Resumen de venta y a la consulta de catálogos cargados.',
-    defaultPermissions: ['view_dashboard', 'view_catalogs'],
+    description: 'Acceso al Resumen de venta (consulta y exportación) y a la consulta de catálogos cargados.',
+    // Matriz 7.16 del DED: Contabilidad también exporta el listado de ventas.
+    defaultPermissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
   },
   {
     id: 'TESORERIA',
     label: 'Tesorería',
-    description: 'Acceso a Conciliación bancaria y a la consulta de catálogos cargados.',
-    defaultPermissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    description: 'Acceso al Resumen de venta, Conciliación bancaria y a la consulta de catálogos cargados.',
+    // Matriz 7.16 del DED: Tesorería también consulta (y exporta) ventas —
+    // antes solo tenía Conciliación bancaria.
+    defaultPermissions: [
+      'view_dashboard',
+      'view_reconciliation',
+      'manage_differences',
+      'import_settlements',
+      'export_reports',
+      'view_catalogs',
+    ],
   },
   {
     id: 'COSTOS',
     label: 'Costos',
-    // Matriz 7.16 del DED: Costos consulta y exporta ventas y catálogos. Por
-    // ahora solo tiene la consulta de catálogos (`/catalogos`, su pantalla de
-    // aterrizaje vía `homeRoute()`) — una cuenta real del backend con rol
-    // COSTOS (sin `AppUser` vinculado) la recibe vía
-    // `defaultPermissionsForRoles`. La consulta/exportación de ventas queda
-    // pendiente de ajustar junto con el resto de la matriz de permisos.
-    description: 'Consulta de catálogos cargados (solo lectura).',
-    defaultPermissions: ['view_catalogs'],
+    // Matriz 7.16 del DED: Costos consulta y exporta ventas y catálogos.
+    description: 'Consulta y exportación de ventas, y consulta de catálogos cargados (solo lectura).',
+    defaultPermissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
   },
 ];
 

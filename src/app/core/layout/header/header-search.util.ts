@@ -38,7 +38,8 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
     label: 'Auditoría de usuarios',
     path: '/usuarios/auditoria',
     keywords: ['historial', 'log'],
-    permission: 'manage_users',
+    // Permiso propio (matriz 7.16 del DED) — ver app.routes.ts.
+    permission: 'view_audit_log',
   },
   { label: 'Perfil', path: '/perfil', keywords: ['cuenta', 'yo', 'información general'] },
 ];

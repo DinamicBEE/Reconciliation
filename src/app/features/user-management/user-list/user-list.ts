@@ -12,8 +12,9 @@ import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AppUser, ROLE_OPTIONS, RoleId, STATUS_META, STATUS_OPTIONS, UserStatus, defaultPermissionsForRoles, fullName } from '../data/user-management.model';
-import { RoleFilter, StatusFilter, UserManagementService } from '../data/user-management.service';
+import { RoleFilter, StatusFilter, UserManagementService, forbiddenRoleMessage } from '../data/user-management.service';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
 
@@ -57,6 +58,12 @@ export class UserList {
     { value: 'all', label: 'Todos los estados' },
     ...STATUS_OPTIONS,
   ];
+
+  constructor() {
+    // Reconcilia la lista mock con el backend real (GET /users) al entrar a
+    // la pantalla, best-effort — ver UserManagementService.syncFromBackend.
+    this.service.syncFromBackend();
+  }
 
   protected onSearchChange(value: string): void {
     this.service.setSearch(value);
@@ -103,17 +110,34 @@ export class UserList {
   }
 
   // --- Estado: el chip emite la intención, la confirmación vive aquí (mismo
-  // patrón en user-detail, ver StatusChip) ---
+  // patrón en user-detail, ver StatusChip). `PATCH /users/{id}/status` real
+  // (ver `UserManagementService.setStatus`) — el modal se queda abierto/
+  // girando (`nzOnOk` devuelve una Promise) hasta que el backend responde. ---
   protected onStatusChangeRequest(user: AppUser, next: UserStatus): void {
     const label = STATUS_META[next].label;
     this.modal.confirm({
       nzTitle: 'Cambiar estado',
       nzContent: `¿Cambiar el estado de <b>${fullName(user)}</b> a <b>${label}</b>?`,
       nzOkText: 'Cambiar',
-      nzOnOk: () => {
-        this.service.setStatus(user.id, next);
-        this.message.success(`Estado de ${fullName(user)} actualizado a ${label}.`);
-      },
+      nzOnOk: () =>
+        new Promise<void>((resolve, reject) => {
+          this.service.setStatus(user.id, next).subscribe({
+            next: () => {
+              this.message.success(`Estado de ${fullName(user)} actualizado a ${label}.`);
+              resolve();
+            },
+            error: (err: unknown) => {
+              const text =
+                err instanceof HttpErrorResponse
+                  ? forbiddenRoleMessage(err.status)
+                  : err instanceof Error
+                    ? err.message
+                    : 'No se pudo completar la acción.';
+              if (text) this.message.error(text);
+              reject();
+            },
+          });
+        }),
     });
   }
 
@@ -131,16 +155,4 @@ export class UserList {
     });
   }
 
-  protected onDeleteClick(user: AppUser): void {
-    this.modal.confirm({
-      nzTitle: 'Eliminar usuario',
-      nzContent: `¿Eliminar a <b>${fullName(user)}</b>? Esta acción no se puede deshacer.`,
-      nzOkText: 'Eliminar',
-      nzOkDanger: true,
-      nzOnOk: () => {
-        this.service.deleteUser(user.id);
-        this.message.success(`${fullName(user)} fue eliminado.`);
-      },
-    });
-  }
 }

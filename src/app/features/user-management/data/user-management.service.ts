@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { AuthService } from '../../auth/data/auth.service';
+import { Observable, map, throwError } from 'rxjs';
+import { AuthService, CreateUserRequest, UpdateUserRequest, UserDetailDto } from '../../auth/data/auth.service';
 import {
   AppUser,
   AppUserAddress,
@@ -18,6 +19,30 @@ import {
 import { MOCK_AUDIT_LOG, MOCK_USERS } from './user-management-mock.data';
 import { generateTempPassword } from './password.util';
 
+// `UserSummaryDto.status`/`UserDetailDto.status` (backend, mayúsculas) ↔
+// `UserStatus` (este frontend, minúsculas) — ver `syncFromBackend` y
+// `UserDetail` (fusión del detalle real).
+const BACKEND_STATUS_TO_LOCAL: Record<string, UserStatus> = {
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+  LOCKED: 'blocked',
+};
+
+export function backendStatusToLocal(status: string): UserStatus {
+  return BACKEND_STATUS_TO_LOCAL[status] ?? 'active';
+}
+
+// Mensaje para un 403 de `/users/**` SIN código de negocio (bloqueado por
+// `SecurityConfig` antes de llegar al controller/`GlobalExceptionHandler` —
+// a diferencia de `ROLE_ASSIGNMENT_FORBIDDEN` al crear, que SÍ trae código
+// y ya lo muestra `httpErrorAlertInterceptor`) — mismo caso que ya manejaba
+// a mano `UserDetail.onUnlockBackendClick`. `null` para cualquier otro
+// status: esos YA tienen su propio aviso vía el interceptor (p. ej. un 404
+// con `USER_NOT_FOUND`), así que el llamador no debe repetirlo.
+export function forbiddenRoleMessage(status: number): string | null {
+  return status === 403 ? 'Tu sesión no tiene el rol necesario (ADMIN o ALTAS) para esta acción.' : null;
+}
+
 export type StatusFilter = 'all' | UserStatus;
 export type RoleFilter = 'all' | RoleId;
 
@@ -29,10 +54,15 @@ export interface CreateUserInput {
   roleIds: RoleId[];
   status: UserStatus;
   // A diferencia del resto de "Organización", sí se piden al crear (ver
-  // AppUser.subsidiariaId/.ubicacionId) — catálogo REAL del backend
-  // (CatalogService), no un valor propio de este mock.
-  subsidiariaId: number | null;
-  ubicacionId: number | null;
+  // AppUser.subsidiariaIds/.ubicacionIds) — catálogo REAL del backend
+  // (CatalogService), no un valor propio de este mock. Arreglos: el backend
+  // (`CreateUserRequest.subsidiariaIds`/`.ubicacionIds`) acepta varias.
+  subsidiariaIds: number[];
+  ubicacionIds: number[];
+  // Supervisor — select SIMPLE (uno solo). Id 'uXXXX' de ESTE mock (igual
+  // que `UpdateUserProfileInput.managerId`); `createUser()` lo resuelve al
+  // `backendUserId` real antes de mandarlo como `supervisorId`.
+  managerId: string | null;
 }
 
 // Datos personales SOLOS (sin organización) — el único que necesita
@@ -77,8 +107,8 @@ export interface UpdateUserProfileInput {
   employeeId: string;
   hireDate: string;
   contractEndDate: string | null;
-  subsidiariaId: number | null;
-  ubicacionId: number | null;
+  subsidiariaIds: number[];
+  ubicacionIds: number[];
 }
 
 // El siguiente id debe ser mayor al de CUALQUIER id 'uN' ya usado, no solo
@@ -231,6 +261,15 @@ export class UserManagementService {
     return this.usersSignal().find((u) => u.id === userId) ?? null;
   }
 
+  // Reverso de `backendUserId` — para resolver `UserDetailDto.manager.id`
+  // (un id REAL del backend) de vuelta al registro de ESTE mock, cuando lo
+  // tiene (ver `UserDetail`, que fusiona el detalle real sobre la base del
+  // mock). `null` si ese manager no tiene bridge conocido aquí — no todos
+  // lo tienen todavía (ver AppUser.backendUserId).
+  findByBackendUserId(backendUserId: number): AppUser | null {
+    return this.usersSignal().find((u) => u.backendUserId === backendUserId) ?? null;
+  }
+
   // Puente entre la sesión (login.ts, tras un login real contra
   // coctel-del-mar) y el registro local de `user-management` — el backend
   // de autenticación identifica cuentas por email, no por el `id` mock de
@@ -244,60 +283,214 @@ export class UserManagementService {
     return this.usersSignal().find((u) => u.email.toLowerCase() === target) ?? null;
   }
 
-  createUser(input: CreateUserInput): AppUser {
-    const user: AppUser = {
-      // Mínimo 4 dígitos (regla de negocio) — el padding es solo cosmético,
-      // `maxSeq` (arriba) sigue leyendo el número con `Number(...)` así que
-      // un id viejo sin padding (no debería haberlo) igual se compara bien.
-      id: `u${String(nextUserSeq++).padStart(4, '0')}`,
+  // CU3 pasos 1-2: alta REAL (`POST /users`, ver `AuthService.createUser`) —
+  // ya no genera nada localmente: `id` (numérico, el `backendUserId`),
+  // `roleIds`/`permissions` efectivos y `temporaryPassword` vienen todos de
+  // la respuesta del backend. `roleIds` en el alta solo se respeta si quien
+  // la hace tiene `manage_roles` — si no, el backend responde 403
+  // `ROLE_ASSIGNMENT_FORBIDDEN` (el `httpErrorAlertInterceptor` ya muestra
+  // esa alerta; el `.subscribe({ error })` del llamador solo necesita
+  // reaccionar, no traducir el mensaje).
+  createUser(input: CreateUserInput): Observable<AppUser> {
+    // "Administrador responsable" (id 'uXXXX' de ESTE mock) → id NUMÉRICO
+    // real del backend, mismo bridge que `updateUserProfile`. `null` si no
+    // se eligió uno o si el elegido todavía no tiene `backendUserId` (no
+    // debería pasar, ver `managerCandidates`).
+    const managerBackendId = input.managerId ? (this.findUser(input.managerId)?.backendUserId ?? null) : null;
+
+    const request: CreateUserRequest = {
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
       email: input.email.trim(),
-      phone: input.phone.trim(),
-      // Sin foto al crear — se sube después (no hay flujo de carga de avatar
-      // todavía); cae a iniciales + color hasta entonces (ver AppUser.avatarUrl).
-      avatarUrl: null,
-      status: input.status,
-      createdAt: new Date().toISOString(),
-      lastAccessAt: null,
+      phone: input.phone.trim() || null,
+      supervisorId: managerBackendId,
+      subsidiariaIds: input.subsidiariaIds,
+      ubicacionIds: input.ubicacionIds,
       roleIds: input.roleIds,
-      permissions: defaultPermissionsForRoles(input.roleIds),
-      emailVerified: false,
+      // El form de creación solo ofrece Activo/Inactivo (ver
+      // `UserDetail.createActive`) — nunca 'blocked', que el backend
+      // rechazaría de todos modos (LOCKED solo lo genera el sistema).
+      status: input.status === 'active' ? 'ACTIVE' : 'INACTIVE',
+    };
+
+    return this.auth.createUser(request).pipe(
+      map((result) => {
+        const user: AppUser = {
+          // Mínimo 4 dígitos (regla de negocio) — el padding es solo
+          // cosmético, `maxSeq` (arriba) sigue leyendo el número con
+          // `Number(...)` así que un id viejo sin padding igual se compara
+          // bien. Este id 'uXXXX' sigue siendo solo de ESTE mock —
+          // `backendUserId` (abajo) es el id real.
+          id: `u${String(nextUserSeq++).padStart(4, '0')}`,
+          firstName: input.firstName.trim(),
+          lastName: input.lastName.trim(),
+          email: result.email,
+          phone: input.phone.trim(),
+          // Sin foto al crear — se sube después (no hay flujo de carga de
+          // avatar todavía); cae a iniciales + color hasta entonces (ver
+          // AppUser.avatarUrl). El backend tampoco modela avatar.
+          avatarUrl: null,
+          status: input.status,
+          createdAt: new Date().toISOString(),
+          lastAccessAt: null,
+          roleIds: result.roles,
+          permissions: defaultPermissionsForRoles(result.roles),
+          emailVerified: false,
+          lastActivityAt: null,
+          failedLoginAttempts: 0,
+          twoFactorEnabled: false,
+          activeSessions: 0,
+          mustChangePassword: result.mustChangePassword,
+          temporaryPassword: result.temporaryPassword,
+          // No se piden al crear — se completan después editando el detalle
+          // (ver UpdateUserProfileInput/updateUserProfile). El backend
+          // tampoco los pide al alta (ver CreateUserRequest.java).
+          birthDate: '',
+          ssn: '',
+          gender: '',
+          address: { city: '', state: '', zipCode: '', street1: '', street2: null, exteriorNumber: '', interiorNumber: null },
+          department: '',
+          area: '',
+          jobTitle: '',
+          managerId: input.managerId,
+          employeeId: '',
+          hireDate: '',
+          contractEndDate: null,
+          subsidiariaIds: input.subsidiariaIds,
+          ubicacionIds: input.ubicacionIds,
+          backendUserId: result.id,
+        };
+
+        this.usersSignal.update((list) => [user, ...list]);
+        this.appendAudit(
+          user,
+          'created',
+          `Usuario creado con rol${result.roles.length > 1 ? 'es' : ''} ${result.roles.map((r) => ROLE_LABEL[r]).join(', ')}.`,
+        );
+        return user;
+      }),
+    );
+  }
+
+  // `GET /users` — reconcilia el mock local con el backend real: para cada
+  // fila del mock CON `backendUserId`, sobreescribe roleIds/permissions/
+  // status/emailVerified/lastAccessAt/mustChangePassword/subsidiariaIds/
+  // ubicacionIds con lo que devuelva el backend (fuente de verdad); una fila
+  // sin `backendUserId` (no debería quedar ninguna tras sembrar los 26, ver
+  // MASTER.md) se deja intacta. Best-effort: si la llamada falla (backend
+  // caído), se queda con lo último conocido — `UserList` la dispara una vez
+  // al entrar a la pantalla, no es una fuente de verdad en vivo todavía.
+  //
+  // Además INSERTA cualquier cuenta real que el backend ya conoce pero que
+  // `usersSignal` todavía no tiene — antes se perdían para siempre: `usersSignal`
+  // arranca SIEMPRE desde `MOCK_USERS` (26 cuentas fijas) en cada bootstrap de
+  // la app, así que un alta hecha en una sesión anterior (o desde fuera de
+  // este frontend) nunca tenía un registro local con el que reconciliarse —
+  // `GET /users` la devolvía, pero el `.map()` de arriba la ignoraba por
+  // completo al no encontrar ningún `user.backendUserId` que hiciera match.
+  syncFromBackend(): void {
+    this.auth.listUsers({ size: 100 }).subscribe({
+      next: (page) => {
+        const byBackendId = new Map(page.content.map((u) => [u.id, u]));
+        const knownBackendIds = new Set(
+          this.usersSignal()
+            .map((u) => u.backendUserId)
+            .filter((id): id is number => id !== null),
+        );
+
+        this.usersSignal.update((list) =>
+          list.map((user) => {
+            if (user.backendUserId === null) return user;
+            const real = byBackendId.get(user.backendUserId);
+            if (!real) return user;
+            return {
+              ...user,
+              roleIds: real.roles as RoleId[],
+              permissions: real.permissions as PermissionKey[],
+              status: backendStatusToLocal(real.status),
+              emailVerified: real.emailVerified,
+              lastAccessAt: real.lastLoginAt,
+              mustChangePassword: real.mustChangePassword,
+              subsidiariaIds: real.subsidiarias.map((s) => s.id),
+              ubicacionIds: real.ubicaciones.map((u) => u.id),
+            };
+          }),
+        );
+
+        for (const id of byBackendId.keys()) {
+          if (!knownBackendIds.has(id)) this.fetchAndInsertUser(id);
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  // Trae el detalle COMPLETO (`GET /users/{id}`, no solo `UserSummaryDto` —
+  // ahí no viene firstName/lastName/createdAt/organización) de una cuenta
+  // real descubierta por `syncFromBackend()` sin registro local, y la agrega
+  // como un `AppUser` nuevo. Guard de carrera: si para cuando responde esta
+  // llamada esa cuenta YA tiene registro local (otra sync concurrente, o se
+  // insertó por otra vía), no duplica.
+  private fetchAndInsertUser(backendUserId: number): void {
+    this.auth.getUserDetail(backendUserId).subscribe({
+      next: (detail) => {
+        if (this.usersSignal().some((u) => u.backendUserId === backendUserId)) return;
+        this.usersSignal.update((list) => [this.buildUserFromDetail(detail), ...list]);
+      },
+      error: () => {},
+    });
+  }
+
+  // Arma un `AppUser` completo a partir del detalle real del backend — mismo
+  // mapeo de campos que `UserDetail.mergeBackendDetail`, pero construyendo un
+  // registro NUEVO en vez de fusionar sobre una base del mock (no hay base:
+  // esta cuenta no vivía en `MOCK_USERS`). Lo que el backend no modela
+  // (avatarUrl, 2FA, sesiones activas, intentos fallidos) cae a su default.
+  private buildUserFromDetail(detail: UserDetailDto): AppUser {
+    const managerId = detail.manager ? (this.findByBackendUserId(detail.manager.id)?.id ?? null) : null;
+
+    return {
+      id: `u${String(nextUserSeq++).padStart(4, '0')}`,
+      firstName: detail.firstName,
+      lastName: detail.lastName,
+      email: detail.email,
+      phone: detail.phone ?? '',
+      avatarUrl: null,
+      status: backendStatusToLocal(detail.status),
+      createdAt: detail.createdAt,
+      lastAccessAt: detail.lastLoginAt,
+      birthDate: detail.birthDate ?? '',
+      ssn: detail.ssn ?? '',
+      gender: detail.gender ?? '',
+      address: {
+        city: detail.address.city ?? '',
+        state: detail.address.state ?? '',
+        zipCode: detail.address.postalCode ?? '',
+        street1: detail.address.street1 ?? '',
+        street2: detail.address.street2,
+        exteriorNumber: detail.address.exteriorNumber ?? '',
+        interiorNumber: detail.address.interiorNumber,
+      },
+      roleIds: detail.roles as RoleId[],
+      permissions: detail.permissions as PermissionKey[],
+      emailVerified: detail.emailVerified,
       lastActivityAt: null,
       failedLoginAttempts: 0,
       twoFactorEnabled: false,
       activeSessions: 0,
-      // Cuenta nueva → contraseña inicial GENERADA POR EL BACKEND (acuerdo con
-      // backend: la devuelve en `temporaryPassword` al consultar el detalle).
-      // El alta todavía no llama a `POST /users`, así que este mock hace de
-      // backend y la genera aquí. Debe cambiarla en su primer login.
-      mustChangePassword: true,
-      temporaryPassword: generateTempPassword(),
-      // No se piden al crear — se completan después editando el detalle (ver
-      // UpdateUserInfoInput/UpdateOrganizationInput y sus respectivos update*).
-      birthDate: '',
-      ssn: '',
-      gender: '',
-      address: { city: '', state: '', zipCode: '', street1: '', street2: null, exteriorNumber: '', interiorNumber: null },
-      department: '',
-      area: '',
-      jobTitle: '',
-      managerId: null,
-      employeeId: '',
-      hireDate: '',
-      contractEndDate: null,
-      // A diferencia del resto de "Organización" (arriba), sí se piden al
-      // crear — ver CreateUserInput.
-      subsidiariaId: input.subsidiariaId,
-      ubicacionId: input.ubicacionId,
-      // Cuenta nueva de este mock, sin equivalente en el backend real todavía
-      // (no hay endpoint de alta de usuarios ahí, ver MASTER.md).
-      backendUserId: null,
+      mustChangePassword: detail.mustChangePassword,
+      temporaryPassword: detail.temporaryPassword,
+      department: detail.department ?? '',
+      area: detail.area ?? '',
+      jobTitle: detail.jobTitle ?? '',
+      managerId,
+      employeeId: detail.employeeCode ?? '',
+      hireDate: detail.hireDate ?? '',
+      contractEndDate: detail.contractEndDate,
+      subsidiariaIds: detail.subsidiarias.map((s) => s.id),
+      ubicacionIds: detail.ubicaciones.map((u) => u.id),
+      backendUserId: detail.id,
     };
-
-    this.usersSignal.update((list) => [user, ...list]);
-    this.appendAudit(user, 'created', `Usuario creado con rol${input.roleIds.length > 1 ? 'es' : ''} ${input.roleIds.map((r) => ROLE_LABEL[r]).join(', ')}.`);
-    return user;
   }
 
   // Self-service: el propio usuario edita SOLO su información personal (ver
@@ -336,40 +529,94 @@ export class UserManagementService {
   // auditoría (ver `UserDetail.onSaveProfile()`) — reemplaza a los antiguos
   // `updateInfo`/`updateOrganization` como 2 llamadas separadas para ESE
   // caso de uso. Ver `UpdateUserProfileInput`.
-  updateUserProfile(userId: string, input: UpdateUserProfileInput): void {
+  //
+  // CU3 paso 3: `PATCH /users/{id}` real (ver `AuthService.updateUser`) —
+  // requiere que el usuario ya esté vinculado (`backendUserId`); no debería
+  // quedar ninguno sin vincular tras sembrar los 26 (ver MASTER.md). La
+  // respuesta (`UserSummaryDto`) NO repite los campos que se acaban de
+  // mandar, así que el `AppUser` resultante combina el `input` (lo que el
+  // backend acaba de guardar) con lo que SÍ trae la respuesta (roles,
+  // permisos, estado, mustChangePassword, emailVerified — autoritativo).
+  // `subsidiariaIds`/`ubicacionIds` NO viajan en este request (el backend no
+  // las modela en este endpoint, ver `UpdateUserRequest` — comentario "Rol,
+  // permisos y estado se manejan en sus propios endpoints, no aqui" aplica
+  // también a ellas): se quedan con lo que devuelve la respuesta (sin
+  // cambios reales), descartando cualquier edición que el form haya
+  // permitido — ver la nota en `user-detail.html` sobre por qué esos 2
+  // campos son de solo lectura en modo edición.
+  updateUserProfile(userId: string, input: UpdateUserProfileInput): Observable<AppUser> {
     const user = this.findUser(userId);
-    if (!user) return;
+    if (!user) {
+      return throwError(() => new Error('Usuario no encontrado.'));
+    }
+    if (!user.backendUserId) {
+      return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
+    }
+    const backendUserId = user.backendUserId;
 
-    const updated: AppUser = {
-      ...user,
+    // `managerId` del form es el id 'uXXXX' de ESTE mock — el backend
+    // necesita el id numérico real del manager (mismo bridge que
+    // `UserDetail.mergeBackendDetail`, en sentido inverso).
+    const managerBackendId = input.managerId ? (this.findUser(input.managerId)?.backendUserId ?? null) : null;
+
+    const request: UpdateUserRequest = {
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
       email: input.email.trim(),
-      phone: input.phone.trim(),
-      birthDate: input.birthDate,
-      ssn: input.ssn.trim(),
-      gender: input.gender,
+      phone: input.phone.trim() || null,
+      birthDate: input.birthDate || null,
+      ssn: input.ssn.trim() || null,
+      gender: input.gender || null,
       address: {
-        city: input.address.city.trim(),
-        state: input.address.state.trim(),
-        zipCode: input.address.zipCode.trim(),
-        street1: input.address.street1.trim(),
+        city: input.address.city.trim() || null,
+        state: input.address.state.trim() || null,
+        postalCode: input.address.zipCode.trim() || null,
+        street1: input.address.street1.trim() || null,
         street2: input.address.street2?.trim() || null,
-        exteriorNumber: input.address.exteriorNumber.trim(),
         interiorNumber: input.address.interiorNumber?.trim() || null,
+        exteriorNumber: input.address.exteriorNumber.trim() || null,
       },
-      department: input.department.trim(),
-      area: input.area.trim(),
-      jobTitle: input.jobTitle.trim(),
-      managerId: input.managerId,
-      employeeId: input.employeeId.trim(),
-      hireDate: input.hireDate,
+      department: input.department.trim() || null,
+      area: input.area.trim() || null,
+      jobTitle: input.jobTitle.trim() || null,
+      managerId: managerBackendId,
+      employeeCode: input.employeeId.trim() || null,
+      hireDate: input.hireDate || null,
       contractEndDate: input.contractEndDate,
-      subsidiariaId: input.subsidiariaId,
-      ubicacionId: input.ubicacionId,
     };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-    this.appendAudit(updated, 'updated', 'Se actualizó información personal y de organización.');
+
+    return this.auth.updateUser(backendUserId, request).pipe(
+      map((summary) => {
+        const updated: AppUser = {
+          ...user,
+          firstName: input.firstName.trim(),
+          lastName: input.lastName.trim(),
+          email: input.email.trim(),
+          phone: summary.phone ?? input.phone.trim(),
+          birthDate: input.birthDate,
+          ssn: input.ssn.trim(),
+          gender: input.gender,
+          address: { ...input.address },
+          department: input.department.trim(),
+          area: input.area.trim(),
+          jobTitle: input.jobTitle.trim(),
+          managerId: input.managerId,
+          employeeId: input.employeeId.trim(),
+          hireDate: input.hireDate,
+          contractEndDate: input.contractEndDate,
+          subsidiariaIds: summary.subsidiarias.map((s) => s.id),
+          ubicacionIds: summary.ubicaciones.map((u) => u.id),
+          status: backendStatusToLocal(summary.status),
+          roleIds: summary.roles as RoleId[],
+          permissions: summary.permissions as PermissionKey[],
+          emailVerified: summary.emailVerified,
+          mustChangePassword: summary.mustChangePassword,
+        };
+        this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+        this.appendAudit(updated, 'updated', 'Se actualizó información personal y de organización.');
+        return updated;
+      }),
+    );
   }
 
   // Cambiar los roles asignados resetea los permisos a la UNIÓN de los
@@ -397,24 +644,70 @@ export class UserManagementService {
   // 3 estados posibles (activo/inactivo/bloqueado, ver StatusChip) — cada
   // uno tiene su propia AuditAction para que el historial diga exactamente
   // qué pasó, no un genérico "estado cambiado".
-  setStatus(userId: string, status: UserStatus): void {
+  //
+  // CU3 paso 4: `PATCH /users/{id}/status` real (ver `AuthService.changeStatus`)
+  // — mismo criterio que `updateUserProfile`: requiere `backendUserId`, y la
+  // respuesta (`UserSummaryDto`) es autoritativa para roles/permisos/estado/
+  // mustChangePassword/emailVerified/subsidiarias/ubicaciones (se reconcilian
+  // también, por si divergieron).
+  setStatus(userId: string, status: UserStatus): Observable<AppUser> {
     const user = this.findUser(userId);
-    if (!user || user.status === status) return;
+    if (!user) {
+      return throwError(() => new Error('Usuario no encontrado.'));
+    }
+    if (user.status === status) {
+      return throwError(() => new Error('El usuario ya tiene ese estado.'));
+    }
+    if (!user.backendUserId) {
+      return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
+    }
 
-    const updated: AppUser = { ...user, status };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+    return this.auth.changeStatus(user.backendUserId, status).pipe(
+      map((summary) => {
+        const updated: AppUser = {
+          ...user,
+          status: backendStatusToLocal(summary.status),
+          roleIds: summary.roles as RoleId[],
+          permissions: summary.permissions as PermissionKey[],
+          emailVerified: summary.emailVerified,
+          mustChangePassword: summary.mustChangePassword,
+          subsidiariaIds: summary.subsidiarias.map((s) => s.id),
+          ubicacionIds: summary.ubicaciones.map((u) => u.id),
+        };
+        this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
 
-    const action: AuditAction = status === 'active' ? 'activated' : status === 'blocked' ? 'blocked' : 'deactivated';
-    this.appendAudit(updated, action, `Cuenta cambiada a estado "${STATUS_META[status].label}".`);
+        const action: AuditAction = status === 'active' ? 'activated' : status === 'blocked' ? 'blocked' : 'deactivated';
+        this.appendAudit(updated, action, `Cuenta cambiada a estado "${STATUS_META[status].label}".`);
+        return updated;
+      }),
+    );
   }
 
-  setEmailVerified(userId: string): void {
+  // CU3 paso 6: `POST /users/{id}/verify-email` real (ver
+  // `AuthService.verifyEmail`) — el guard `user.emailVerified` evita una
+  // llamada innecesaria (el botón ya está oculto en ese caso, ver
+  // `user-detail.html`), no algo que el backend exija (fuerza el flag
+  // igual si se llama de nuevo).
+  setEmailVerified(userId: string): Observable<AppUser> {
     const user = this.findUser(userId);
-    if (!user || user.emailVerified) return;
+    if (!user) {
+      return throwError(() => new Error('Usuario no encontrado.'));
+    }
+    if (user.emailVerified) {
+      return throwError(() => new Error('El correo ya está verificado.'));
+    }
+    if (!user.backendUserId) {
+      return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
+    }
 
-    const updated: AppUser = { ...user, emailVerified: true };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-    this.appendAudit(updated, 'email_verified', 'Un administrador marcó el correo como verificado.');
+    return this.auth.verifyEmail(user.backendUserId).pipe(
+      map(() => {
+        const updated: AppUser = { ...user, emailVerified: true };
+        this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+        this.appendAudit(updated, 'email_verified', 'Un administrador marcó el correo como verificado.');
+        return updated;
+      }),
+    );
   }
 
   // Cerrar sesiones activas no revoca 2FA ni cambia contraseña — solo el
@@ -514,22 +807,6 @@ export class UserManagementService {
     // (el backend deja de devolver `temporaryPassword`).
     const updated: AppUser = { ...user, mustChangePassword: false, temporaryPassword: null };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-  }
-
-  deleteUser(userId: string): void {
-    const user = this.findUser(userId);
-    if (!user) return;
-
-    this.usersSignal.update((list) => list.filter((u) => u.id !== userId));
-    this.selectedIdsSignal.update((current) => {
-      if (!current.has(userId)) return current;
-      const next = new Set(current);
-      next.delete(userId);
-      return next;
-    });
-    // La entrada de auditoría queda — no depende de que el usuario siga
-    // existiendo (ver nota en user-management-mock.data.ts sobre 'u0009').
-    this.appendAudit(user, 'deleted', 'Usuario eliminado del sistema.');
   }
 
   private appendAudit(user: AppUser, action: AuditAction, detail: string): void {

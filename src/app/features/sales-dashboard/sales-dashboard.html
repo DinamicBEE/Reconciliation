@@ -14,6 +14,18 @@
         nzFormat="dd/MM/yyyy"
       />
 
+      <!-- "Empresa" (subsidiaria) — arreglo real que llega en el login
+           (AuthUser.subsidiarias vía CatalogService), igual que Ubicación. -->
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.subsidiariaFilter()"
+        (ngModelChange)="onSubsidiariaFilterChange($event)"
+      >
+        @for (opt of subsidiariaOptions(); track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
+
       <nz-select
         class="toolbar__filter"
         [ngModel]="service.storeFilter()"
@@ -55,43 +67,53 @@
 
       <span class="toolbar__spacer"></span>
 
-      <!-- Solo se habilita con un día específico + una tienda específica
-           seleccionados (`service.reprocessTarget()`, ver
-           sales-dashboard.service.ts) — el <span> lleva el tooltip en vez del
-           <button> porque un botón `disabled` no dispara eventos de hover en
-           Ant Design; así el usuario ve por qué está deshabilitado. -->
-      <span
-        nz-tooltip
-        [nzTooltipTitle]="
-          service.reprocessTarget()
-            ? 'Reprocesar el día completo de la tienda seleccionada'
-            : 'Selecciona una fecha específica (un solo día) y una tienda para habilitar el reproceso'
-        "
-      >
-        <button nz-button type="button" [disabled]="!service.reprocessTarget()" (click)="onReprocessClick()">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M20 20v-5h-5" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4.6 15a8 8 0 0 0 14.4 3.4M19.4 9A8 8 0 0 0 5 5.6" />
-          </svg>
-          Reprocesar
-        </button>
-      </span>
+      <!-- "Reproceso de ventas" (matriz 7.16 del DED): Admin/Contabilidad
+           únicamente, sin permiso propio — ver
+           AccessControlService.canReprocessSales. Además solo se habilita
+           con un día específico + una tienda específica seleccionados
+           (`service.reprocessTarget()`, ver sales-dashboard.service.ts) — el
+           <span> lleva el tooltip en vez del <button> porque un botón
+           `disabled` no dispara eventos de hover en Ant Design; así el
+           usuario ve por qué está deshabilitado. -->
+      @if (access.canReprocessSales()) {
+        <span
+          nz-tooltip
+          [nzTooltipTitle]="
+            service.reprocessTarget()
+              ? 'Reprocesar el día completo de la tienda seleccionada'
+              : 'Selecciona una fecha específica (un solo día) y una tienda para habilitar el reproceso'
+          "
+        >
+          <button nz-button type="button" [disabled]="!service.reprocessTarget()" (click)="onReprocessClick()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 20v-5h-5" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.6 15a8 8 0 0 0 14.4 3.4M19.4 9A8 8 0 0 0 5 5.6" />
+            </svg>
+            Reprocesar
+          </button>
+        </span>
+      }
 
-      <button
-        nz-button
-        type="button"
-        (click)="exportCsv()"
-        nz-tooltip
-        nzTooltipTitle="Descarga la información de la tabla (según los filtros actuales) en un archivo .csv"
-        class="toolbar__export-button"
-      >
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0-4-4m4 4 4-4" />
-          <path stroke-linecap="round" d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-        </svg>
-        Exportar
-      </button>
+      <!-- "Exportación del listado de ventas" (matriz 7.16 del DED):
+           permiso propio `export_reports` — decoupled de `view_dashboard`
+           (quien ve la pantalla no necesariamente puede exportar). -->
+      @if (access.hasPermission('export_reports')) {
+        <button
+          nz-button
+          type="button"
+          (click)="exportCsv()"
+          nz-tooltip
+          nzTooltipTitle="Descarga la información de la tabla (según los filtros actuales) en un archivo .csv"
+          class="toolbar__export-button"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0-4-4m4 4 4-4" />
+            <path stroke-linecap="round" d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+          </svg>
+          Exportar
+        </button>
+      }
     </section>
 
     <!-- Bleed: se sale del padding de la card (margin negativo, ver
@@ -246,6 +268,35 @@
               <div class="info-field__value-row">
                 <app-match-status-tag [status]="sale.reconciliationStatus" />
               </div>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 2v4M16 2v4M3 10h18" />
+                </svg>
+                <span class="info-field__label">Conciliación relacionada</span>
+              </span>
+              @if (sale.reconciliation; as rec) {
+                <span class="info-field__value font-mono">{{ rec.id }} · {{ rec.date | date: 'dd/MM/yyyy' }}</span>
+              } @else {
+                <span class="info-field__value text-muted">Sin conciliar</span>
+              }
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h10M4 17h7" />
+                </svg>
+                <span class="info-field__label">Transacción NetSuite</span>
+              </span>
+              @if (sale.netsuite; as ns) {
+                <span class="info-field__value font-mono">{{ ns.entryId }} · {{ ns.postedAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+              } @else {
+                <span class="info-field__value text-muted">Sin contabilizar</span>
+              }
             </div>
           </div>
 
