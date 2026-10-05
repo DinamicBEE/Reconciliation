@@ -4,6 +4,14 @@ import { CountryProfile } from '../../../core/country/country.model';
 import { ElectronicInvoice, Sale, SaleCustomer, Store } from '../../../shared/models/sale.model';
 import { saleTotal } from './sale.util';
 
+// Única subsidiaria del catálogo de la sesión (id 1, "Conciliación
+// Bancaria" — `MOCK_SUBSIDIARIAS` en auth-mock.data.ts; el mismo id que la
+// sembrada en el backend real) — TODA venta del mock le pertenece, a falta
+// de un backend de ventas que traiga su propio id. Con más de una
+// subsidiaria en el catálogo, el mock seguiría funcionando (el filtro
+// "Empresa" del toolbar simplemente tendría más opciones).
+const DEFAULT_SUBSIDIARIA_ID = 1;
+
 // Ventas "en bruto" — `payments` es opcional aquí: si no se especifica,
 // `withPayment()` deriva DOS pagos (método principal + secundario) a partir
 // del total ya calculado (subtotal - descuento + impuestos + propina), para
@@ -50,8 +58,14 @@ const TODAY_SALES: RawSale[] = [
     date: '2026-08-27',
     time: '08:12',
     store: 'polanco',
+    subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
     tenderMedia: 'efectivo',
     reconciliationStatus: 'matched',
+    // Ya contabilizada en NetSuite Y conciliada (coherente con
+    // reconciliationStatus: 'matched') — ver NetSuiteReference/
+    // SaleReconciliationReference en sale.model.ts.
+    netsuite: { entryId: 'JE-2026-08-27-0041', postedAt: '2026-08-27T18:30:00-06:00' },
+    reconciliation: { id: 'CONC-2026-08-27-EFECTIVO', date: '2026-08-27' },
     customer: { name: 'Cliente mostrador' },
     items: [
       { id: 'I-1', productName: 'Café americano', quantity: 4, unitPrice: 45 },
@@ -73,8 +87,15 @@ const TODAY_SALES: RawSale[] = [
     date: '2026-08-27',
     time: '09:04',
     store: 'condesa',
+    subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
     tenderMedia: 'rappi',
     reconciliationStatus: 'sale_only',
+    // Ya contabilizada en NetSuite (la contabilización puede correr
+    // independiente de la conciliación bancaria) pero AÚN sin conciliar
+    // (reconciliationStatus: 'sale_only') — a propósito sin `reconciliation`,
+    // para no contradecir ese estado.
+    netsuite: { entryId: 'JE-2026-08-27-0042', postedAt: '2026-08-27T18:30:00-06:00' },
+    reconciliation: null,
     customer: {
       name: 'Diego Salinas',
       phone: '55 1234 8890',
@@ -101,8 +122,11 @@ const TODAY_SALES: RawSale[] = [
     date: '2026-08-27',
     time: '10:47',
     store: 'roma',
+    subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
     tenderMedia: 'bbva',
     reconciliationStatus: 'matched',
+    netsuite: { entryId: 'JE-2026-08-27-0043', postedAt: '2026-08-27T18:30:00-06:00' },
+    reconciliation: { id: 'CONC-2026-08-27-BBVA', date: '2026-08-27' },
     customer: {
       name: 'María Fernanda Ruiz',
       email: 'mf.ruiz@correo.com',
@@ -128,8 +152,11 @@ const TODAY_SALES: RawSale[] = [
     date: '2026-08-27',
     time: '11:20',
     store: 'centro',
+    subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
     tenderMedia: 'didi_food',
     reconciliationStatus: 'sale_only',
+    netsuite: null,
+    reconciliation: null,
     customer: {
       name: 'Jorge Ibáñez',
       phone: '55 9902 1147',
@@ -156,8 +183,11 @@ const TODAY_SALES: RawSale[] = [
     date: '2026-08-27',
     time: '12:35',
     store: 'polanco',
+    subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
     tenderMedia: 'efectivo',
     reconciliationStatus: 'amount_mismatch',
+    netsuite: null,
+    reconciliation: null,
     customer: { name: 'Cliente mostrador' },
     items: [
       { id: 'I-1', productName: 'Té helado', quantity: 4, unitPrice: 38 },
@@ -179,8 +209,11 @@ const TODAY_SALES: RawSale[] = [
     date: '2026-08-27',
     time: '13:10',
     store: 'condesa',
+    subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
     tenderMedia: 'rappi',
     reconciliationStatus: 'sale_only',
+    netsuite: null,
+    reconciliation: null,
     customer: {
       name: 'Ana Paola Cortés',
       phone: '55 4471 0032',
@@ -206,8 +239,11 @@ const TODAY_SALES: RawSale[] = [
     date: '2026-08-27',
     time: '14:02',
     store: 'roma',
+    subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
     tenderMedia: 'bbva', // método "principal" para la tabla/filtros — la cuenta se pagó mixto
     reconciliationStatus: 'matched',
+    netsuite: null,
+    reconciliation: null,
     customer: {
       name: 'Roberto Nieto',
       email: 'r.nieto@correo.com',
@@ -372,8 +408,13 @@ function buildDay(date: string, count: number): RawSale[] {
       date,
       time: `${8 + ((idx % 5) * 2)}:${idx % 2 === 0 ? '00' : '30'}`,
       store: STORE_CYCLE[idx % STORE_CYCLE.length],
+      subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
       tenderMedia,
       reconciliationStatus: RECONCILIATION_CYCLE[idx % RECONCILIATION_CYCLE.length],
+      // Solo las 3 primeras ventas del mock (V-2001/2/3, en TODAY_SALES)
+      // traen valor real — el resto, generado o a mano, se queda en `null`.
+      netsuite: null,
+      reconciliation: null,
       customer: { name: CUSTOMER_POOL[idx % CUSTOMER_POOL.length] },
       items,
       discountAmount,

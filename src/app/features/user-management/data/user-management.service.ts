@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { Observable, of, throwError } from 'rxjs';
 import { AuthService } from '../../auth/data/auth.service';
 import {
   AppUser,
@@ -29,10 +30,14 @@ export interface CreateUserInput {
   roleIds: RoleId[];
   status: UserStatus;
   // A diferencia del resto de "Organización", sí se piden al crear (ver
-  // AppUser.subsidiariaId/.ubicacionId) — catálogo de la sesión
-  // (CatalogService), no un valor propio de este registro.
-  subsidiariaId: number | null;
-  ubicacionId: number | null;
+  // AppUser.subsidiariaIds/.ubicacionIds) — catálogo de la sesión
+  // (CatalogService), no un valor propio de este registro. Arreglos: se
+  // pueden asignar varias.
+  subsidiariaIds: number[];
+  ubicacionIds: number[];
+  // Supervisor — select SIMPLE (uno solo). Id 'uXXXX' de este registro
+  // (igual que `UpdateUserProfileInput.managerId`).
+  managerId: string | null;
 }
 
 // Datos personales SOLOS (sin organización) — el único que necesita
@@ -77,8 +82,8 @@ export interface UpdateUserProfileInput {
   employeeId: string;
   hireDate: string;
   contractEndDate: string | null;
-  subsidiariaId: number | null;
-  ubicacionId: number | null;
+  subsidiariaIds: number[];
+  ubicacionIds: number[];
 }
 
 // El siguiente id debe ser mayor al de CUALQUIER id 'uN' ya usado, no solo
@@ -231,7 +236,11 @@ export class UserManagementService {
     return this.usersSignal().find((u) => u.id === userId) ?? null;
   }
 
-  createUser(input: CreateUserInput): AppUser {
+  // Devuelve `Observable` (no el valor directo) para tener la MISMA firma
+  // que en la rama de integración, donde estas mutaciones llaman al backend
+  // real — así los componentes son iguales en las dos ramas. Aquí se
+  // resuelve al instante con `of(...)`.
+  createUser(input: CreateUserInput): Observable<AppUser> {
     const user: AppUser = {
       // Mínimo 4 dígitos (regla de negocio) — el padding es solo cosmético,
       // `maxSeq` (arriba) sigue leyendo el número con `Number(...)` así que
@@ -269,19 +278,20 @@ export class UserManagementService {
       department: '',
       area: '',
       jobTitle: '',
-      managerId: null,
+      // Supervisor sí se pide al crear (select simple) — ver CreateUserInput.
+      managerId: input.managerId,
       employeeId: '',
       hireDate: '',
       contractEndDate: null,
       // A diferencia del resto de "Organización" (arriba), sí se piden al
       // crear — ver CreateUserInput.
-      subsidiariaId: input.subsidiariaId,
-      ubicacionId: input.ubicacionId,
+      subsidiariaIds: input.subsidiariaIds,
+      ubicacionIds: input.ubicacionIds,
     };
 
     this.usersSignal.update((list) => [user, ...list]);
     this.appendAudit(user, 'created', `Usuario creado con rol${input.roleIds.length > 1 ? 'es' : ''} ${input.roleIds.map((r) => ROLE_LABEL[r]).join(', ')}.`);
-    return user;
+    return of(user);
   }
 
   // Self-service: el propio usuario edita SOLO su información personal (ver
@@ -320,9 +330,14 @@ export class UserManagementService {
   // auditoría (ver `UserDetail.onSaveProfile()`) — reemplaza a los antiguos
   // `updateInfo`/`updateOrganization` como 2 llamadas separadas para ESE
   // caso de uso. Ver `UpdateUserProfileInput`.
-  updateUserProfile(userId: string, input: UpdateUserProfileInput): void {
+  //
+  // Subsidiarias/ubicaciones NO se editan aquí (se conservan las del
+  // registro): el `PATCH /users/{id}` real no las modela — solo el alta —,
+  // así que la pantalla las muestra de solo lectura en modo edición, igual
+  // que en la rama de integración.
+  updateUserProfile(userId: string, input: UpdateUserProfileInput): Observable<AppUser> {
     const user = this.findUser(userId);
-    if (!user) return;
+    if (!user) return throwError(() => new Error('Usuario no encontrado.'));
 
     const updated: AppUser = {
       ...user,
@@ -349,11 +364,10 @@ export class UserManagementService {
       employeeId: input.employeeId.trim(),
       hireDate: input.hireDate,
       contractEndDate: input.contractEndDate,
-      subsidiariaId: input.subsidiariaId,
-      ubicacionId: input.ubicacionId,
     };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
     this.appendAudit(updated, 'updated', 'Se actualizó información personal y de organización.');
+    return of(updated);
   }
 
   // Cambiar los roles asignados resetea los permisos a la UNIÓN de los
@@ -381,24 +395,28 @@ export class UserManagementService {
   // 3 estados posibles (activo/inactivo/bloqueado, ver StatusChip) — cada
   // uno tiene su propia AuditAction para que el historial diga exactamente
   // qué pasó, no un genérico "estado cambiado".
-  setStatus(userId: string, status: UserStatus): void {
+  setStatus(userId: string, status: UserStatus): Observable<AppUser> {
     const user = this.findUser(userId);
-    if (!user || user.status === status) return;
+    if (!user) return throwError(() => new Error('Usuario no encontrado.'));
+    if (user.status === status) return throwError(() => new Error('El usuario ya tiene ese estado.'));
 
     const updated: AppUser = { ...user, status };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
 
     const action: AuditAction = status === 'active' ? 'activated' : status === 'blocked' ? 'blocked' : 'deactivated';
     this.appendAudit(updated, action, `Cuenta cambiada a estado "${STATUS_META[status].label}".`);
+    return of(updated);
   }
 
-  setEmailVerified(userId: string): void {
+  setEmailVerified(userId: string): Observable<AppUser> {
     const user = this.findUser(userId);
-    if (!user || user.emailVerified) return;
+    if (!user) return throwError(() => new Error('Usuario no encontrado.'));
+    if (user.emailVerified) return throwError(() => new Error('El correo ya está verificado.'));
 
     const updated: AppUser = { ...user, emailVerified: true };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
     this.appendAudit(updated, 'email_verified', 'Un administrador marcó el correo como verificado.');
+    return of(updated);
   }
 
   // Cerrar sesiones activas no revoca 2FA ni cambia contraseña — solo el
@@ -498,22 +516,6 @@ export class UserManagementService {
     // (el backend deja de devolver `temporaryPassword`).
     const updated: AppUser = { ...user, mustChangePassword: false, temporaryPassword: null };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-  }
-
-  deleteUser(userId: string): void {
-    const user = this.findUser(userId);
-    if (!user) return;
-
-    this.usersSignal.update((list) => list.filter((u) => u.id !== userId));
-    this.selectedIdsSignal.update((current) => {
-      if (!current.has(userId)) return current;
-      const next = new Set(current);
-      next.delete(userId);
-      return next;
-    });
-    // La entrada de auditoría queda — no depende de que el usuario siga
-    // existiendo (ver nota en user-management-mock.data.ts sobre 'u0009').
-    this.appendAudit(user, 'deleted', 'Usuario eliminado del sistema.');
   }
 
   private appendAudit(user: AppUser, action: AuditAction, detail: string): void {

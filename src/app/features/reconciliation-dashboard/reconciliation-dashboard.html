@@ -117,16 +117,19 @@
 
         <!-- Botón "Importar" — carga masiva de un estado de cuenta bancario
        completo (ver modal al final del archivo), independiente de la tabla:
-       por eso vive arriba, a la derecha, no dentro de la columna Acciones. -->
-      <div class="dashboard__actions">
-        <button nz-button type="button" class="dashboard__import-btn" (click)="openImportModal()">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-          </svg>
-          <span>Importar</span>
-        </button>
-      </div>
+       por eso vive arriba, a la derecha, no dentro de la columna Acciones.
+       Permiso propio `import_settlements` (matriz 7.16 del DED). -->
+      @if (access.hasPermission('import_settlements')) {
+        <div class="dashboard__actions">
+          <button nz-button type="button" class="dashboard__import-btn" (click)="openImportModal()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+            </svg>
+            <span>Importar</span>
+          </button>
+        </div>
+      }
 
     </section>
 

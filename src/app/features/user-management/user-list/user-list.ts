@@ -110,10 +110,19 @@ export class UserList {
       nzTitle: 'Cambiar estado',
       nzContent: `¿Cambiar el estado de <b>${fullName(user)}</b> a <b>${label}</b>?`,
       nzOkText: 'Cambiar',
-      nzOnOk: () => {
-        this.service.setStatus(user.id, next);
-        this.message.success(`Estado de ${fullName(user)} actualizado a ${label}.`);
-      },
+      nzOnOk: () =>
+        new Promise<void>((resolve, reject) => {
+          this.service.setStatus(user.id, next).subscribe({
+            next: () => {
+              this.message.success(`Estado de ${fullName(user)} actualizado a ${label}.`);
+              resolve();
+            },
+            error: (err: unknown) => {
+              this.message.error(err instanceof Error ? err.message : 'No se pudo completar la acción.');
+              reject();
+            },
+          });
+        }),
     });
   }
 
@@ -127,19 +136,6 @@ export class UserList {
         if (tempPassword) {
           this.message.success(`Contraseña de ${fullName(user)} restablecida. Temporal: ${tempPassword}`, { nzDuration: 8000 });
         }
-      },
-    });
-  }
-
-  protected onDeleteClick(user: AppUser): void {
-    this.modal.confirm({
-      nzTitle: 'Eliminar usuario',
-      nzContent: `¿Eliminar a <b>${fullName(user)}</b>? Esta acción no se puede deshacer.`,
-      nzOkText: 'Eliminar',
-      nzOkDanger: true,
-      nzOnOk: () => {
-        this.service.deleteUser(user.id);
-        this.message.success(`${fullName(user)} fue eliminado.`);
       },
     });
   }

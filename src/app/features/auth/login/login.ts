@@ -19,6 +19,10 @@ const BLOCKED_MESSAGE = 'Usuario bloqueado por intentos fallidos. Contacte al ad
 // Texto propio del frontend (el backend decide por `code`, no por texto —
 // ver auth-errors.ts).
 const IDLE_TIMEOUT_MESSAGE = 'Tu sesión se cerró por inactividad. Inicia sesión de nuevo para continuar.';
+// En la rama de integración lo dispara el interceptor ante un 401; en el
+// mock no hay peticiones HTTP, pero el aviso queda listo (ver
+// `SessionEndReason` en auth-errors.ts).
+const INVALID_TOKEN_MESSAGE = 'Tu sesión ya no es válida. Inicia sesión de nuevo para continuar.';
 
 @Component({
   selector: 'app-login',
@@ -37,12 +41,17 @@ export class Login {
 
   protected readonly submitting = signal(false);
   protected readonly loginError = signal<string | null>(null);
-  // Aviso de sesión cerrada por inactividad — visible hasta el siguiente
-  // login exitoso (AuthService limpia el motivo ahí) o hasta que haya un
-  // error de credenciales, que tiene prioridad en el mismo lugar.
-  protected readonly sessionNotice = computed(() =>
-    this.auth.sessionEndReason() === 'idle_timeout' && !this.loginError() ? IDLE_TIMEOUT_MESSAGE : null,
-  );
+  // Aviso de sesión cerrada sin que el usuario lo pidiera (inactividad o
+  // token invalidado) — visible hasta el siguiente login exitoso
+  // (AuthService limpia el motivo ahí) o hasta que haya un error de
+  // credenciales, que tiene prioridad en el mismo lugar.
+  protected readonly sessionNotice = computed(() => {
+    if (this.loginError()) return null;
+    const reason = this.auth.sessionEndReason();
+    if (reason === 'idle_timeout') return IDLE_TIMEOUT_MESSAGE;
+    if (reason === 'invalid_token') return INVALID_TOKEN_MESSAGE;
+    return null;
+  });
 
   protected readonly form = this.fb.group({
     username: this.fb.control('', [Validators.required, Validators.minLength(3)]),

@@ -7,7 +7,7 @@ import { AppUser, AppUserAddress, AuditLogEntry } from './user-management.model'
 // índice en vez de escribirlos 25 veces a mano. `mustChangePassword` tampoco
 // se declara por usuario aquí — se defaultea a `false` para los 25 al
 // construir `MOCK_USERS`, con UNA excepción a propósito (ver ese bloque).
-// `subsidiariaId`/`ubicacionId` (catálogo de la sesión) tampoco — mismo
+// `subsidiariaIds`/`ubicacionIds` (catálogo de la sesión) tampoco — mismo
 // criterio, ver el `.map()` de más abajo.
 type MockUserSeed = Omit<
   AppUser,
@@ -20,8 +20,8 @@ type MockUserSeed = Omit<
   | 'contractEndDate'
   | 'mustChangePassword'
   | 'temporaryPassword'
-  | 'subsidiariaId'
-  | 'ubicacionId'
+  | 'subsidiariaIds'
+  | 'ubicacionIds'
 >;
 
 // Incluye a 'u0001', 'u0006', 'u0011' y 'u0018' — los mismos 4 usuarios demo
@@ -69,7 +69,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-01-10T09:05:00',
     lastAccessAt: '2026-08-27T08:02:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-27T08:20:00',
     failedLoginAttempts: 0,
@@ -91,7 +91,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-03-02T10:00:00',
     lastAccessAt: '2026-08-26T18:40:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-26T19:00:00',
     failedLoginAttempts: 0,
@@ -113,7 +113,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-05-14T09:30:00',
     lastAccessAt: '2026-08-27T07:55:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-27T08:10:00',
     failedLoginAttempts: 1,
@@ -137,7 +137,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-06-20T09:00:00',
     lastAccessAt: '2026-07-30T11:20:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-07-30T11:45:00',
     failedLoginAttempts: 3,
@@ -181,7 +181,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2026-08-24T15:20:00',
     lastAccessAt: null,
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: false,
     lastActivityAt: null,
     failedLoginAttempts: 0,
@@ -203,7 +203,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-11-11T09:00:00',
     lastAccessAt: '2026-05-02T09:00:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-05-02T09:20:00',
     failedLoginAttempts: 0,
@@ -229,7 +229,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-02-03T09:00:00',
     lastAccessAt: '2026-08-25T10:05:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-25T10:30:00',
     failedLoginAttempts: 0,
@@ -251,7 +251,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-02-10T09:00:00',
     lastAccessAt: '2026-08-24T16:20:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-24T16:45:00',
     failedLoginAttempts: 0,
@@ -295,7 +295,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-03-05T09:00:00',
     lastAccessAt: '2026-03-15T09:40:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-03-15T10:00:00',
     failedLoginAttempts: 0,
@@ -317,7 +317,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2026-08-20T14:00:00',
     lastAccessAt: null,
     roleIds: ['CONTABILIDAD'],
-    permissions: ['view_dashboard', 'view_catalogs'],
+    permissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
     emailVerified: false,
     lastActivityAt: null,
     failedLoginAttempts: 0,
@@ -339,7 +339,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-04-02T09:00:00',
     lastAccessAt: '2026-08-21T08:50:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-21T09:10:00',
     failedLoginAttempts: 0,
@@ -361,7 +361,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-04-18T09:00:00',
     lastAccessAt: '2026-06-10T13:00:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-06-10T13:25:00',
     failedLoginAttempts: 5,
@@ -405,7 +405,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-05-22T09:00:00',
     lastAccessAt: '2026-08-18T09:00:00',
     roleIds: ['CONTABILIDAD'],
-    permissions: ['view_dashboard', 'view_catalogs'],
+    permissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-18T09:20:00',
     failedLoginAttempts: 0,
@@ -427,7 +427,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-06-09T09:00:00',
     lastAccessAt: '2026-02-14T10:00:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-02-14T10:20:00',
     failedLoginAttempts: 0,
@@ -449,7 +449,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-06-25T09:00:00',
     lastAccessAt: '2026-08-26T12:00:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-26T12:20:00',
     failedLoginAttempts: 0,
@@ -493,7 +493,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2026-08-22T11:00:00',
     lastAccessAt: null,
     roleIds: ['CONTABILIDAD'],
-    permissions: ['view_dashboard', 'view_catalogs'],
+    permissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
     emailVerified: false,
     lastActivityAt: null,
     failedLoginAttempts: 0,
@@ -515,7 +515,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-08-11T09:00:00',
     lastAccessAt: '2026-05-28T08:30:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-05-28T08:55:00',
     failedLoginAttempts: 4,
@@ -537,7 +537,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-09-05T09:00:00',
     lastAccessAt: '2026-08-23T17:05:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-23T17:30:00',
     failedLoginAttempts: 0,
@@ -559,7 +559,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-09-21T09:00:00',
     lastAccessAt: '2026-01-30T09:15:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-01-30T09:40:00',
     failedLoginAttempts: 0,
@@ -606,7 +606,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2026-09-01T09:00:00',
     lastAccessAt: '2026-09-25T12:10:00',
     roleIds: ['COSTOS'],
-    permissions: ['view_catalogs'],
+    permissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-09-25T12:30:00',
     failedLoginAttempts: 0,
@@ -691,8 +691,10 @@ export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   // La única subsidiaria del catálogo mock (id 1, ver `MOCK_SUBSIDIARIAS`
   // en auth-mock.data.ts) para los 25; ubicación varía por índice entre las
   // 4 de `MOCK_UBICACIONES` (ids 1-4) solo para dar variedad visible en la UI.
-  subsidiariaId: 1,
-  ubicacionId: (index % 4) + 1,
+  // Arreglo de UN elemento por usuario sembrado; el alta permite asignar
+  // varias (ver `UserManagementService.createUser`).
+  subsidiariaIds: [1],
+  ubicacionIds: [(index % 4) + 1],
 }));
 
 // Incluye una entrada para 'u0009', un usuario ELIMINADO que ya no existe en

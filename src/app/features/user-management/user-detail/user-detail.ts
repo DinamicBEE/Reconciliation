@@ -116,6 +116,18 @@ export class UserDetail {
   protected readonly jobTitles = JOB_TITLES;
   protected readonly genderOptions = GENDER_OPTIONS;
 
+  protected subsidiariaNames(ids: number[]): string[] {
+    return ids
+      .map((id) => this.catalog.findSubsidiaria(id)?.nombre)
+      .filter((name): name is string => !!name);
+  }
+
+  protected ubicacionNames(ids: number[]): string[] {
+    return ids
+      .map((id) => this.catalog.findUbicacion(id)?.nombre)
+      .filter((name): name is string => !!name);
+  }
+
   protected readonly isCreate = computed(() => !this.userId());
 
   protected readonly user = computed<AppUser | null>(() => {
@@ -197,8 +209,8 @@ export class UserDetail {
     employeeId: this.fb.control(''),
     hireDate: this.fb.control<Date | null>(null),
     contractEndDate: this.fb.control<Date | null>(null),
-    subsidiariaId: this.fb.control<number | null>(null),
-    ubicacionId: this.fb.control<number | null>(null),
+    subsidiariaIds: this.fb.control<number[]>([]),
+    ubicacionIds: this.fb.control<number[]>([]),
   });
 
   // --- Estado local de creación (solo aplica cuando isCreate()) ---
@@ -206,9 +218,18 @@ export class UserDetail {
   protected readonly createActive = signal(true);
   // A diferencia del resto de "Organización" (que solo se pide editando, ver
   // orgForm/onSaveProfile), subsidiaria/ubicación SÍ se piden al crear — ver
-  // AppUser.subsidiariaId/.ubicacionId.
-  protected readonly createSubsidiariaId = signal<number | null>(null);
-  protected readonly createUbicacionId = signal<number | null>(null);
+  // AppUser.subsidiariaIds/.ubicacionIds. Se pueden asignar varias de cada
+  // una (N:M, mismo modelo que el backend).
+  protected readonly createSubsidiariaIds = signal<number[]>([]);
+  protected readonly createUbicacionIds = signal<number[]>([]);
+  // Supervisor — select SIMPLE (un solo responsable, a diferencia de
+  // roles/subsidiarias/ubicaciones que sí aceptan varias). `null` = sin
+  // asignar (ver `CreateUserInput.managerId`).
+  protected readonly createManagerId = signal<string | null>(null);
+  // Deshabilita el botón mientras el alta está en curso — en el mock es
+  // instantáneo, pero deja la pantalla igual a la de la rama de integración
+  // (ahí es una llamada real a `POST /users`).
+  protected readonly submittingCreate = signal(false);
 
   // --- Borrador de "Seguridad y acceso" (solo aplica editando un usuario existente) ---
   protected readonly draftRoleIds = signal<RoleId[]>([]);
@@ -216,11 +237,12 @@ export class UserDetail {
 
   // --- Modo edición de "Información general" (datos personales +
   // organización) — de solo lectura por defecto; el botón "Editar" del
-  // header (junto a "Eliminar usuario") lo activa para AMBAS sub-cards a la
-  // vez, ya que viven bajo el mismo botón (ver user-detail.html). No aplica
-  // a "Seguridad y acceso" (roles/permisos ya tienen su propio flujo de
-  // edición directa, con su propio botón "Guardar permisos").
+  // header lo activa para AMBAS sub-cards a la vez (ver user-detail.html).
+  // No aplica a "Seguridad y acceso" (roles/permisos ya tienen su propio
+  // flujo de edición directa, con su propio botón "Guardar permisos").
   protected readonly isEditing = signal(false);
+  // "Guardar cambios" en curso — mismo criterio que `submittingCreate`.
+  protected readonly savingProfile = signal(false);
 
   constructor() {
     // effect (no computed): reinicia formularios + borradores al entrar a un
@@ -253,8 +275,8 @@ export class UserDetail {
           employeeId: found.employeeId,
           hireDate: parseIsoDate(found.hireDate),
           contractEndDate: parseIsoDate(found.contractEndDate),
-          subsidiariaId: found.subsidiariaId,
-          ubicacionId: found.ubicacionId,
+          subsidiariaIds: [...found.subsidiariaIds],
+          ubicacionIds: [...found.ubicacionIds],
         });
         this.draftRoleIds.set([...found.roleIds]);
         this.draftPermissions.set(new Set(found.permissions));
@@ -277,13 +299,15 @@ export class UserDetail {
           employeeId: '',
           hireDate: null,
           contractEndDate: null,
-          subsidiariaId: null,
-          ubicacionId: null,
+          subsidiariaIds: [],
+          ubicacionIds: [],
         });
         this.createRoleIds.set([]);
         this.createActive.set(true);
-        this.createSubsidiariaId.set(null);
-        this.createUbicacionId.set(null);
+        this.createSubsidiariaIds.set([]);
+        this.createUbicacionIds.set([]);
+        this.createManagerId.set(null);
+        this.submittingCreate.set(false);
         this.draftRoleIds.set([]);
         this.draftPermissions.set(new Set());
       }
@@ -322,8 +346,8 @@ export class UserDetail {
         employeeId: user.employeeId,
         hireDate: parseIsoDate(user.hireDate),
         contractEndDate: parseIsoDate(user.contractEndDate),
-        subsidiariaId: user.subsidiariaId,
-        ubicacionId: user.ubicacionId,
+        subsidiariaIds: [...user.subsidiariaIds],
+        ubicacionIds: [...user.ubicacionIds],
       });
     }
     this.isEditing.set(false);
@@ -369,15 +393,27 @@ export class UserDetail {
 
     const info = this.infoForm.getRawValue();
     const org = this.orgForm.getRawValue();
-    this.service.updateUserProfile(id, {
-      ...info,
-      ...org,
-      birthDate: toIsoDate(info.birthDate),
-      hireDate: toIsoDate(org.hireDate),
-      contractEndDate: toIsoDateOrNull(org.contractEndDate),
-    });
-    this.message.success('Datos actualizados.');
-    this.isEditing.set(false);
+
+    this.savingProfile.set(true);
+    this.service
+      .updateUserProfile(id, {
+        ...info,
+        ...org,
+        birthDate: toIsoDate(info.birthDate),
+        hireDate: toIsoDate(org.hireDate),
+        contractEndDate: toIsoDateOrNull(org.contractEndDate),
+      })
+      .subscribe({
+        next: () => {
+          this.savingProfile.set(false);
+          this.message.success('Datos actualizados.');
+          this.isEditing.set(false);
+        },
+        error: (err: unknown) => {
+          this.savingProfile.set(false);
+          this.showMutationError(err);
+        },
+      });
   }
 
   protected onSaveRolesAndPermissions(): void {
@@ -404,10 +440,19 @@ export class UserDetail {
       nzTitle: 'Cambiar estado',
       nzContent: `¿Cambiar el estado de <b>${fullName(user)}</b> a <b>${label}</b>?`,
       nzOkText: 'Cambiar',
-      nzOnOk: () => {
-        this.service.setStatus(user.id, next);
-        this.message.success(`Estado actualizado a ${label}.`);
-      },
+      nzOnOk: () =>
+        new Promise<void>((resolve, reject) => {
+          this.service.setStatus(user.id, next).subscribe({
+            next: () => {
+              this.message.success(`Estado actualizado a ${label}.`);
+              resolve();
+            },
+            error: (err: unknown) => {
+              this.showMutationError(err);
+              reject();
+            },
+          });
+        }),
     });
   }
 
@@ -415,8 +460,17 @@ export class UserDetail {
     const id = this.userId();
     if (!id) return;
 
-    this.service.setEmailVerified(id);
-    this.message.success('Correo marcado como verificado.');
+    this.service.setEmailVerified(id).subscribe({
+      next: () => this.message.success('Correo marcado como verificado.'),
+      error: (err: unknown) => this.showMutationError(err),
+    });
+  }
+
+  // Aviso para un error de las mutaciones de este componente — en el mock
+  // solo son errores locales del servicio (usuario inexistente, estado
+  // repetido).
+  private showMutationError(err: unknown): void {
+    this.message.error(err instanceof Error ? err.message : 'No se pudo completar la acción.');
   }
 
   protected onCloseSessionsClick(): void {
@@ -456,23 +510,6 @@ export class UserDetail {
     }
   }
 
-  protected onDeleteClick(): void {
-    const user = this.user();
-    if (!user) return;
-
-    this.modal.confirm({
-      nzTitle: 'Eliminar usuario',
-      nzContent: `¿Eliminar a <b>${fullName(user)}</b>? Esta acción no se puede deshacer.`,
-      nzOkText: 'Eliminar',
-      nzOkDanger: true,
-      nzOnOk: () => {
-        this.service.deleteUser(user.id);
-        this.message.success('Usuario eliminado.');
-        this.router.navigateByUrl('/usuarios');
-      },
-    });
-  }
-
   protected onCreateSubmit(): void {
     if (this.infoForm.invalid || this.createRoleIds().length === 0) {
       this.infoForm.markAllAsTouched();
@@ -490,17 +527,29 @@ export class UserDetail {
       return;
     }
 
-    const user = this.service.createUser({
-      firstName,
-      lastName,
-      email,
-      phone,
-      roleIds: this.createRoleIds(),
-      status: this.createActive() ? 'active' : 'inactive',
-      subsidiariaId: this.createSubsidiariaId(),
-      ubicacionId: this.createUbicacionId(),
-    });
-    this.message.success(`Usuario ${fullName(user)} creado. Su contraseña temporal aparece en "Organización".`);
-    this.router.navigate(['/usuarios', user.id]);
+    this.submittingCreate.set(true);
+    this.service
+      .createUser({
+        firstName,
+        lastName,
+        email,
+        phone,
+        roleIds: this.createRoleIds(),
+        status: this.createActive() ? 'active' : 'inactive',
+        subsidiariaIds: this.createSubsidiariaIds(),
+        ubicacionIds: this.createUbicacionIds(),
+        managerId: this.createManagerId(),
+      })
+      .subscribe({
+        next: (user) => {
+          this.submittingCreate.set(false);
+          this.message.success(`Usuario ${fullName(user)} creado. Su contraseña temporal aparece en "Organización".`);
+          this.router.navigate(['/usuarios', user.id]);
+        },
+        error: (err: unknown) => {
+          this.submittingCreate.set(false);
+          this.showMutationError(err);
+        },
+      });
   }
 }

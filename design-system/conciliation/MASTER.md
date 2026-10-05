@@ -2391,6 +2391,62 @@ mantenimiento, las correcciones van por soporte) — el propio
    Laura Pineda). La consulta/exportación de ventas que la matriz también da
    a Costos y Tesorería sigue pendiente.
 
+### Actualización: cambios de la rama de integración traídos al mock (matriz 7.16 completa, multi-subsidiaria, supervisor, NetSuite)
+
+Origen: commit `dc3ee8a` de `feature/login-coctel-del-mar-integration`. Se
+trajo todo lo que NO es conexión al backend; esta rama sigue funcionando
+solo con datos mock.
+
+**Sí se trajo:**
+
+1. **Matriz de roles y permisos (7.16) completa** — `ROLES.defaultPermissions`
+   ampliado: Tesorería y Costos también tienen `view_dashboard`;
+   Contabilidad y Costos también `export_reports`. Ahora se evalúan de
+   verdad `export_reports` (botón "Exportar" de ventas), `import_settlements`
+   (botón "Importar" de conciliación), `manage_differences` ("Guardar
+   match") y `view_audit_log` (`/usuarios/auditoria` y su entrada del
+   buscador). "Reproceso de ventas" no tiene permiso propio: es
+   `AccessControlService.canReprocessSales` (roles ADMIN o CONTABILIDAD).
+   Se mantiene a propósito la desviación de "Asignación y cambio de rol"
+   (Altas conserva `manage_roles`; varios roles por usuario).
+2. **`AccessControlService.permissions` lee de `AuthUser.permissions`**
+   (fuente única, igual que en integración). En el mock,
+   `AuthService.login` llena ese campo con `defaultPermissionsForRoles` del
+   rol de la cuenta demo. Los permisos sembrados en `MOCK_USERS` se
+   actualizaron a la matriz nueva (en integración los sincroniza el
+   backend; aquí no hay quien lo haga).
+3. **Multi-subsidiaria/ubicación**: `AppUser.subsidiariaIds`/`.ubicacionIds`
+   (arreglos). Se eligen varias en el alta; en edición se muestran de solo
+   lectura porque el `PATCH /users/{id}` real no las modela — mismo
+   comportamiento en ambas ramas.
+4. **Supervisor en el alta** (`createManagerId`, select simple que reusa
+   `managerOptions()`); `CreateUserInput.managerId`.
+5. **Sin eliminar usuarios**: se quitaron los botones de eliminar y
+   `UserManagementService.deleteUser` (el DED pide desactivar).
+6. **Firmas con `Observable`**: `createUser`, `updateUserProfile`,
+   `setStatus` y `setEmailVerified` devuelven `Observable<AppUser>`
+   (resuelto al instante con `of(...)`), y los componentes muestran
+   "Guardando…" (`submittingCreate`, `savingProfile`) — así `user-detail` y
+   `user-list` quedan iguales a los de integración.
+7. **Ventas**: filtro "Empresa" (`Sale.subsidiariaId`, `SubsidiariaFilter`),
+   y en el drawer "Conciliación relacionada" (`Sale.reconciliation`) y
+   "Transacción NetSuite" (`Sale.netsuite`); valores solo en V-2001/2/3.
+8. **Sesión**: `SessionEndReason` suma `'invalid_token'` y `App`/`Login`
+   reaccionan a cualquier motivo no nulo; `AuthService.invalidateSession`
+   (antes `expireSession`, privado). En el mock solo se dispara por
+   inactividad. `auth-errors.ts` trae el catálogo completo de códigos de
+   error del backend (`ERROR_CODE_MESSAGES`), sin HTTP.
+9. **Docs**: `docs/avances/comparativa-DED-vs-portal-conciliacion_v3.pdf` y
+   la copia vigente en `docs/`.
+
+**No se trajo (conexión al backend):** `authTokenInterceptor` y
+`httpErrorAlertInterceptor`, `provideHttpClient`, los métodos HTTP de
+`AuthService` (`createUser`, `listUsers`, `updateUser`, `changeStatus`,
+`verifyEmail`, `me`, `getUserDetail`) y sus DTOs,
+`UserManagementService.syncFromBackend`/`findByBackendUserId`, la fusión del
+detalle real en `user-detail` (`mergeBackendDetail`), `backendUserId`, el
+desbloqueo contra el backend y la cuenta demo de login real.
+
 ## Pendientes / deuda conocida al cerrar este módulo
 
 1. Borde de `nz-range-picker` no refleja `--color-border` (ver arriba).

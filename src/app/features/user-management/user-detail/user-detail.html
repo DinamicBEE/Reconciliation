@@ -31,12 +31,6 @@
                 Editar
               }
             </button>
-            <button nz-button nzDanger type="button" (click)="onDeleteClick()">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m3 0-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7h14Z" />
-              </svg>
-              Eliminar usuario
-            </button>
           </div>
         }
       </div>
@@ -141,14 +135,14 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M3 21V7l9-4 9 4v14" />
               <path stroke-linecap="round" d="M9 21v-6h6v6" />
             </svg>
-            <span class="summary-field__label">Subsidiaria:</span>
+            <span class="summary-field__label">Subsidiarias:</span>
             <nz-select
               class="summary-field__control"
-              [ngModel]="createSubsidiariaId()"
+              nzMode="multiple"
+              [ngModel]="createSubsidiariaIds()"
               [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="createSubsidiariaId.set($event)"
-              nzAllowClear
-              nzPlaceholder="Selecciona una subsidiaria"
+              (ngModelChange)="createSubsidiariaIds.set($event)"
+              placeholder="Selecciona una o más subsidiarias"
             >
               @for (opt of catalog.subsidiarias(); track opt.id) {
                 <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
@@ -161,17 +155,39 @@
               <rect x="3" y="9" width="18" height="12" rx="1" />
               <path stroke-linecap="round" stroke-linejoin="round" d="M3 9 12 3l9 6" />
             </svg>
-            <span class="summary-field__label">Ubicación:</span>
+            <span class="summary-field__label">Ubicaciones:</span>
             <nz-select
               class="summary-field__control"
-              [ngModel]="createUbicacionId()"
+              nzMode="multiple"
+              [ngModel]="createUbicacionIds()"
               [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="createUbicacionId.set($event)"
-              nzAllowClear
-              nzPlaceholder="Selecciona una ubicación"
+              (ngModelChange)="createUbicacionIds.set($event)"
+              placeholder="Selecciona una o más ubicaciones"
             >
               @for (opt of catalog.ubicaciones(); track opt.id) {
                 <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="summary-field">
+            <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="7" r="4" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 21v-2a6 6 0 0 1 6-6h0" />
+              <circle cx="17" cy="14" r="3" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12.5 21v-1a4 4 0 0 1 4-4h1a4 4 0 0 1 4 4v1" />
+            </svg>
+            <span class="summary-field__label">Supervisor:</span>
+            <nz-select
+              class="summary-field__control"
+              [ngModel]="createManagerId()"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="createManagerId.set($event)"
+              nzAllowClear
+              placeholder="Selecciona un responsable (opcional)"
+            >
+              @for (opt of managerOptions(); track opt.value) {
+                <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
               }
             </nz-select>
           </div>
@@ -193,10 +209,17 @@
           </div>
 
           <p class="text-muted user-form__hint">
-            Departamento, área, puesto y responsable se completan después, desde la pestaña "Organización".
+            Departamento, área y puesto se completan después, desde la pestaña "Organización".
           </p>
 
-          <button nz-button nzType="primary" type="submit" class="user-form__submit">
+          <button
+            nz-button
+            nzType="primary"
+            type="submit"
+            class="user-form__submit"
+            [nzLoading]="submittingCreate()"
+            [disabled]="submittingCreate()"
+          >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" d="M12 5v14M5 12h14" />
             </svg>
@@ -580,17 +603,18 @@
                           <path stroke-linecap="round" stroke-linejoin="round" d="M3 21V7l9-4 9 4v14" />
                           <path stroke-linecap="round" d="M9 21v-6h6v6" />
                         </svg>
-                        <span class="info-field__label">Subsidiaria</span>
+                        <span class="info-field__label">Subsidiarias</span>
                       </span>
-                      @if (isEditing()) {
-                        <nz-select class="info-field__input" formControlName="subsidiariaId" nzAllowClear nzPlaceholder="Selecciona una subsidiaria">
-                          @for (opt of catalog.subsidiarias(); track opt.id) {
-                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
-                          }
-                        </nz-select>
-                      } @else {
-                        @if (catalog.findSubsidiaria(u.subsidiariaId); as s) {
-                          <span class="info-field__value">{{ s.nombre }}</span>
+                      <!-- Siempre de solo lectura, incluso en modo edición:
+                           `PATCH /users/{id}` (UpdateUserRequest.java) no
+                           modela subsidiarias/ubicaciones — solo `POST
+                           /users` (alta) las acepta. Ofrecer un multi-select
+                           editable aquí implicaría descartar en silencio lo
+                           que la persona elija al guardar (ver
+                           UserManagementService.updateUserProfile). -->
+                      @if (subsidiariaNames(u.subsidiariaIds); as names) {
+                        @if (names.length) {
+                          <span class="info-field__value">{{ names.join(', ') }}</span>
                         } @else {
                           <span class="info-field__value text-muted">Sin asignar</span>
                         }
@@ -603,17 +627,13 @@
                           <rect x="3" y="9" width="18" height="12" rx="1" />
                           <path stroke-linecap="round" stroke-linejoin="round" d="M3 9 12 3l9 6" />
                         </svg>
-                        <span class="info-field__label">Ubicación</span>
+                        <span class="info-field__label">Ubicaciones</span>
                       </span>
-                      @if (isEditing()) {
-                        <nz-select class="info-field__input" formControlName="ubicacionId" nzAllowClear nzPlaceholder="Selecciona una ubicación">
-                          @for (opt of catalog.ubicaciones(); track opt.id) {
-                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
-                          }
-                        </nz-select>
-                      } @else {
-                        @if (catalog.findUbicacion(u.ubicacionId); as ub) {
-                          <span class="info-field__value">{{ ub.nombre }}</span>
+                      <!-- Solo lectura siempre — ver el comentario de
+                           "Subsidiarias" arriba. -->
+                      @if (ubicacionNames(u.ubicacionIds); as names) {
+                        @if (names.length) {
+                          <span class="info-field__value">{{ names.join(', ') }}</span>
                         } @else {
                           <span class="info-field__value text-muted">Sin asignar</span>
                         }
@@ -823,7 +843,14 @@
                  participa. -->
             @if (isEditing()) {
               <div class="tab-card__save-bar">
-                <button nz-button nzType="primary" type="button" (click)="onSaveProfile()">
+                <button
+                  nz-button
+                  nzType="primary"
+                  type="button"
+                  (click)="onSaveProfile()"
+                  [nzLoading]="savingProfile()"
+                  [disabled]="savingProfile()"
+                >
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-8H7v8M7 3v5h8" />

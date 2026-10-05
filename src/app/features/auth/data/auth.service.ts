@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
 import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
-import { RoleId } from '../../user-management/data/user-management.model';
+import { PermissionKey, RoleId, defaultPermissionsForRoles } from '../../user-management/data/user-management.model';
 import { AuthErrorResponse, SESSION_IDLE_TIMEOUT_CODE, SessionEndReason, isSessionIdleTimeout } from './auth-errors';
 import { MOCK_SUBSIDIARIAS, MOCK_UBICACIONES, MOCK_USERS } from './auth-mock.data';
 import {
@@ -47,6 +47,11 @@ export interface AuthUser {
   // `defaultPermissionsForRoles` solo cuando no hay `AppUser` vinculado (ver
   // AccessControlService.permissions); en el mock siempre lo hay.
   roles: RoleId[];
+  // Permisos efectivos de la sesión — equivalente a
+  // `UserSummaryDto.permissions` del login real; fuente única de
+  // `AccessControlService.permissions` (mismo criterio que la rama de
+  // integración). En el mock: los defaults del rol (matriz 7.16).
+  permissions: PermissionKey[];
   // Equivalente a `UserSummaryDto.mustChangePassword` del login real. En el
   // mock siempre `false`: la fuente de verdad del cambio obligatorio es
   // `AppUser.mustChangePassword` del registro vinculado (ver
@@ -147,6 +152,7 @@ export class AuthService {
       displayName: match.displayName,
       appUserId: match.appUserId,
       roles: [...match.roles],
+      permissions: defaultPermissionsForRoles(match.roles),
       mustChangePasswordHint: false,
       subsidiarias: MOCK_SUBSIDIARIAS,
       ubicaciones: MOCK_UBICACIONES,
@@ -195,7 +201,7 @@ export class AuthService {
       next: (pair) => this.setSession({ user: current.user, ...pair }),
       error: (err: unknown) => {
         if (isSessionIdleTimeout(err)) {
-          this.expireSession('idle_timeout');
+          this.invalidateSession('idle_timeout');
           return;
         }
         this.logout();
@@ -218,8 +224,9 @@ export class AuthService {
   }
 
   // Cierre NO pedido por el usuario — igual de completo que `logout()`, pero
-  // deja registrado el motivo para avisarle.
-  private expireSession(reason: SessionEndReason): void {
+  // deja registrado el motivo para avisarle. Público y con el mismo nombre
+  // que en la rama de integración (ahí también lo usa el interceptor HTTP).
+  invalidateSession(reason: SessionEndReason): void {
     this.closeSession();
     this.endReason.set(reason);
   }
@@ -308,6 +315,7 @@ export class AuthService {
       if (
         !parsed.user ||
         !parsed.user.roles ||
+        !parsed.user.permissions ||
         !parsed.user.subsidiarias ||
         !parsed.user.ubicaciones ||
         !parsed.accessToken ||

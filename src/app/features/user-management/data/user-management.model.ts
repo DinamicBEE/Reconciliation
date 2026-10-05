@@ -126,18 +126,18 @@ export interface AppUser {
   employeeId: string; // ID empleado
   hireDate: string; // ISO date — Fecha de contratación
   contractEndDate: string | null; // ISO date — Fecha fin de contrato; null = contrato indefinido
-  // Subsidiaria (negocio/marca/empresa) y ubicación (tienda/store/punto de
-  // venta/sucursal) — a diferencia del resto de "Organización", SÍ se piden
-  // al crear la cuenta (ver CreateUserInput). `id` numérico porque referencia
-  // el catálogo de la sesión (`CatalogService`, `core/services/` — hoy mock,
-  // ver `MOCK_SUBSIDIARIAS`/`MOCK_UBICACIONES` en auth-mock.data.ts), no un
-  // valor propio de este registro — `null` = sin asignar. El backend modela
-  // acceso a VARIAS subsidiarias/ubicaciones por persona (`empleado_subsidiaria`/
-  // `empleado_ubicacion`, tablas de relación); esta pantalla simplifica a UNA
-  // sola de cada una, mismo criterio de single-select que el resto de esta
-  // sección (departamento/área/puesto tampoco son multi-valor aquí).
-  subsidiariaId: number | null;
-  ubicacionId: number | null;
+  // Subsidiaria(s) (negocio/marca/empresa) y ubicación(es) (tienda/store/
+  // punto de venta/sucursal) — a diferencia del resto de "Organización", SÍ
+  // se piden al crear la cuenta (ver CreateUserInput). `id`s numéricos
+  // porque referencian el catálogo de la sesión (`CatalogService`,
+  // `core/services/` — hoy mock, ver `MOCK_SUBSIDIARIAS`/`MOCK_UBICACIONES`
+  // en auth-mock.data.ts), no un valor propio de este registro. ARREGLOS,
+  // no un solo valor: el backend modela acceso a VARIAS subsidiarias/
+  // ubicaciones por persona (`empleado_subsidiaria`/`empleado_ubicacion`,
+  // tablas N:M) — mismo modelo que la rama de integración. `[]` = sin
+  // asignar ninguna.
+  subsidiariaIds: number[];
+  ubicacionIds: number[];
 }
 
 // Género — lista cerrada (mismo criterio que STATUS_OPTIONS/ROLE_OPTIONS):
@@ -225,24 +225,31 @@ export const ROLES: RoleDef[] = [
   {
     id: 'CONTABILIDAD',
     label: 'Contabilidad',
-    description: 'Acceso al Resumen de venta y a la consulta de catálogos cargados.',
-    defaultPermissions: ['view_dashboard', 'view_catalogs'],
+    description: 'Acceso al Resumen de venta (consulta y exportación) y a la consulta de catálogos cargados.',
+    // Matriz 7.16 del DED: Contabilidad también exporta el listado de ventas.
+    defaultPermissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
   },
   {
     id: 'TESORERIA',
     label: 'Tesorería',
-    description: 'Acceso a Conciliación bancaria y a la consulta de catálogos cargados.',
-    defaultPermissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    description: 'Acceso al Resumen de venta, Conciliación bancaria y a la consulta de catálogos cargados.',
+    // Matriz 7.16 del DED: Tesorería también consulta (y exporta) ventas —
+    // antes solo tenía Conciliación bancaria.
+    defaultPermissions: [
+      'view_dashboard',
+      'view_reconciliation',
+      'manage_differences',
+      'import_settlements',
+      'export_reports',
+      'view_catalogs',
+    ],
   },
   {
     id: 'COSTOS',
     label: 'Costos',
-    // Matriz 7.16 del DED: Costos consulta y exporta ventas y catálogos. Por
-    // ahora solo tiene la consulta de catálogos (`/catalogos`, su pantalla de
-    // aterrizaje vía `homeRoute()`); la consulta/exportación de ventas queda
-    // pendiente de ajustar junto con el resto de la matriz de permisos.
-    description: 'Consulta de catálogos cargados (solo lectura).',
-    defaultPermissions: ['view_catalogs'],
+    // Matriz 7.16 del DED: Costos consulta y exporta ventas y catálogos.
+    description: 'Consulta y exportación de ventas, y consulta de catálogos cargados (solo lectura).',
+    defaultPermissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
   },
 ];
 

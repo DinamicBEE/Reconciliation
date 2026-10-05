@@ -8,6 +8,11 @@ export type TenderMediaFilter = TenderMedia | 'all';
 export type StoreFilter = Store | 'all';
 export type StatusFilter = ReconciliationStatus | 'all';
 export type DateRangeFilter = [Date, Date] | null;
+// Filtro "Empresa" (subsidiaria) del toolbar — id del catálogo de la
+// sesión (`Sale.subsidiariaId`/`CatalogService.subsidiarias()`), a
+// diferencia de `StoreFilter` (que sigue siendo un slug fijo del mock, ver
+// sale.model.ts).
+export type SubsidiariaFilter = number | 'all';
 
 function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -40,6 +45,7 @@ export class SalesDashboardService {
   readonly selectedSale = signal<Sale | null>(null);
 
   readonly dateRange = signal<DateRangeFilter>(null);
+  readonly subsidiariaFilter = signal<SubsidiariaFilter>('all');
   readonly storeFilter = signal<StoreFilter>('all');
   readonly statusFilter = signal<StatusFilter>('all');
   readonly tenderMediaFilter = signal<TenderMediaFilter>('all');
@@ -47,12 +53,14 @@ export class SalesDashboardService {
 
   readonly filteredSales = computed(() => {
     const range = this.dateRange();
+    const subsidiaria = this.subsidiariaFilter();
     const store = this.storeFilter();
     const status = this.statusFilter();
     const tenderMedia = this.tenderMediaFilter();
     const term = this.search().trim().toLowerCase();
 
     return this.sales().filter((sale) => {
+      if (subsidiaria !== 'all' && sale.subsidiariaId !== subsidiaria) return false;
       if (store !== 'all' && sale.store !== store) return false;
       if (status !== 'all' && saleReconciliationStatus(sale) !== status) return false;
       if (tenderMedia !== 'all' && sale.tenderMedia !== tenderMedia) return false;
@@ -71,6 +79,10 @@ export class SalesDashboardService {
   // reciban un rango con `range[0]`/`range[1]` inválidos.
   setDateRange(range: DateRangeFilter): void {
     this.dateRange.set(range && range[0] && range[1] ? range : null);
+  }
+
+  setSubsidiariaFilter(filter: SubsidiariaFilter): void {
+    this.subsidiariaFilter.set(filter);
   }
 
   setStoreFilter(filter: StoreFilter): void {
