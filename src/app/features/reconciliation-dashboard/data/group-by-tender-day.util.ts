@@ -87,7 +87,7 @@ export function groupByTenderDay(
   return [...buckets.values()]
     .map((bucket): TenderDaySummary => {
       const soldAmount = round2(bucket.sold.reduce((sum, s) => sum + s.amount, 0));
-      const settledAmount = round2(bucket.settlements.reduce((sum, s) => sum + s.amount, 0));
+      const settledAmount = round2(bucket.settlements.reduce((sum, s) => sum + s.grossAmount, 0));
       const actionableOrder =
         orderMatches.find(
           (m) =>

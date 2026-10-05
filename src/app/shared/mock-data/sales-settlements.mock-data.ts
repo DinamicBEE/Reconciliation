@@ -1,5 +1,6 @@
 import { SaleTransaction, SettlementTransaction, TenderMedia } from '../models/reconciliation-item.model';
 import { Sale } from '../models/sale.model';
+import { settlementDeductions } from './settlement-deductions';
 // Fuente de verdad: el mismo mock de ventas que consume `sales-dashboard`
 // ("Resumen de venta") — la base de TODO lo que se concilia es el sistema
 // POS, no un dataset paralelo inventado para este feature (así era antes:
@@ -111,9 +112,10 @@ function settlementsForSale(sale: Sale, saleTx: SaleTransaction): SettlementTran
         date: sale.date,
         orderId: saleTx.orderId,
         tenderMedia: sale.tenderMedia,
-        amount: round2(saleTx.amount * MISMATCH_RATIO),
+        concept: description,
+        grossAmount: round2(saleTx.amount * MISMATCH_RATIO),
+        ...settlementDeductions(sale.tenderMedia, round2(saleTx.amount * MISMATCH_RATIO)),
         batchId,
-        description,
       },
     ];
   }
@@ -127,9 +129,10 @@ function settlementsForSale(sale: Sale, saleTx: SaleTransaction): SettlementTran
       date: sale.date,
       orderId: saleTx.orderId,
       tenderMedia: sale.tenderMedia,
-      amount,
+      concept: `${description} — abono ${i + 1}/${parts.length + 1}`,
+      grossAmount: amount,
+      ...settlementDeductions(sale.tenderMedia, amount),
       batchId,
-      description: `${description} — abono ${i + 1}/${parts.length + 1}`,
     }));
   }
 
@@ -139,9 +142,10 @@ function settlementsForSale(sale: Sale, saleTx: SaleTransaction): SettlementTran
       date: sale.date,
       orderId: saleTx.orderId,
       tenderMedia: sale.tenderMedia,
-      amount: saleTx.amount,
+      concept: description,
+      grossAmount: saleTx.amount,
+      ...settlementDeductions(sale.tenderMedia, saleTx.amount),
       batchId,
-      description,
     },
   ];
 }
@@ -163,36 +167,40 @@ const ORPHAN_SETTLEMENTS: SettlementTransaction[] = [
     date: '2026-08-16',
     orderId: 'SPEI0000199999',
     tenderMedia: 'bbva',
-    amount: 2980,
+    grossAmount: 2980,
+    ...settlementDeductions('bbva', 2980),
     batchId: batchIdFor('bbva', '2026-08-16'),
-    description: 'Transferencia SPEI recibida — folio sin identificar',
+    concept: 'Transferencia SPEI recibida — folio sin identificar',
   },
   {
     id: 'L-ORPHAN-RAPPI-01',
     date: '2026-08-23',
     orderId: 'RAPPI-LIQ-999',
     tenderMedia: 'rappi',
-    amount: 270,
+    grossAmount: 270,
+    ...settlementDeductions('rappi', 270),
     batchId: batchIdFor('rappi', '2026-08-23'),
-    description: 'Liquidación Rappi sin folio de orden',
+    concept: 'Liquidación Rappi sin folio de orden',
   },
   {
     id: 'L-ORPHAN-EFECTIVO-01',
     date: '2026-08-16',
     orderId: 'CORTE-0816-099',
     tenderMedia: 'efectivo',
-    amount: 975,
+    grossAmount: 975,
+    ...settlementDeductions('efectivo', 975),
     batchId: batchIdFor('efectivo', '2026-08-16'),
-    description: 'Depósito en ventanilla sin referencia',
+    concept: 'Depósito en ventanilla sin referencia',
   },
   {
     id: 'L-ORPHAN-DIDI-01',
     date: '2026-08-23',
     orderId: 'DIDI-099',
     tenderMedia: 'didi_food',
-    amount: 298,
+    grossAmount: 298,
+    ...settlementDeductions('didi_food', 298),
     batchId: batchIdFor('didi_food', '2026-08-23'),
-    description: 'Liquidación DiDi Food sin folio de orden',
+    concept: 'Liquidación DiDi Food sin folio de orden',
   },
 ];
 
@@ -216,9 +224,10 @@ function buildLooseRappiSettlements(count: number): SettlementTransaction[] {
     date,
     orderId: `RAPPI-LIQ-9${50 + i}`,
     tenderMedia: 'rappi' as const,
-    amount: round2(320 + i * 67.5),
+    grossAmount: round2(320 + i * 67.5),
+    ...settlementDeductions('rappi', round2(320 + i * 67.5)),
     batchId,
-    description: `Liquidación Rappi sin folio de orden — depósito ${i + 2}/${count + 1}`,
+    concept: `Liquidación Rappi sin folio de orden — depósito ${i + 2}/${count + 1}`,
   }));
 }
 

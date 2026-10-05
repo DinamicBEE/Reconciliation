@@ -118,19 +118,12 @@
                       </div>
 
                       <div class="candidate-card__field candidate-card__field--desc">
-                        <span class="candidate-card__label">Descripción</span>
-                        <span class="candidate-card__value" [attr.title]="c.settlement.description">
-                          {{ c.settlement.description }}
+                        <span class="candidate-card__label">Concepto</span>
+                        <span class="candidate-card__value" [attr.title]="c.settlement.concept">
+                          {{ c.settlement.concept }}
                         </span>
                         <span class="candidate-card__meta">
                           {{ c.settlement.date | date: 'dd/MM/yyyy' }} · Lote {{ c.settlement.batchId }}
-                        </span>
-                      </div>
-
-                      <div class="candidate-card__field candidate-card__field--amount">
-                        <span class="candidate-card__label">Monto</span>
-                        <span class="candidate-card__value font-mono">
-                          {{ c.settlement.amount | money }}
                         </span>
                       </div>
 
@@ -142,6 +135,32 @@
                           </nz-tag>
                         </div>
                       }
+
+                      <!-- Movimiento normalizado (DED, CU5 paso 3): bruto, comisiones,
+                           retenciones y neto abonado. El bruto es el que se cruza
+                           contra la venta (ver "Monto liquidado" arriba). -->
+                      <div class="candidate-card__amounts">
+                        <div class="candidate-card__field candidate-card__field--amount">
+                          <span class="candidate-card__label">Bruto</span>
+                          <span class="candidate-card__value font-mono">{{ c.settlement.grossAmount | money }}</span>
+                        </div>
+                        <div class="candidate-card__field candidate-card__field--amount">
+                          <span class="candidate-card__label">Comisiones</span>
+                          <span class="candidate-card__value candidate-card__value--deduction font-mono">
+                            {{ c.settlement.commission > 0 ? '−' : '' }}{{ c.settlement.commission | money }}
+                          </span>
+                        </div>
+                        <div class="candidate-card__field candidate-card__field--amount">
+                          <span class="candidate-card__label">Retenciones</span>
+                          <span class="candidate-card__value candidate-card__value--deduction font-mono">
+                            {{ c.settlement.withholdings > 0 ? '−' : '' }}{{ c.settlement.withholdings | money }}
+                          </span>
+                        </div>
+                        <div class="candidate-card__field candidate-card__field--amount">
+                          <span class="candidate-card__label">Neto</span>
+                          <span class="candidate-card__value font-mono">{{ c.settlement.netAmount | money }}</span>
+                        </div>
+                      </div>
                     </div>
                   </nz-card>
                 }

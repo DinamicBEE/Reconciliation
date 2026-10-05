@@ -2447,6 +2447,44 @@ solo con datos mock.
 detalle real en `user-detail` (`mergeBackendDetail`), `backendUserId`, el
 desbloqueo contra el backend y la cuenta demo de login real.
 
+### Actualización: carga de extractos por origen + movimientos normalizados (DED CU5)
+
+1. **Modal "Importar movimientos bancarios"**: "Medio de pago" pasa a
+   **"Origen"** (los 4 del DED: Bancolombia Reporte Conciliar, Davivienda
+   datáfono, QR Caja Social BREB y liquidación Rappi — `IMPORT_ORIGINS` en
+   `data/bank-import.model.ts`) y "Cuenta bancaria" a **"Cuenta/lote"**: sus
+   opciones dependen del origen (cuentas del banco del origen, o lotes de
+   liquidación para Rappi — `importTargetsFor()` en
+   `data/bank-accounts.mock-data.ts`). Cambiar el origen limpia la
+   cuenta/lote.
+2. **El frontend ya no lee ni parsea el archivo**: el input acepta CSV,
+   Excel (`.xlsx`/`.xls`) o TXT (`IMPORT_FILE_ACCEPT`), valida solo la
+   extensión y envía el archivo tal cual. Se borró `bank-import.util.ts`
+   (parser y resumen del lado del front).
+3. **Envío al backend preparado y simulado** — `BankImportApi.upload()`
+   (`data/bank-import.api.ts`) arma el `FormData` definitivo
+   (`buildBankImportFormData`: `origin`, `targetKind`, `targetId`, `file`)
+   para `POST /bank-imports` (contrato actualizado en
+   `docs/api-endpoints.csv`) y hoy devuelve una respuesta simulada con esa
+   forma (`BankImportResponse` → incorporados/duplicados/con error), o un
+   rechazo `422 { code: STATEMENT_REJECTED, line, reason }` como error del
+   Observable (el segundo envío de la sesión y los archivos vacíos). Al
+   conectar el backend solo cambia el cuerpo de `upload()` por el
+   `http.post` (esta rama no tiene `HttpClient` a propósito).
+4. **`SettlementTransaction` normalizado**: `concept` (antes
+   `description`), `grossAmount` (antes `amount`), `commission`,
+   `withholdings` y `netAmount` (= bruto − comisión − retenciones). El cruce
+   contra la venta (cross-match, totales por día, "Gestión de diferencias")
+   usa el **bruto**, así que los estados de conciliación no cambiaron. El
+   mock deriva comisión y retenciones con tasas ilustrativas por medio de
+   pago (`shared/mock-data/settlement-deductions.ts`: Rappi/DiDi 6 % + 1 %,
+   BBVA 2,5 % + 1,5 %, efectivo 0).
+5. **"Transacciones bancarias candidatas"** (`difference-management`): cada
+   tarjeta muestra referencia, concepto (con fecha y lote) y una fila de
+   importes — bruto, comisiones, retenciones y neto (`.candidate-card__amounts`,
+   grid de 4 columnas que cae a 2×2 por debajo de 1200 px). El modal "Ver
+   detalles" de conciliación muestra "Concepto", "Bruto" y "Neto".
+
 ## Pendientes / deuda conocida al cerrar este módulo
 
 1. Borde de `nz-range-picker` no refleja `--color-border` (ver arriba).

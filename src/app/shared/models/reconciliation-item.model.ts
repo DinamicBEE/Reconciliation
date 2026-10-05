@@ -34,14 +34,27 @@ export interface SaleTransaction {
   amount: number;
 }
 
+// Movimiento normalizado de un extracto bancario o de una liquidación de
+// agregador (DED, CU5 paso 3): fecha, referencia, concepto, importe bruto,
+// importe neto, comisiones y retenciones. La normalización la hace el
+// backend con el parser del origen (ver `bank-import.api.ts`); este modelo
+// es la forma en que llega al frontend.
 export interface SettlementTransaction {
   id: string;
   date: string; // ISO date
   orderId: string; // referencia de cruce — debe matchear con SaleTransaction.orderId
   tenderMedia: TenderMedia;
-  amount: number;
+  concept: string; // concepto del banco/proveedor (texto libre del extracto)
+  // Importe BRUTO del movimiento — el que se cruza contra el total de la
+  // venta (cross-match, totales por día y "Gestión de diferencias").
+  grossAmount: number;
+  // Comisión cobrada por el banco/adquirente/agregador (positiva; se resta).
+  commission: number;
+  // Retenciones aplicadas (retefuente, reteIVA, reteICA…) — total positivo.
+  withholdings: number;
+  // Importe NETO abonado: bruto − comisión − retenciones.
+  netAmount: number;
   batchId: string; // lote de liquidación del proveedor
-  description: string; // texto libre del banco/proveedor — usado en "Gestión de diferencias"
 }
 
 // matched: existe en ambos lados y el monto coincide.

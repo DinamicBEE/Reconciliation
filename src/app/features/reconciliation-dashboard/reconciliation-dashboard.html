@@ -259,8 +259,9 @@
                 <th>Fecha</th>
                 <th>Referencia</th>
                 <th>Lote</th>
-                <th class="col-truncate" style="--col-max-width: 220px">Descripción</th>
-                <th class="text-right">Monto</th>
+                <th class="col-truncate" style="--col-max-width: 220px">Concepto</th>
+                <th class="text-right">Bruto</th>
+                <th class="text-right">Neto</th>
               </tr>
             </thead>
             <tbody>
@@ -269,14 +270,15 @@
                   <td>{{ settlement.date | date: 'dd/MM/yyyy' }}</td>
                   <td class="font-mono">{{ settlement.id }}</td>
                   <td class="font-mono">{{ settlement.batchId }}</td>
-                  <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="settlement.description">
-                    {{ settlement.description }}
+                  <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="settlement.concept">
+                    {{ settlement.concept }}
                   </td>
-                  <td class="text-right font-mono">{{ settlement.amount | money }}</td>
+                  <td class="text-right font-mono">{{ settlement.grossAmount | money }}</td>
+                  <td class="text-right font-mono">{{ settlement.netAmount | money }}</td>
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="5" class="text-muted">Sin transacciones bancarias asociadas.</td>
+                  <td colspan="6" class="text-muted">Sin transacciones bancarias asociadas.</td>
                 </tr>
               }
             </tbody>
@@ -301,33 +303,33 @@
     <ng-container *nzModalContent>
       <div class="bank-import">
         <div class="bank-import__field">
-          <label class="bank-import__label" for="import-tender-media">Medio de pago</label>
+          <label class="bank-import__label" for="import-origin">Origen</label>
           <nz-select
-            id="import-tender-media"
+            id="import-origin"
             class="bank-import__select"
-            nzPlaceHolder="Selecciona un medio de pago"
+            nzPlaceHolder="Selecciona el origen del archivo"
             [nzDisabled]="importing()"
-            [ngModel]="importTenderMedia()"
-            (ngModelChange)="onImportTenderMediaChange($event)"
+            [ngModel]="importOrigin()"
+            (ngModelChange)="onImportOriginChange($event)"
           >
-            @for (opt of importTenderMediaOptions; track opt.value) {
-              <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+            @for (origin of importOrigins; track origin.id) {
+              <nz-option [nzValue]="origin.id" [nzLabel]="origin.label" />
             }
           </nz-select>
         </div>
 
         <div class="bank-import__field">
-          <label class="bank-import__label" for="import-bank-account">Cuenta bancaria</label>
+          <label class="bank-import__label" for="import-target">Cuenta/lote</label>
           <nz-select
-            id="import-bank-account"
+            id="import-target"
             class="bank-import__select"
-            nzPlaceHolder="Selecciona una cuenta bancaria"
-            [nzDisabled]="importing()"
-            [ngModel]="importBankAccountId()"
-            (ngModelChange)="onImportBankAccountChange($event)"
+            [nzPlaceHolder]="importTargetPlaceholder()"
+            [nzDisabled]="importing() || importOrigin() === null"
+            [ngModel]="importTargetId()"
+            (ngModelChange)="onImportTargetChange($event)"
           >
-            @for (account of bankAccounts; track account.id) {
-              <nz-option [nzValue]="account.id" [nzLabel]="account.bankName + ' ' + account.accountNumber" />
+            @for (target of importTargets(); track target.id) {
+              <nz-option [nzValue]="target.id" [nzLabel]="target.label" />
             }
           </nz-select>
         </div>
@@ -335,15 +337,16 @@
         <!-- Mismo botón de importación (icono + label centrados) que
              "Importar CSV" en Gestión de diferencias — ver
              shared/styles/_import-dropzone.scss. Deshabilitado hasta que
-             ambos selectores de arriba tengan valor. El icono se cambia por
-             un spinner mientras `importing()` simula la llamada al backend,
-             y el nombre del archivo elegido se muestra debajo del label en
-             cuanto se selecciona uno. -->
+             ambos selectores de arriba tengan valor. Acepta CSV, Excel o TXT;
+             el archivo se envía tal cual al backend (`BankImportApi`). El
+             icono se cambia por un spinner mientras se envía, y el nombre
+             del archivo elegido se muestra debajo del label en cuanto se
+             selecciona uno. -->
         <section class="import-dropzone-row">
           <input
             #bankImportInput
             type="file"
-            accept=".csv,.txt,text/csv,text/plain"
+            [accept]="importFileAccept"
             hidden
             (change)="onImportFileSelected($event)"
           />
@@ -360,7 +363,7 @@
               </svg>
             }
             <span class="import-dropzone__text">
-              <span>{{ importing() ? 'Conectando con el banco…' : 'Importar archivo (.csv, .txt)' }}</span>
+              <span>{{ importing() ? 'Enviando archivo…' : 'Importar archivo (.csv, .xlsx, .txt)' }}</span>
               @if (selectedFileName()) {
                 <span class="import-dropzone__filename">{{ selectedFileName() }}</span>
               }
@@ -401,7 +404,7 @@
             nzType="error"
             nzShowIcon
             nzMessage="El archivo fue rechazado"
-            [nzDescription]="'Línea ' + rejection.line + ': ' + rejection.reason"
+            [nzDescription]="(rejection.line > 0 ? 'Línea ' + rejection.line + ': ' : '') + rejection.reason"
           />
         }
       </div>
