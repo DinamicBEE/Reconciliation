@@ -1,0 +1,257 @@
+<!doctype html>
+<!--
+  FUENTE del PDF "Endpoints implementados" (docs/endpoints-implementados.pdf).
+  Para actualizar: editar este archivo (subir la versión en <meta name="doc-version">, la
+  portada y la tabla "Historial de versiones"), y regenerar con docs/fuentes/generar-pdf.ps1.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="doc-version" content="1.0">
+<title>Endpoints implementados y conectados al backend — v1.0</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 9.4pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 20pt; margin: 0 0 6px; color: #fff; }
+  h2 { font-size: 13.5pt; margin: 24px 0 10px; color: #0f172a; border-bottom: 2px solid #142850; padding-bottom: 4px; }
+  h3 { font-size: 10.5pt; margin: 0; color: #0f172a; }
+  code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 8.2pt; font-family: Consolas, "Courier New", monospace; }
+  .cover { background: #0f1b3d; color: #fff; padding: 20px 22px; border-radius: 6px; margin-bottom: 18px; }
+  .eyebrow { font-size: 8pt; letter-spacing: 1.5px; color: #93c5fd; font-weight: bold; text-transform: uppercase; }
+  .subtitle { font-size: 11pt; color: #cbd5e1; margin-bottom: 14px; }
+  .meta { width: 100%; border-collapse: collapse; font-size: 8.8pt; }
+  .meta td { padding: 3px 0; vertical-align: top; }
+  .meta td.l { color: #93c5fd; width: 150px; font-weight: bold; }
+  .meta td.v { color: #e2e8f0; }
+  .cards { display: flex; gap: 10px; margin: 12px 0 8px; }
+  .card { flex: 1; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 4px; padding: 9px 12px; }
+  .card .n { font-size: 21pt; font-weight: bold; line-height: 1; }
+  .card .t { font-size: 8pt; color: #475569; margin-top: 3px; }
+  .card.a { border-left-color: #16a34a; } .card.a .n { color: #16a34a; }
+  .card.b { border-left-color: #2563eb; } .card.b .n { color: #2563eb; }
+  .card.c { border-left-color: #d97706; } .card.c .n { color: #d97706; }
+  .card.d { border-left-color: #dc2626; } .card.d .n { color: #dc2626; }
+  table.data { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 8.6pt; }
+  table.data th { background: #142850; color: #fff; text-align: left; padding: 5px 7px; font-size: 8.1pt; }
+  table.data td { padding: 5px 7px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  table.data tr:nth-child(even) td { background: #f8fafc; }
+  .m { display: inline-block; min-width: 46px; text-align: center; padding: 2px 7px; border-radius: 4px; font-size: 7.8pt; font-weight: bold; color: #fff; font-family: Consolas, monospace; }
+  .m.GET { background: #2563eb; } .m.POST { background: #16a34a; } .m.PATCH { background: #d97706; } .m.DELETE { background: #dc2626; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 7.6pt; font-weight: bold; white-space: nowrap; }
+  .badge.pub { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  .badge.tok { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }
+  .badge.rol { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+  .ep { border: 1px solid #e2e8f0; border-radius: 5px; margin-bottom: 10px; page-break-inside: avoid; }
+  .ep-head { background: #f8fafc; padding: 7px 10px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; border-radius: 5px 5px 0 0; }
+  .ep-head .path { font-family: Consolas, monospace; font-weight: bold; font-size: 9.4pt; }
+  .ep-head .desc { color: #475569; font-size: 8.4pt; margin-left: auto; text-align: right; }
+  .ep table { width: 100%; border-collapse: collapse; font-size: 8.4pt; }
+  .ep td { padding: 4px 10px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+  .ep tr:last-child td { border-bottom: 0; }
+  .ep td.k { width: 105px; color: #64748b; font-weight: bold; font-size: 8pt; }
+  .callout { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 5px; padding: 10px 14px; margin: 10px 0; font-size: 8.8pt; }
+  .callout ul { margin: 4px 0 0; padding-left: 18px; } .callout li { margin-bottom: 3px; }
+  .small { font-size: 8.2pt; color: #475569; }
+  .pb { page-break-before: always; }
+  .footer { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 7.6pt; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="eyebrow">Referencia técnica · Integración con el backend</div>
+  <h1>Endpoints implementados y conectados al backend</h1>
+  <div class="subtitle">Portal de conciliación — Cóctel del Mar</div>
+  <table class="meta">
+    <tr><td class="l">Rama</td><td class="v"><b>feature/login-coctel-del-mar-integration</b></td></tr>
+    <tr><td class="l">Backend</td><td class="v">coctel_midd (Spring Boot) — Auth Service detrás del API Gateway</td></tr>
+    <tr><td class="l">Versión</td><td class="v">1.0 — 06-Oct-2026</td></tr>
+    <tr><td class="l">Alcance</td><td class="v">Llamadas HTTP reales que hace hoy el frontend (<code style="background:#1e2f5c;color:#e2e8f0">AuthService</code>). Excluye mocks en memoria.</td></tr>
+    <tr><td class="l">Responsable portal</td><td class="v">Irving Canul</td></tr>
+  </table>
+</div>
+
+<h2 style="margin-top:0;">1. Resumen</h2>
+<div class="cards">
+  <div class="card a"><div class="n">12</div><div class="t">endpoints conectados al backend real</div></div>
+  <div class="card b"><div class="n">5</div><div class="t">de autenticación (<code>/auth/*</code>)</div></div>
+  <div class="card c"><div class="n">7</div><div class="t">de administración de usuarios (<code>/users/*</code>)</div></div>
+  <div class="card d"><div class="n">20</div><div class="t">de <code>api-endpoints.csv</code> aún sin conectar (sección 4)</div></div>
+</div>
+<div class="callout">
+  <b>Cómo se conecta.</b> Todas las llamadas usan rutas relativas (<code>environment.apiUrl = ''</code>) que en desarrollo atraviesa <code>proxy.conf.json</code> hacia el gateway (<code>http://localhost:8082</code>; rutas <code>/auth</code> y <code>/users</code>).
+  <ul>
+    <li><b>Bearer automático:</b> <code>authTokenInterceptor</code> agrega <code>Authorization: Bearer &lt;accessToken&gt;</code> a toda petición salvo <code>/auth/login</code>, <code>/auth/refresh</code> y <code>/auth/logout</code> (públicos). Un 401 en cualquier otra llamada invalida la sesión y redirige a <code>/login</code>.</li>
+    <li><b>Errores de negocio:</b> el backend responde <code>{ "error": string, "code": string }</code>; <code>httpErrorAlertInterceptor</code> muestra una alerta por <code>code</code> (catálogo en <code>auth-errors.ts</code>), salvo los que ya tienen UI propia (<code>INVALID_CREDENTIALS</code>, <code>ACCOUNT_LOCKED</code>, <code>SESSION_IDLE_TIMEOUT</code>).</li>
+    <li><b>Autorización en el servidor:</b> <code>/users/**</code> exige rol <code>ADMIN</code> o <code>ALTAS</code> (<code>SecurityConfig.java</code>); un 403 sin <code>code</code> es ese rechazo.</li>
+  </ul>
+</div>
+
+<h2>2. Tabla de endpoints</h2>
+<table class="data">
+  <tr><th style="width:3%">#</th><th style="width:8%">Método</th><th style="width:25%">Endpoint</th><th>Qué hace</th><th style="width:14%">Acceso</th></tr>
+  <tr><td>1</td><td><span class="m POST">POST</span></td><td><code>/auth/login</code></td><td>Inicia sesión; devuelve tokens y datos del usuario</td><td><span class="badge pub">Público</span></td></tr>
+  <tr><td>2</td><td><span class="m POST">POST</span></td><td><code>/auth/refresh</code></td><td>Rota access/refresh token (un solo uso)</td><td><span class="badge pub">Público</span></td></tr>
+  <tr><td>3</td><td><span class="m POST">POST</span></td><td><code>/auth/logout</code></td><td>Invalida el refresh token</td><td><span class="badge pub">Público</span></td></tr>
+  <tr><td>4</td><td><span class="m GET">GET</span></td><td><code>/auth/me</code></td><td>Valida la sesión y refresca roles/permisos</td><td><span class="badge tok">Bearer</span></td></tr>
+  <tr><td>5</td><td><span class="m POST">POST</span></td><td><code>/auth/change-password</code></td><td>Cambia la contraseña (obligatorio en el primer acceso)</td><td><span class="badge tok">Bearer</span></td></tr>
+  <tr><td>6</td><td><span class="m GET">GET</span></td><td><code>/users</code></td><td>Lista paginada/filtrada de usuarios</td><td><span class="badge rol">ADMIN · ALTAS</span></td></tr>
+  <tr><td>7</td><td><span class="m GET">GET</span></td><td><code>/users/{id}</code></td><td>Detalle completo de un usuario</td><td><span class="badge rol">ADMIN · ALTAS</span></td></tr>
+  <tr><td>8</td><td><span class="m POST">POST</span></td><td><code>/users</code></td><td>Alta de usuario (devuelve contraseña temporal)</td><td><span class="badge rol">ADMIN · ALTAS</span></td></tr>
+  <tr><td>9</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}</code></td><td>Edita información personal y organización</td><td><span class="badge rol">ADMIN · ALTAS</span></td></tr>
+  <tr><td>10</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/status</code></td><td>Cambia el estado (activo / inactivo / bloqueado)</td><td><span class="badge rol">ADMIN · ALTAS</span></td></tr>
+  <tr><td>11</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/verify-email</code></td><td>Marca el correo como verificado (manual)</td><td><span class="badge rol">ADMIN · ALTAS</span></td></tr>
+  <tr><td>12</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/unlock</code></td><td>Desbloquea una cuenta bloqueada por intentos fallidos</td><td><span class="badge rol">ADMIN · ALTAS</span></td></tr>
+</table>
+<p class="small"><code>{id}</code> es el id numérico del <code>app_user</code> real (<code>AppUser.backendUserId</code> en el front), no el id <code>uXXXX</code> del mock.</p>
+
+<h2>3. Detalle por endpoint</h2>
+<h3 style="margin:0 0 8px;color:#142850;">3.1 Autenticación (<code>/auth/*</code>)</h3>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/auth/login</span><span class="desc">Público</span></div>
+  <table>
+    <tr><td class="k">Request</td><td><code>{ username, password }</code></td></tr>
+    <tr><td class="k">Respuesta 200</td><td><code>{ accessToken, refreshToken, expiresIn (s), user: UserSummaryDto }</code> — <code>user</code> incluye <code>roles</code>, <code>permissions</code>, <code>subsidiarias</code>, <code>ubicaciones</code>, <code>mustChangePassword</code></td></tr>
+    <tr><td class="k">Errores</td><td>401 <code>INVALID_CREDENTIALS</code> · 423 <code>ACCOUNT_LOCKED</code> (5 intentos fallidos)</td></tr>
+    <tr><td class="k">Front</td><td><code>AuthService.login()</code> → <code>Login.onSubmit()</code>; después <code>completeLogin()</code> guarda la sesión en <code>sessionStorage</code></td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/auth/refresh</span><span class="desc">Público</span></div>
+  <table>
+    <tr><td class="k">Request</td><td><code>{ refreshToken }</code></td></tr>
+    <tr><td class="k">Respuesta 200</td><td><code>{ accessToken, refreshToken, expiresIn }</code> — el refresh anterior queda invalidado (rotación)</td></tr>
+    <tr><td class="k">Errores</td><td>401 <code>INVALID_REFRESH_TOKEN</code> · <code>REFRESH_TOKEN_REUSED</code> · <code>REFRESH_TOKEN_EXPIRED</code> · <code>SESSION_IDLE_TIMEOUT</code> (30 min sin actividad) · <code>USER_LOCKED_OR_INACTIVE</code></td></tr>
+    <tr><td class="k">Front</td><td><code>AuthService.refreshAccessToken()</code> (privado), disparado por un timer 30 s antes de que expire el access token. <code>SESSION_IDLE_TIMEOUT</code> cierra sesión y muestra el aviso de inactividad.</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/auth/logout</span><span class="desc">Público</span></div>
+  <table>
+    <tr><td class="k">Request</td><td><code>{ refreshToken }</code></td></tr>
+    <tr><td class="k">Respuesta 200</td><td><code>{ success: true }</code></td></tr>
+    <tr><td class="k">Front</td><td><code>AuthService.logout()</code> (menú lateral y header). Best-effort: la sesión local se cierra aunque la llamada falle.</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/auth/me</span><span class="desc">Bearer</span></div>
+  <table>
+    <tr><td class="k">Respuesta 200</td><td><code>UserSummaryDto</code> (<code>id, email, displayName, phone, status, roles, permissions, subsidiarias, ubicaciones, mustChangePassword, lastLoginAt, emailVerified</code>)</td></tr>
+    <tr><td class="k">Front</td><td><code>AuthService.me()</code> / <code>validateResumedSession()</code>: al recargar la página revalida la sesión restaurada y refresca roles/permisos/catálogos. Los permisos efectivos del portal salen de este arreglo.</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/auth/change-password</span><span class="desc">Bearer</span></div>
+  <table>
+    <tr><td class="k">Request</td><td><code>{ currentPassword, newPassword }</code></td></tr>
+    <tr><td class="k">Respuesta 200</td><td><code>{ success: true }</code></td></tr>
+    <tr><td class="k">Errores</td><td>401 <code>INVALID_CREDENTIALS</code> (contraseña actual incorrecta). Mientras <code>mustChangePassword</code> sea true, el resto de endpoints protegidos responde 403 <code>PASSWORD_CHANGE_REQUIRED</code>.</td></tr>
+    <tr><td class="k">Front</td><td><code>AuthService.changePassword()</code> → pantalla <code>/cambiar-password</code> (<code>authGuard</code> la fuerza antes de cualquier otra ruta)</td></tr>
+  </table>
+</div>
+
+<h3 style="margin:14px 0 8px;color:#142850;">3.2 Administración de usuarios (<code>/users/*</code>) — rol ADMIN o ALTAS</h3>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/users</span><span class="desc">Lista paginada</span></div>
+  <table>
+    <tr><td class="k">Query</td><td><code>page</code> (0) · <code>size</code> (100) · <code>search</code>? · <code>role</code>? · <code>status</code>? (<code>ACTIVE|INACTIVE|LOCKED</code>)</td></tr>
+    <tr><td class="k">Respuesta 200</td><td><code>{ content: UserSummaryDto[], page, size, totalElements, totalPages }</code></td></tr>
+    <tr><td class="k">Front</td><td><code>UserManagementService.syncFromBackend()</code>, al entrar a <code>/usuarios</code>: reconcilia roles/permisos/estado/último acceso/subsidiarias/ubicaciones de cada cuenta conocida y <b>agrega</b> las cuentas reales que el mock no tiene (pidiendo su detalle).</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/users/{id}</span><span class="desc">Detalle completo</span></div>
+  <table>
+    <tr><td class="k">Respuesta 200</td><td><code>UserDetailDto</code>: <code>firstName, lastName, displayName, createdAt, birthDate, ssn, gender, address{city,state,postalCode,street1,street2,interiorNumber,exteriorNumber}, department, area, jobTitle, manager{id,displayName}, employeeCode, hireDate, contractEndDate, temporaryPassword</code> + los campos de <code>UserSummaryDto</code></td></tr>
+    <tr><td class="k">Errores</td><td>404 <code>USER_NOT_FOUND</code></td></tr>
+    <tr><td class="k">Front</td><td><code>UserDetail</code> (carga y fusiona sobre el registro local; se vuelve a pedir tras cada mutación) y <code>syncFromBackend()</code> para cuentas nuevas. <code>temporaryPassword</code> solo llega mientras <code>mustChangePassword</code> sea true.</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/users</span><span class="desc">Alta de usuario</span></div>
+  <table>
+    <tr><td class="k">Request</td><td><code>{ firstName, lastName, email, phone, supervisorId, subsidiariaIds[], ubicacionIds[], roleIds[], status: "ACTIVE"|"INACTIVE" }</code> — <code>roleIds</code> solo se respeta con el permiso <code>manage_roles</code></td></tr>
+    <tr><td class="k">Respuesta 201</td><td><code>{ id, email, displayName, roles, permissions, subsidiarias, ubicaciones, mustChangePassword, temporaryPassword }</code> — la contraseña temporal solo se devuelve aquí</td></tr>
+    <tr><td class="k">Errores</td><td>409 <code>EMAIL_ALREADY_REGISTERED</code> · 400 <code>INVALID_ROLE</code> / <code>INVALID_USER_STATUS</code> · 403 <code>ROLE_ASSIGNMENT_FORBIDDEN</code></td></tr>
+    <tr><td class="k">Front</td><td><code>UserManagementService.createUser()</code> ← formulario <code>/usuarios/nuevo</code> (roles, subsidiarias y ubicaciones múltiples; supervisor select simple)</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m PATCH">PATCH</span><span class="path">/users/{id}</span><span class="desc">Edición parcial</span></div>
+  <table>
+    <tr><td class="k">Request</td><td><code>{ firstName, lastName, email, phone, birthDate, ssn, gender, address, department, area, jobTitle, managerId, employeeCode, hireDate, contractEndDate }</code> — solo sobreescribe lo no nulo. <b>No</b> incluye estado, roles, subsidiarias ni ubicaciones.</td></tr>
+    <tr><td class="k">Respuesta 200</td><td><code>UserSummaryDto</code> (no repite los campos enviados)</td></tr>
+    <tr><td class="k">Errores</td><td>404 <code>USER_NOT_FOUND</code> · 409 <code>EMAIL_ALREADY_REGISTERED</code></td></tr>
+    <tr><td class="k">Front</td><td><code>UserManagementService.updateUserProfile()</code> ← "Guardar cambios" de Información general</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m PATCH">PATCH</span><span class="path">/users/{id}/status</span><span class="desc">Cambio de estado</span></div>
+  <table>
+    <tr><td class="k">Request</td><td><code>{ status: "active" | "inactive" | "blocked" }</code> (minúsculas; <code>blocked</code> = enum <code>LOCKED</code>)</td></tr>
+    <tr><td class="k">Respuesta 200</td><td><code>UserSummaryDto</code> — aquí <code>status</code> vuelve en mayúsculas (<code>ACTIVE|INACTIVE|LOCKED</code>)</td></tr>
+    <tr><td class="k">Errores</td><td>400 <code>INVALID_USER_STATUS</code> · 404 <code>USER_NOT_FOUND</code></td></tr>
+    <tr><td class="k">Front</td><td><code>UserManagementService.setStatus()</code> ← chip de estado en la lista y en el detalle (con confirmación)</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/users/{id}/verify-email</span><span class="desc">Verificación manual</span></div>
+  <table>
+    <tr><td class="k">Request</td><td>Sin cuerpo</td></tr>
+    <tr><td class="k">Respuesta 200</td><td><code>{ id, emailVerified: true }</code> — fuerza el flag sin validar token pendiente</td></tr>
+    <tr><td class="k">Front</td><td><code>UserManagementService.setEmailVerified()</code> ← "Marcar como verificado" en Seguridad y acceso</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m PATCH">PATCH</span><span class="path">/users/{id}/unlock</span><span class="desc">Desbloqueo</span></div>
+  <table>
+    <tr><td class="k">Request</td><td>Sin cuerpo</td></tr>
+    <tr><td class="k">Respuesta 200</td><td>Cuenta desbloqueada (<code>ACTIVE</code>, contador de intentos en 0); el front no usa el cuerpo</td></tr>
+    <tr><td class="k">Errores</td><td>403 (sin rol ADMIN/ALTAS, sin <code>code</code>) · 404 <code>USER_NOT_FOUND</code></td></tr>
+    <tr><td class="k">Front</td><td><code>UserDetail.onUnlockBackendClick()</code> ← "Desbloquear cuenta" (campo "Cuenta real (backend)")</td></tr>
+  </table>
+</div>
+
+<div class="pb"></div>
+<h2 style="margin-top:0;">4. Documentados en <code>docs/api-endpoints.csv</code> y aún sin conectar</h2>
+<p class="small">El portal los resuelve hoy con datos en memoria (mock). Al conectarlos, moverlos a las secciones 2 y 3 y subir la versión de este documento.</p>
+<table class="data">
+  <tr><th style="width:18%">Módulo</th><th style="width:8%">Método</th><th style="width:44%">Endpoint</th><th>Hoy en el front</th></tr>
+  <tr><td>Usuarios</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/roles</code></td><td>Cambio de roles/permisos solo local</td></tr>
+  <tr><td>Usuarios</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/close-sessions</code></td><td>Contador local</td></tr>
+  <tr><td>Usuarios</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/reset-password</code></td><td>Genera contraseña local (toast)</td></tr>
+  <tr><td>Usuarios</td><td><span class="m DELETE">DELETE</span></td><td><code>/users/{id}</code></td><td>Opción retirada del front (el backend tampoco la expone)</td></tr>
+  <tr><td>Usuarios</td><td><span class="m GET">GET</span></td><td><code>/users/{id}/audit-log</code> · <code>/audit-log</code></td><td>Bitácora en memoria (<code>appendAudit</code>)</td></tr>
+  <tr><td>Usuarios</td><td><span class="m GET">GET</span></td><td><code>/roles</code> · <code>/permissions</code> · <code>/catalogs/organization</code></td><td>Catálogos hardcodeados en el modelo</td></tr>
+  <tr><td>Ventas</td><td><span class="m GET">GET</span></td><td><code>/sales</code> · <code>/sales/{id}</code> · <code>/sales/export</code></td><td><code>MOCK_SALES</code>; exportación CSV en el cliente</td></tr>
+  <tr><td>Ventas</td><td><span class="m POST">POST</span></td><td><code>/sales/{store}/{date}/reprocess</code></td><td>Simulado con <code>setTimeout</code></td></tr>
+  <tr><td>Conciliación</td><td><span class="m GET">GET</span></td><td><code>/reconciliation</code> · <code>/reconciliation/kpis</code> · <code>/tender-media/status</code></td><td>Datos mock</td></tr>
+  <tr><td>Conciliación</td><td><span class="m GET">GET</span></td><td><code>/reconciliation/{tenderMedia}/{date}/settlements</code></td><td>Datos mock</td></tr>
+  <tr><td>Conciliación</td><td><span class="m POST">POST</span></td><td><code>/reconciliation/{tenderMedia}/{date}/unreconcile</code></td><td>Store en memoria</td></tr>
+  <tr><td>Conciliación</td><td><span class="m GET">GET</span></td><td><code>/bank-accounts</code></td><td>Cuentas mock</td></tr>
+  <tr><td>Conciliación</td><td><span class="m POST">POST</span></td><td><code>/bank-imports</code></td><td>Archivo parseado en el navegador, no se envía</td></tr>
+</table>
+<p class="small">Total: 20 endpoints del CSV sin conectar (los 9 restantes del CSV ya están en la sección 2, junto con <code>/auth/refresh</code>, <code>/auth/change-password</code> y <code>/users/{id}/unlock</code>, que no figuran en el CSV).</p>
+
+<h2>5. Historial de versiones</h2>
+<table class="data">
+  <tr><th style="width:9%">Versión</th><th style="width:14%">Fecha</th><th>Cambios</th></tr>
+  <tr><td>1.0</td><td>06-Oct-2026</td><td>Versión inicial: 12 endpoints conectados (5 de <code>/auth</code>, 7 de <code>/users</code>) en <code>feature/login-coctel-del-mar-integration</code>.</td></tr>
+</table>
+
+<div class="footer">Endpoints implementados · Cóctel del Mar · v1.0 · Generado el 06-Oct-2026 · Fuente: docs/fuentes/endpoints-implementados.html</div>
+</body>
+</html>
