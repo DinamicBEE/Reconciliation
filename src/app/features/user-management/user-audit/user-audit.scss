@@ -1,7 +1,5 @@
-@use '../../../shared/styles/back-link';
 @use '../../../shared/styles/toolbar';
 @use '../../../shared/styles/data-table';
-@use '../../../shared/styles/buttons';
 
 .user-audit {
   display: flex;
@@ -9,19 +7,7 @@
   gap: var(--grid-gap);
 }
 
-.user-audit__header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 
-.user-audit__title {
-  font-family: var(--font-heading);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  margin: 0;
-}
 
 .toolbar__filter--search {
   width: 260px;

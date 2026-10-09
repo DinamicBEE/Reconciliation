@@ -1,5 +1,5 @@
 import { Injectable, computed, inject } from '@angular/core';
-import { AppUser, PermissionKey, defaultPermissionsForRoles } from '../../user-management/data/user-management.model';
+import { AppUser, PermissionKey, RoleId } from '../../user-management/data/user-management.model';
 import { UserManagementService } from '../../user-management/data/user-management.service';
 import { AuthService } from './auth.service';
 
@@ -12,12 +12,15 @@ import { AuthService } from './auth.service';
  * dependencia circular. Este servicio vive "por encima" de ambos: lee la
  * sesión de uno y el registro completo del otro.
  *
- * `permissions` viene de `AuthUser.permissions` — FUENTE ÚNICA, igual que en
- * la rama de integración (ahí es `UserSummaryDto.permissions` del login
- * real; en el mock, los defaults del rol que arma `AuthService.login`). La
- * personalización de permisos de "Seguridad y acceso" en user-detail no
- * afecta la sesión (tampoco persiste en el backend real).
- * `defaultPermissionsForRoles` queda como fallback si llegara vacío.
+ * `permissions` viene de `AuthUser.permissions` (`UserSummaryDto.permissions`
+ * tal cual lo devolvió el backend real en el login/`GET /auth/me`) — FUENTE
+ * ÚNICA, ya no de `AppUser.permissions` (el registro mock vinculado). Antes
+ * de esta actualización se ignoraba el arreglo real del backend y siempre
+ * se recalculaba desde `roles` (o, peor, desde la personalización LOCAL de
+ * "Seguridad y acceso", que no persistía) — una de las desviaciones de la matriz
+ * 7.16 del DED. Ya no hay recálculo ni fallback por rol: lo que el backend
+ * devuelve en `permissions` ES lo que la persona puede hacer (vacío = nada), y
+ * `PATCH /users/{id}/roles` es el único que lo cambia.
  */
 @Injectable({ providedIn: 'root' })
 export class AccessControlService {
@@ -31,18 +34,18 @@ export class AccessControlService {
 
   readonly permissions = computed<ReadonlySet<PermissionKey>>(() => {
     const user = this.auth.currentUser();
-    if (!user) return new Set<PermissionKey>();
-    if (user.permissions.length > 0) return new Set(user.permissions);
-    return new Set(defaultPermissionsForRoles(user.roles));
+    return new Set<PermissionKey>(user?.permissions ?? []);
   });
 
   // "Reproceso de ventas" (matriz 7.16 del DED): sin permiso propio — el DED
   // lo limita a Admin/Contabilidad directamente por rol, un subconjunto MÁS
-  // ANGOSTO que `view_dashboard` (que también incluye Tesorería y Costos,
-  // ver ROLES en user-management.model.ts) — por eso no puede expresarse con
-  // `hasPermission('view_dashboard')` sola. Vive aquí (no en
-  // sales-dashboard) por el mismo motivo que `hasPermission`: un solo lugar
-  // que sabe "quién puede qué".
+  // ANGOSTO que `view_dashboard` (que desde esta actualización también
+  // incluye Tesorería y Costos, matriz 7.16) — por
+  // eso no puede expresarse con `hasPermission('view_dashboard')` sola. Vive
+  // aquí (no en sales-dashboard) por el mismo motivo que `hasPermission`: un
+  // solo lugar que sabe "quién puede qué". Por rol REAL del backend
+  // (`auth.currentUser()?.roles`), no por el registro mock editable —
+  // consistente con `permissions` arriba.
   readonly canReprocessSales = computed(() => {
     const roles = this.auth.currentUser()?.roles ?? [];
     return roles.includes('ADMIN') || roles.includes('CONTABILIDAD');
@@ -54,17 +57,27 @@ export class AccessControlService {
   // solo uso + cambio obligatorio de contraseña".
   //
   // Dos fuentes, no una: `currentAppUser()?.mustChangePassword` (el registro
-  // de `user-management` vinculado a la sesión) OR
-  // `auth.currentUser()?.mustChangePasswordHint` (lo que devuelve el login,
-  // ver `AuthService`; en el mock siempre `false`) — una sesión sin
-  // `AppUser` vinculado solo tiene la segunda fuente, y aun así debe
-  // respetar el flag.
+  // mock de `user-management`, para las cuentas de demo con `appUserId`
+  // vinculado) OR `auth.currentUser()?.mustChangePasswordHint` (lo que
+  // devolvió el login REAL contra el auth-service, ver `AuthService`) — una
+  // cuenta autenticada por el backend real pero SIN match en el mock (no
+  // existe todavía un backend de administración de usuarios que comparta el
+  // mismo registro) solo tiene la segunda fuente, y aun así debe respetar
+  // el flag.
   readonly mustChangePassword = computed(
     () => (this.currentAppUser()?.mustChangePassword ?? false) || (this.auth.currentUser()?.mustChangePasswordHint ?? false),
   );
 
   hasPermission(key: PermissionKey): boolean {
     return this.permissions().has(key);
+  }
+
+  // Por rol REAL del backend (`auth.currentUser()?.roles`), mismo criterio que
+  // `canReprocessSales` — para pantallas exclusivas de un rol que ningún
+  // permiso del catálogo expresa por sí solo (p. ej. "Roles y permisos", solo
+  // ADMIN: `manage_roles` también lo tiene ALTAS).
+  hasRole(role: RoleId): boolean {
+    return (this.auth.currentUser()?.roles ?? []).includes(role);
   }
 
   // Primera pantalla accesible para el usuario logeado — usada tanto para

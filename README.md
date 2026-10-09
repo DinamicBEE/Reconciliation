@@ -12,6 +12,42 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
+## Datos locales (sin backend)
+
+Esta rama trabaja **solo con data local**: no hace peticiones HTTP. El login, la administración de usuarios,
+roles/permisos y la bitácora usan un backend simulado en memoria (`src/app/features/auth/data/auth-mock-backend.ts`)
+con el mismo contrato que el auth-service real. Cuentas de demo: ver la pantalla de login.
+
+## País (México / Colombia)
+
+El país se fija al compilar (`src/environments/environment.ts` = México; `environment.co.ts` = Colombia, vía la
+configuración `co` de `angular.json`). Define impuestos, vocabulario fiscal (SAT/DIAN, RFC/NIT…), moneda y
+formato de números.
+
+```bash
+pnpm start:co
+```
+
+```bash
+pnpm build:co
+```
+
+## Despliegue en Vercel
+
+Sitio estático (SPA): `vercel.json` ya reescribe todas las rutas a `index.html`. No requiere variables de entorno
+(no hay `API_URL` ni CORS en esta rama). Un proyecto de Vercel por país:
+
+| Ajuste del proyecto | México | Colombia |
+| --- | --- | --- |
+| Framework Preset | Angular (u "Other") | Angular (u "Other") |
+| Install Command | `pnpm install` | `pnpm install` |
+| Build Command | `pnpm run build` | `pnpm run build:co` |
+| Output Directory | `dist/conciliation/browser` | `dist/conciliation/browser` |
+| Production Branch | `feature/ded-pantallas-faltantes` (o `main`) | igual |
+
+Con la CLI (`npm i -g vercel`, `vercel login`), desde la raíz del repo: `vercel link` (crear p. ej. el proyecto
+`conciliation-co`), ajustar el Build Command anterior en *Settings → Build & Deployment* y `vercel --prod`.
+
 ## Code scaffolding
 
 Angular CLI includes powerful code scaffolding tools. To generate a new component, run:

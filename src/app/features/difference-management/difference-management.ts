@@ -5,6 +5,8 @@ import { Router, RouterLink } from '@angular/router';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
+import { NzBreadCrumbModule } from 'ng-zorro-antd/breadcrumb';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
@@ -23,6 +25,8 @@ const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
 @Component({
   selector: 'app-difference-management',
   imports: [
+    NzPageHeaderModule,
+    NzBreadCrumbModule,
     CommonModule,
     MoneyPipe,
     FormsModule,
@@ -50,6 +54,11 @@ export class DifferenceManagement {
   private readonly message = inject(NzMessageService);
   private readonly modal = inject(NzModalService);
   private readonly router = inject(Router);
+
+  // Flecha del nz-page-header: de vuelta a la pantalla padre (Conciliación).
+  protected onBack(): void {
+    void this.router.navigateByUrl('/conciliacion');
+  }
   private readonly country = inject(COUNTRY_PROFILE);
   protected readonly access = inject(AccessControlService);
 

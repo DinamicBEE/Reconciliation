@@ -1,4 +1,4 @@
-import { AppUser, AppUserAddress, AuditLogEntry } from './user-management.model';
+import { AppUser, AppUserAddress } from './user-management.model';
 
 // Semilla de MOCK_USERS SIN los campos de "Información personal
 // adicional"/"Organización" agregados más tarde (fecha de nacimiento, SSN,
@@ -7,8 +7,8 @@ import { AppUser, AppUserAddress, AuditLogEntry } from './user-management.model'
 // índice en vez de escribirlos 25 veces a mano. `mustChangePassword` tampoco
 // se declara por usuario aquí — se defaultea a `false` para los 25 al
 // construir `MOCK_USERS`, con UNA excepción a propósito (ver ese bloque).
-// `subsidiariaIds`/`ubicacionIds` (catálogo de la sesión) tampoco — mismo
-// criterio, ver el `.map()` de más abajo.
+// `subsidiariaIds`/`ubicacionIds`/`backendUserId` (catálogo real + puente al
+// backend) tampoco — mismo criterio, ver el `.map()` de más abajo.
 type MockUserSeed = Omit<
   AppUser,
   | 'birthDate'
@@ -22,17 +22,21 @@ type MockUserSeed = Omit<
   | 'temporaryPassword'
   | 'subsidiariaIds'
   | 'ubicacionIds'
+  | 'backendUserId'
+  | 'lockedUntil'
 >;
 
 // Incluye a 'u0001', 'u0006', 'u0011' y 'u0018' — los mismos 4 usuarios demo
 // (uno por rol) listados en login.html ("Cuentas de demo") — para que el
 // módulo de administración se sienta parte de la misma app y no un dataset
-// desconectado (ver `appUserId` en `features/auth/data/auth-mock.data.ts`).
-// El resto son personas ficticias para dar variedad realista
+// desconectado. Su `email` es además el puente hacia la sesión real (ver
+// `UserManagementService.findUserByEmail`, `AuthService.AuthUser.appUserId`):
+// solo se resuelven permisos/nombre/foto para cuentas cuyo email coincide
+// con lo sembrado en coctel-del-mar. El resto son personas ficticias para dar variedad realista
 // de roles/estado/último acceso (incluyendo "nunca ha iniciado sesión") y de
 // los nuevos campos de seguridad/organización. `jobTitle`/`department`/
-// `area` NO se reescribieron al redefinir los roles (ver `ROLES` en
-// user-management.model.ts) — son datos organizacionales independientes del
+// `area` NO se reescribieron al redefinir los roles (los roles
+// reales viven en el backend, `GET /roles`) — son datos organizacionales independientes del
 // rol de acceso al sistema; un "Auditor de Procesos" puede perfectamente
 // tener hoy el rol `admin`.
 const MOCK_USERS_SEED: MockUserSeed[] = [
@@ -69,7 +73,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-01-10T09:05:00',
     lastAccessAt: '2026-08-27T08:02:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-27T08:20:00',
     failedLoginAttempts: 0,
@@ -91,7 +95,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-03-02T10:00:00',
     lastAccessAt: '2026-08-26T18:40:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-26T19:00:00',
     failedLoginAttempts: 0,
@@ -113,7 +117,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-05-14T09:30:00',
     lastAccessAt: '2026-08-27T07:55:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-27T08:10:00',
     failedLoginAttempts: 1,
@@ -137,7 +141,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-06-20T09:00:00',
     lastAccessAt: '2026-07-30T11:20:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-07-30T11:45:00',
     failedLoginAttempts: 3,
@@ -181,7 +185,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2026-08-24T15:20:00',
     lastAccessAt: null,
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: false,
     lastActivityAt: null,
     failedLoginAttempts: 0,
@@ -203,7 +207,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-11-11T09:00:00',
     lastAccessAt: '2026-05-02T09:00:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-05-02T09:20:00',
     failedLoginAttempts: 0,
@@ -229,7 +233,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-02-03T09:00:00',
     lastAccessAt: '2026-08-25T10:05:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-25T10:30:00',
     failedLoginAttempts: 0,
@@ -251,7 +255,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-02-10T09:00:00',
     lastAccessAt: '2026-08-24T16:20:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-24T16:45:00',
     failedLoginAttempts: 0,
@@ -295,7 +299,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-03-05T09:00:00',
     lastAccessAt: '2026-03-15T09:40:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-03-15T10:00:00',
     failedLoginAttempts: 0,
@@ -317,7 +321,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2026-08-20T14:00:00',
     lastAccessAt: null,
     roleIds: ['CONTABILIDAD'],
-    permissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_catalogs'],
     emailVerified: false,
     lastActivityAt: null,
     failedLoginAttempts: 0,
@@ -339,7 +343,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-04-02T09:00:00',
     lastAccessAt: '2026-08-21T08:50:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-21T09:10:00',
     failedLoginAttempts: 0,
@@ -361,7 +365,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-04-18T09:00:00',
     lastAccessAt: '2026-06-10T13:00:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-06-10T13:25:00',
     failedLoginAttempts: 5,
@@ -405,7 +409,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-05-22T09:00:00',
     lastAccessAt: '2026-08-18T09:00:00',
     roleIds: ['CONTABILIDAD'],
-    permissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-18T09:20:00',
     failedLoginAttempts: 0,
@@ -427,7 +431,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-06-09T09:00:00',
     lastAccessAt: '2026-02-14T10:00:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-02-14T10:20:00',
     failedLoginAttempts: 0,
@@ -449,7 +453,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-06-25T09:00:00',
     lastAccessAt: '2026-08-26T12:00:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-26T12:20:00',
     failedLoginAttempts: 0,
@@ -493,7 +497,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2026-08-22T11:00:00',
     lastAccessAt: null,
     roleIds: ['CONTABILIDAD'],
-    permissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
+    permissions: ['view_dashboard', 'view_catalogs'],
     emailVerified: false,
     lastActivityAt: null,
     failedLoginAttempts: 0,
@@ -515,7 +519,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-08-11T09:00:00',
     lastAccessAt: '2026-05-28T08:30:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-05-28T08:55:00',
     failedLoginAttempts: 4,
@@ -537,7 +541,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-09-05T09:00:00',
     lastAccessAt: '2026-08-23T17:05:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-08-23T17:30:00',
     failedLoginAttempts: 0,
@@ -559,7 +563,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2025-09-21T09:00:00',
     lastAccessAt: '2026-01-30T09:15:00',
     roleIds: ['TESORERIA'],
-    permissions: ['view_dashboard', 'view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
+    permissions: ['view_reconciliation', 'manage_differences', 'import_settlements', 'export_reports', 'view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-01-30T09:40:00',
     failedLoginAttempts: 0,
@@ -592,9 +596,11 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     jobTitle: 'Auditor de Procesos',
     managerId: 'u0001',
   },
-  // Cuenta demo de COSTOS (login `costos`, ver auth-mock.data.ts) — el único
+  // Cuenta demo de COSTOS (login "Costos", ver login.html) — el único
   // usuario con ese rol, agregado junto con la pantalla de Catálogos
-  // cargados, que es hoy lo único que ese rol puede ver.
+  // cargados, que es hoy lo único que ese rol puede ver. Sembrada también en
+  // el backend real (ver BACKEND_USER_ID abajo y MASTER.md, "Actualización:
+  // endpoints de administración de usuarios + manejo de errores").
   {
     id: 'u0027',
     firstName: 'Laura',
@@ -606,7 +612,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     createdAt: '2026-09-01T09:00:00',
     lastAccessAt: '2026-09-25T12:10:00',
     roleIds: ['COSTOS'],
-    permissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
+    permissions: ['view_catalogs'],
     emailVerified: true,
     lastActivityAt: '2026-09-25T12:30:00',
     failedLoginAttempts: 0,
@@ -675,71 +681,64 @@ function extraProfileFields(
   };
 }
 
+// Puente de LOS 26 hacia su `app_user.id` REAL en el backend — ver docker
+// exec directo contra Postgres al sembrarlos (MASTER.md, "Actualización:
+// endpoints de administración de usuarios (CRUD real) + multi-subsidiaria/
+// ubicación"). Ya no queda ninguno "solo mock": los 26 existen también en
+// el backend real. Un usuario creado DESPUÉS de este seed (vía
+// `UserManagementService.createUser`, que ahora llama a `POST /users`) no
+// pasa por aquí — su `backendUserId` llega directo en la respuesta del
+// alta, ver `AuthService.createUser`.
+const BACKEND_USER_ID: Partial<Record<string, number>> = {
+  u0001: 2, // admin@conciliacion.mx
+  u0002: 7, // analista@conciliacion.mx
+  u0003: 8, // daniela.torres@conciliacion.mx
+  u0004: 9, // jorge.ramirez@conciliacion.mx
+  u0005: 10, // marina.lopez@conciliacion.mx
+  u0006: 3, // carlos.medina@conciliacion.mx
+  u0007: 11, // sofia.hernandez@conciliacion.mx
+  u0008: 12, // luis.fernandez@conciliacion.mx
+  u0010: 13, // fernanda.cruz@conciliacion.mx
+  u0011: 4, // roberto.sanchez@conciliacion.mx
+  u0012: 14, // patricia.gomez@conciliacion.mx
+  u0013: 15, // fernando.castillo@conciliacion.mx
+  u0014: 16, // alejandra.reyes@conciliacion.mx
+  u0015: 17, // diego.morales@conciliacion.mx
+  u0016: 18, // valeria.ortiz@conciliacion.mx
+  u0017: 19, // ricardo.jimenez@conciliacion.mx
+  u0018: 5, // gabriela.vargas@conciliacion.mx
+  u0019: 20, // andres.molina@conciliacion.mx
+  u0020: 21, // karla.delgado@conciliacion.mx
+  u0021: 22, // emilio.navarro@conciliacion.mx
+  u0022: 23, // paola.aguilar@conciliacion.mx
+  u0023: 24, // hector.ibarra@conciliacion.mx
+  u0024: 25, // renata.campos@conciliacion.mx
+  u0025: 26, // ivan.salazar@conciliacion.mx
+  u0026: 27, // camila.rangel@conciliacion.mx
+  u0027: 6, // laura.pineda@conciliacion.mx
+};
+
 export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   ...seed,
   ...extraProfileFields(index, seed.createdAt),
-  // Solo 'u0018' (Gabriela Vargas — cuenta demo "contabilidad", ver
-  // auth-mock.data.ts) arranca con cambio obligatorio de contraseña, para
-  // poder probar ese flujo de "primer inicio de sesión" con una sola de las
-  // 4 cuentas demo sin forzarlo en las otras 3 (ver login.html, "Cuentas de
-  // demo", y MASTER.md "Patrón: refresh token de un solo uso + cambio
-  // obligatorio de contraseña").
-  mustChangePassword: seed.id === 'u0018',
-  // Solo la cuenta que aún debe cambiar su contraseña tiene una temporal
-  // vigente — la misma con la que entra la cuenta demo `contabilidad`.
-  temporaryPassword: seed.id === 'u0018' ? 'Contabilidad2026' : null,
-  // La única subsidiaria del catálogo mock (id 1, ver `MOCK_SUBSIDIARIAS`
-  // en auth-mock.data.ts) para los 25; ubicación varía por índice entre las
-  // 4 de `MOCK_UBICACIONES` (ids 1-4) solo para dar variedad visible en la UI.
-  // Arreglo de UN elemento por usuario sembrado; el alta permite asignar
-  // varias (ver `UserManagementService.createUser`).
+  // Siempre `false` en esta semilla local: quién debe cambiar su contraseña lo
+  // decide el backend (simulado en esta rama, ver `auth-mock.data.ts`,
+  // `MOCK_MUST_CHANGE_PASSWORD` — hoy Gabriela Vargas, la cuenta demo de
+  // Contabilidad) y llega en el login/`GET /auth/me`/`GET /users`. Forzarlo
+  // aquí lo "revivía" tras un F5 aunque ya se hubiera cambiado.
+  mustChangePassword: false,
+  // Valor mock de partida; para cualquier cuenta con `backendUserId`,
+  // `user-detail` la sobreescribe con lo que devuelva `GET /users/{id}` en
+  // caliente (ver `UserDetail`, efecto que llama `AuthService.getUserDetail`).
+  temporaryPassword: null,
+  // La única subsidiaria real sembrada hoy (id 1, "Conciliación Bancaria")
+  // para los 26; ubicación varía por índice entre las 4 reales sembradas
+  // (ids 1-4) — mismos valores con los que se sembró cada uno en el backend
+  // real (ver el script de siembra, MASTER.md). Arreglo de UN elemento
+  // porque así se sembraron; nada impide que `POST /users`
+  // (`UserManagementService.createUser`) le asigne varias a alguien nuevo.
   subsidiariaIds: [1],
   ubicacionIds: [(index % 4) + 1],
+  backendUserId: BACKEND_USER_ID[seed.id] ?? null,
+  lockedUntil: null,
 }));
-
-// Incluye una entrada para 'u0009', un usuario ELIMINADO que ya no existe en
-// MOCK_USERS — a propósito: el historial de auditoría debe sobrevivir a la
-// eliminación de la cuenta que describe (ver
-// UserManagementService.deleteUser, que nunca borra entradas de auditoría).
-export const MOCK_AUDIT_LOG: AuditLogEntry[] = [
-  { id: 'a1', timestamp: '2025-01-10T09:00:00', actorName: 'Sistema', targetUserId: 'u0001', targetUserName: 'Administrador Principal', action: 'created', detail: 'Usuario creado con rol Administrador.' },
-  { id: 'a2', timestamp: '2025-01-10T09:05:00', actorName: 'Administrador Principal', targetUserId: 'u0002', targetUserName: 'Ana Martínez', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a3', timestamp: '2025-03-02T10:00:00', actorName: 'Administrador Principal', targetUserId: 'u0003', targetUserName: 'Daniela Torres', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a4', timestamp: '2025-04-01T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0009', targetUserName: 'Usuario de Pruebas', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a5', timestamp: '2025-04-20T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0009', targetUserName: 'Usuario de Pruebas', action: 'deleted', detail: 'Usuario eliminado del sistema (cuenta de pruebas).' },
-  { id: 'a6', timestamp: '2025-05-14T09:30:00', actorName: 'Administrador Principal', targetUserId: 'u0004', targetUserName: 'Jorge Ramírez', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a7', timestamp: '2025-06-01T12:00:00', actorName: 'Administrador Principal', targetUserId: 'u0003', targetUserName: 'Daniela Torres', action: 'role_changed', detail: 'Roles cambiados de Analista de Conciliación a Supervisor.' },
-  { id: 'a8', timestamp: '2025-06-20T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0005', targetUserName: 'Marina López', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a9', timestamp: '2025-09-01T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0006', targetUserName: 'Carlos Medina', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-  { id: 'a10', timestamp: '2025-09-15T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0006', targetUserName: 'Carlos Medina', action: 'permissions_changed', detail: 'Se otorgó el permiso adicional "Exportar reportes".' },
-  { id: 'a11', timestamp: '2025-11-11T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0008', targetUserName: 'Luis Fernández', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a12', timestamp: '2026-02-01T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0001', targetUserName: 'Administrador Principal', action: 'updated', detail: 'Se actualizó el correo de contacto.' },
-  { id: 'a13', timestamp: '2026-05-03T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0008', targetUserName: 'Luis Fernández', action: 'deactivated', detail: 'Cuenta desactivada — colaborador dado de baja.' },
-  { id: 'a14', timestamp: '2026-07-31T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0005', targetUserName: 'Marina López', action: 'blocked', detail: 'Cuenta bloqueada por múltiples intentos fallidos de acceso.' },
-  { id: 'a15', timestamp: '2026-08-10T16:45:00', actorName: 'Administrador Principal', targetUserId: 'u0004', targetUserName: 'Jorge Ramírez', action: 'password_reset', detail: 'Se generó una nueva contraseña temporal.' },
-  { id: 'a16', timestamp: '2026-08-24T15:20:00', actorName: 'Administrador Principal', targetUserId: 'u0007', targetUserName: 'Sofía Hernández', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  // a17-a33: alta de u0010-u0026 (relleno de paginación, ver MOCK_USERS) —
-  // cada usuario conserva su propio "creado" para que el historial de
-  // auditoría no se sienta incompleto solo por ser parte del relleno.
-  { id: 'a17', timestamp: '2025-02-03T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0010', targetUserName: 'Fernanda Cruz', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a18', timestamp: '2025-02-10T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0011', targetUserName: 'Roberto Sánchez', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a19', timestamp: '2025-02-18T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0012', targetUserName: 'Patricia Gómez', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-  { id: 'a20', timestamp: '2025-03-05T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0013', targetUserName: 'Fernando Castillo', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a21', timestamp: '2026-08-20T14:00:00', actorName: 'Administrador Principal', targetUserId: 'u0014', targetUserName: 'Alejandra Reyes', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a22', timestamp: '2025-04-02T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0015', targetUserName: 'Diego Morales', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a23', timestamp: '2025-04-18T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0016', targetUserName: 'Valeria Ortiz', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a24', timestamp: '2026-06-10T13:00:00', actorName: 'Administrador Principal', targetUserId: 'u0016', targetUserName: 'Valeria Ortiz', action: 'blocked', detail: 'Cuenta bloqueada por múltiples intentos fallidos de acceso.' },
-  { id: 'a25', timestamp: '2025-05-06T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0017', targetUserName: 'Ricardo Jiménez', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-  { id: 'a26', timestamp: '2025-05-22T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0018', targetUserName: 'Gabriela Vargas', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a27', timestamp: '2025-06-09T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0019', targetUserName: 'Andrés Molina', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a28', timestamp: '2026-02-14T10:00:00', actorName: 'Administrador Principal', targetUserId: 'u0019', targetUserName: 'Andrés Molina', action: 'deactivated', detail: 'Cuenta desactivada — colaborador dado de baja.' },
-  { id: 'a29', timestamp: '2025-06-25T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0020', targetUserName: 'Karla Delgado', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a30', timestamp: '2025-07-14T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0021', targetUserName: 'Emilio Navarro', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-  { id: 'a31', timestamp: '2026-08-22T11:00:00', actorName: 'Administrador Principal', targetUserId: 'u0022', targetUserName: 'Paola Aguilar', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a32', timestamp: '2025-08-11T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0023', targetUserName: 'Héctor Ibarra', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a33', timestamp: '2026-05-28T08:30:00', actorName: 'Administrador Principal', targetUserId: 'u0023', targetUserName: 'Héctor Ibarra', action: 'blocked', detail: 'Cuenta bloqueada por múltiples intentos fallidos de acceso.' },
-  { id: 'a34', timestamp: '2025-09-05T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0024', targetUserName: 'Renata Campos', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a35', timestamp: '2025-09-21T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0025', targetUserName: 'Iván Salazar', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a36', timestamp: '2025-10-08T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0026', targetUserName: 'Camila Rangel', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-  { id: 'a37', timestamp: '2026-09-01T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0027', targetUserName: 'Laura Pineda', action: 'created', detail: 'Usuario creado con rol Costos.' },
-];

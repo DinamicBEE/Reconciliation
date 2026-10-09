@@ -13,6 +13,12 @@
       "autoPort": true
     },
     {
+      "name": "conciliation-dev-4200",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["exec", "ng", "serve", "--port", "4200"],
+      "port": 4200
+    },
+    {
       "name": "conciliation-dev-co",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [

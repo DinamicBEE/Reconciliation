@@ -256,6 +256,29 @@ problemas que resolvió a la vez:
    `!important` para poder ganarle a este bloque — mismo gotcha que
    `.table-card` de arriba.
 
+5. **REGLA GENERAL — botón "icono + label"**: todo `nz-button` de la app
+   lleva su icono (SVG en línea, el proyecto no registra iconos de ng-zorro)
+   ANTES del texto, y se alinea con `display: inline-flex; align-items:
+   center; gap: 6px;` (+ `justify-content: center`, para que un botón solo
+   icono — `.row-actions` — siga centrado). Vive UNA vez en el bloque de
+   botones de `styles.scss`, sobre `.ant-btn`: un botón nuevo la hereda sin
+   declarar nada en su `.scss` — **no** repetir esas 3 propiedades por
+   pantalla ni crear clases tipo `.x__add-btn` solo para eso. Antes era el
+   partial opt-in `shared/styles/_buttons.scss` (cada pantalla tenía que
+   agregarse a su lista de selectores; `reconciliation-dashboard`/`user-list`
+   además la repetían en clases propias) — se eliminó al volverse global.
+   Un botón nuevo SIN icono es una desviación: si no hay un SVG establecido
+   para reusar, se dibuja uno (mismo trazo `stroke-width="2"`, 16×16).
+
+   ```html
+   <button nz-button nzType="primary" type="button" (click)="onCreate()">
+     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+       <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+     </svg>
+     Crear rol
+   </button>
+   ```
+
 Pendiente/deuda deliberada: `nz-radio-group`/`nz-switch` siguen sin
 bridgear (azul de Ant fijo) — "los botones" de este pase se entendió como
 `nz-button`/`.ant-btn`, no como cualquier control interactivo de ng-zorro.
@@ -1255,6 +1278,8 @@ in-place, sin mover nada alrededor".
    columnas sobrantes quedan vacías a propósito, para no tener que tocar
    este grid el día que se agregue un 4° grupo de permisos.
 10. **Icono + etiqueta, misma estructura en TODO el módulo**:
+    *(Histórico: hoy es una regla GLOBAL de `styles.scss`, ver "Patrón:
+    botones", punto 5 — el partial ya no existe.)*
     `features/user-management/_buttons.scss` (nuevo, feature-local — 3
     consumidores del MISMO feature, no amerita `shared/styles/` todavía) —
     `.user-list ::ng-deep .ant-btn, .user-detail ::ng-deep .ant-btn,
@@ -1306,9 +1331,11 @@ vista es de administración/consulta de una lista): toolbar DENTRO de la
 card, `[nzBodyStyle]="{ padding: '24px' }"`, tabla envuelta en
 `.table-bleed`. **Sin filtros** (tabla sola, o filtros que alimentan también
 KPIs/otro contenido fuera de la tabla — ahí el toolbar se queda afuera):
-`[nzBodyStyle]="{ padding: '0' }"`, sin `.table-bleed` (innecesario: la
-tabla ya toca los 4 bordes). En ambos casos, `.table-card` solo se aplica
-como clase en el `.html` — nada que declarar en el `.scss` del feature.
+**también** `[nzBodyStyle]="{ padding: '24px' }"`, sin `.table-bleed` y sin un
+`.toolbar` vacío — la tabla nunca va pegada a la card (ver "Regla general:
+tablas" más abajo; antes este caso usaba padding 0 y la tabla tocaba los 4
+bordes). En ambos casos, `.table-card` solo se aplica como clase en el
+`.html` — nada que declarar en el `.scss` del feature.
 
 ```html
 <!-- Con filtros (user-list, reconciliation-dashboard, user-audit, sales-dashboard) -->
@@ -1319,8 +1346,8 @@ como clase en el `.html` — nada que declarar en el `.scss` del feature.
   </div>
 </nz-card>
 
-<!-- Sin filtros (Historial de user-detail) -->
-<nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
+<!-- Sin filtros (Roles y permisos) -->
+<nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
   <nz-table>...</nz-table>
 </nz-card>
 ```
@@ -2484,6 +2511,360 @@ desbloqueo contra el backend y la cuenta demo de login real.
    importes — bruto, comisiones, retenciones y neto (`.candidate-card__amounts`,
    grid de 4 columnas que cae a 2×2 por debajo de 1200 px). El modal "Ver
    detalles" de conciliación muestra "Concepto", "Bruto" y "Neto".
+
+### Actualización: ajustes a login, cambio de contraseña, `GET /users`, `GET /users/{id}` y `PATCH /users/{id}` + catálogo completo de códigos de error
+
+Alineación con la `Guia_Endpoints_Usuarios_Roles_Permisos` (rama DEV del
+backend). Detalle por endpoint:
+
+1. **`POST /auth/login` — mensaje de bloqueo del backend.** `Login.onSubmit`
+   ya no usa un texto fijo para 423/`ACCOUNT_LOCKED`: muestra el `error` que
+   manda el backend (`serverErrorText()` en `auth-errors.ts`), que en DEV
+   incluye los minutos restantes del bloqueo temporal (5 intentos → 2 h,
+   `lockedUntil`) o indica contactar al administrador si el bloqueo es
+   manual. `BLOCKED_MESSAGE` queda solo de respaldo (backends sin texto).
+2. **`POST /auth/change-password` — refresh.** La contraseña cambia ⇒ el
+   backend cierra todas las sesiones del usuario, así que el access/refresh
+   token en mano deja de servir. `AuthService.changePassword()` encadena
+   (`switchMap`) un `POST /auth/refresh` con el refresh token vigente
+   (`rotateSessionAfterPasswordChange` → `requestTokenPair`, compartido con
+   `refreshAccessToken`) y reemplaza la sesión (`mustChangePasswordHint:
+   false`). Si ese refresh falla se invalida la sesión
+   (`idle_timeout`/`invalid_token`). Además `authTokenInterceptor` ya NO
+   cierra sesión ante un 401 con `INVALID_CREDENTIALS` (contraseña actual
+   incorrecta): es error de negocio, no token rechazado — antes un simple
+   error de tecleo sacaba al usuario. `ChangePassword` maneja 400 (nueva
+   contraseña < 8 caracteres).
+3. **`GET /users` — permiso, no rol, y paginación.** Se eliminó
+   `forbiddenRoleMessage` (decía "ADMIN o ALTAS"): el backend autoriza por
+   permiso (`manage_users`) y el 403 sin código lo avisa
+   `httpErrorAlertInterceptor` con texto de permiso. `size` queda en 100
+   (`USERS_PAGE_SIZE`); `AuthService.listAllUsers()` recorre las páginas
+   (0-based, `totalPages`) con `expand`/`reduce` y `syncFromBackend()` lo
+   usa — con más de 100 cuentas ya no se pierden las siguientes.
+4. **`GET /users/{id}` — 3 campos nuevos.** `failedLoginAttempts`,
+   `activeSessions` y `lockedUntil` en `UserDetailDto`, `AppUser`
+   (`lockedUntil` nuevo; los otros dos ya existían con valor fabricado),
+   `MOCK_USERS` (`lockedUntil: null`), `buildUserFromDetail`,
+   `UserDetail.mergeBackendDetail`, `createUser`, `setStatus` (`active` los
+   pone en 0/null; `blocked` limpia `lockedUntil`), `resetPassword` y el
+   nuevo `UserManagementService.unlockAccount()` (el botón "Desbloquear
+   cuenta" lo usa y refresca el detalle). Seguridad y acceso muestra
+   "Bloqueada hasta". Se leen con `?? 0`/`?? null` por si el backend
+   desplegado es anterior.
+5. **`PATCH /users/{id}` — subsidiarias/ubicaciones.** `UpdateUserRequest`
+   acepta `subsidiariaIds`/`ubicacionIds`; los multi-selects de
+   Organización vuelven a ser editables en modo edición y
+   `updateUserProfile()` los envía. El `AppUser` local sigue tomando las
+   listas de la respuesta (`UserSummaryDto`).
+6. **Interceptor de errores (`httpErrorAlertInterceptor`).** `ERROR_CODE_MESSAGES`
+   cubre los 16 códigos de la guía (se sumaron `INVALID_PERMISSION`,
+   `INVALID_LOCATION`, `CANNOT_DELETE_SELF`). Gestión: `PASSWORD_CHANGE_REQUIRED`
+   → aviso + `markPasswordChangeRequired()` + redirección a
+   `/cambiar-password`; códigos con UI propia (`INVALID_CREDENTIALS`,
+   `ACCOUNT_LOCKED`, `SESSION_IDLE_TIMEOUT`) no duplican toast; resto de
+   códigos → toast del catálogo (o genérico con el código); 403 sin código →
+   "sin permiso"; 5xx sin código → error del servidor; 400 sin código lo
+   decide cada formulario. `authTokenInterceptor` mapea `SESSION_IDLE_TIMEOUT`
+   → `idle_timeout`.
+7. **Verificado en navegador** (backend local, imagen de `feature/login`, que
+   aún NO devuelve los 3 campos nuevos ni persiste ubicaciones en PATCH —
+   el DEV sí): login con cuenta bloqueada muestra el texto del backend;
+   contraseña actual incorrecta no cierra sesión; cambio correcto rota el
+   refresh token y aterriza en la pantalla de inicio; detalle muestra
+   "Bloqueada hasta"; modo edición muestra los multi-selects; "Desbloquear
+   cuenta" deja el estado en Activo.
+
+### Actualización: entorno y configuración del front (§5.3 del análisis v2) + pruebas contra el Gateway de DEV
+
+1. **Gateway y proxy.** `proxy.conf.json` → **`proxy.conf.js`** (`angular.json`): reenvía `/auth`,
+   `/users`, `/roles`, `/permissions`, `/audit-log` y `/sales` (ninguna choca con rutas del portal) al Gateway
+   en **`http://localhost:8080`** (puerto real de DEV); `GATEWAY_URL` lo cambia si 8080 está ocupado. Antes
+   solo cubría `/auth` y `/users` y apuntaba a `:8082`.
+2. **Base de datos / pila DEV.** `dev-env/levantar-backend.ps1` levanta la pila de `coctel_midd` (rama DEV:
+   `db-migration` → auth, sales, gateway) con **su propio `docker-compose.yml` sin modificarlo**
+   (`--project-directory`, proyecto `coctel_dev`, variables en `dev-env/.env`, ver `.env.example`) y siembra
+   con `dev-env/seed-demo-users.sql` las **26 cuentas demo** (ids 2-27, mismos hashes/estados/roles/permisos
+   y el catálogo de subsidiaria/ubicación), más el permiso `view_catalogs` que DEV no define. La pila
+   anterior (`feature/login`) se detuvo y renombró `*-legacy`; su volumen sigue intacto para volver atrás.
+3. **CORS y Vercel.** `environment.apiUrl` sale de `src/environments/api-url.ts` (`''` en desarrollo). En
+   Vercel: variable `API_URL=https://<gateway>`, Build Command `node scripts/set-api-url.mjs && pnpm build`
+   (`build:co` para Colombia) — el script valida la URL y reescribe `api-url.ts` en la copia del build. El
+   dominio del portal debe estar en `CORS_ALLOWED_ORIGINS` del Gateway (en local, `dev-env/.env` incluye
+   4200/4201/4202). Ver README, "Despliegue en Vercel".
+4. **Renovación de tokens y paginación** ya estaban resueltas en la actualización anterior; las pruebas las
+   confirmaron (un solo refresh tras `change-password`; reuso del refresh anterior → `REFRESH_TOKEN_REUSED`).
+5. **Dos hallazgos de las pruebas, corregidos en el front:**
+   - `GET /users` del backend pagina **sin `ORDER BY`** (+ `DISTINCT`): recorrer varias páginas puede repetir
+     y omitir cuentas (páginas de 10 sobre 27 → 21 distintas). `AuthService.listAllUsers()` junta por `id` y,
+     si faltan respecto de `totalElements`, pide una sola página de ese tamaño. Con ≤ 100 cuentas no cambia
+     nada. Conviene pedir al equipo de back un `Sort` estable.
+   - El Gateway rechaza con **403 sin `code`** (formato Spring) el token con `mustChangePassword` — nunca
+     llega `PASSWORD_CHANGE_REQUIRED` por ahí. `httpErrorAlertInterceptor` trata ese 403 como
+     `PASSWORD_CHANGE_REQUIRED` si la sesión está marcada como pendiente; si no, "sin permiso".
+6. **Pruebas.** `dev-env/pruebas-endpoints.mjs` (`node dev-env/pruebas-endpoints.mjs`): 65 verificaciones de
+   contrato contra el Gateway (login, me, refresh/reuso, change-password + refresh, `GET /users` + paginación,
+   `GET /users/{id}` con los 3 campos, `POST`, `PATCH` con `subsidiariaIds`/`ubicacionIds`, `status`,
+   `unlock`, `verify-email`, bloqueo con minutos en el 423, 403/401, logout, limpieza con `DELETE`). En
+   navegador (dev server → proxy → DEV): mensaje del 423 con minutos, detalle con intentos/"Bloqueada
+   hasta", "Desbloquear cuenta", edición de ubicaciones persistida en DEV, cambio de contraseña
+   (`login → change-password → refresh`) y toast de 403 sin permiso.
+
+### Actualización: `GET /roles`, `GET /permissions`, `PATCH /users/{id}/roles` y `POST /users/{id}/close-sessions` conectados al backend real
+
+1. **Catálogos reales de roles y permisos (se eliminó el mock).** `ROLES`, `ROLE_LABEL`, `ROLE_OPTIONS`,
+   `PERMISSIONS` y `defaultPermissionsForRoles` ya no existen en `user-management.model.ts`. El nuevo
+   `AccessCatalogService` (`user-management/data/`) carga `GET /roles` + `GET /permissions` al iniciar sesión
+   y expone `roles`, `permissions`, `roleOptions`, `permissionGroups` (agrupados por `module`), `roleLabel()`,
+   `permissionLabel()` y `defaultPermissionsForRoles()`. **REGLA GENERAL** (igual que `CatalogService` con
+   subsidiarias/ubicaciones): toda lista de roles o permisos del portal sale de ahí; no se vuelve a crear un
+   arreglo propio. Consumidores actualizados: selector y filtro de rol de la lista, selector de rol del alta y
+   de "Seguridad y acceso", grid de permisos, encabezado y perfil, textos de auditoría.
+   `RoleDef` pierde `description` (el back no la manda); `PermissionKey` suma `capture_sales`.
+2. **Quién puede pedir los catálogos.** Ambos endpoints exigen `manage_users` o `manage_roles`; sin alguno el
+   catálogo NO se pide (daría 403) y `roleLabel()` cae a una versión legible del código (Contabilidad →
+   "Contabilidad", TESORERIA → "Tesoreria"). Efecto: el encabezado/perfil de Contabilidad, Tesorería y Costos
+   muestran el código legible en vez del nombre del back — se resolvería si el back dejara `GET /roles` a
+   cualquier sesión. `AccessControlService` ya no recalcula permisos desde el rol: `AuthUser.permissions` es
+   la única fuente.
+3. **`PATCH /users/{id}/roles`.** `UserManagementService.changeRoles()` pasó de local a `Observable`: manda
+   solo lo que cambió (`roleIds` y/o `permissions`, omitido = no tocar) y reconcilia con la respuesta
+   (`UserSummaryDto`); si la persona editada es la de la sesión, `AuthService.renewSession()` (refresh +
+   `GET /auth/me`) refleja sus permisos nuevos al instante. La regla "cambio de rol → permisos por defecto"
+   la aplica el front y envía el resultado final. **Hallazgo:** el endpoint ENTERO exige `manage_roles`
+   (403 `ROLE_ASSIGNMENT_FORBIDDEN`), también para un cambio solo de permisos — la guía solo lo dice de los
+   roles. Por eso, sin ese permiso, la sección "Roles y permisos" del detalle queda de solo lectura (selector,
+   checkboxes y botón deshabilitados) y el selector de rol de la lista también. Un rechazo restaura la
+   selección mostrada.
+4. **`POST /users/{id}/close-sessions`.** `closeSessions()` pasó a `Observable`; actualiza `activeSessions` con
+   la respuesta y el detalle se vuelve a pedir (`refreshBackendDetail`, igual que tras roles y perfil).
+5. **Pruebas.** `dev-env/pruebas-endpoints.mjs` ahora son 96 verificaciones (catálogos, roles/permisos con y sin
+   `manage_roles`, `INVALID_ROLE`/`INVALID_PERMISSION`/404, renovación de sesión propia, close-sessions con
+   dos sesiones abiertas). En navegador contra DEV: encabezado "Administrador" desde `/roles`; filtro de rol con
+   los 5 roles del back; grid de 10 permisos agrupados por módulo (incluye `capture_sales`); cambio de rol a
+   Tesorería restablece permisos, se desmarca uno y se guarda (persistido en DEV); cambio rápido de rol desde
+   la lista; "Cerrar sesiones" 2 → 0; una sesión de Tesorería/Costos no dispara `/roles` ni `/permissions`.
+
+### Actualización: `POST /users/{id}/reset-password`, `DELETE /users/{id}`, `GET /users/{id}/audit-log` y `GET /audit-log` conectados al backend real
+
+1. **`POST /users/{id}/reset-password`.** `UserManagementService.resetPassword()` pasó de generar una
+   contraseña local a `Observable<string>` con la temporal que devuelve el back (regla NOMBRE + PRIMER APELLIDO
+   + año de alta). El back marca `mustChangePassword` y **revoca todas las sesiones**; el registro local refleja
+   `mustChangePassword`, `temporaryPassword` y `activeSessions: 0`. Se quitó el "desbloqueo" local que hacía el
+   reset (la guía no lo dice: un bloqueo se levanta con "Desbloquear"). Se eliminó `password.util.ts` (mock del
+   generador) y el login simulado local (`recordFailedLogin`/`clearFailedLogins`, `MAX_FAILED_LOGIN_ATTEMPTS`).
+   Botones: fila de la lista y pestaña Seguridad del detalle (el modal queda girando hasta la respuesta).
+2. **`DELETE /users/{id}`.** Se reactivaron los botones retirados en `dc3ee8a`: "Eliminar" en cada fila de la lista
+   y "Eliminar usuario" en el encabezado del detalle, con modal de confirmación (`nzOkDanger`). Es una **baja
+   lógica**: la persona deja de poder entrar y sale de la lista, su bitácora se conserva y su correo queda libre.
+   Ambos botones se deshabilitan sobre la propia cuenta (el back responde 409 `CANNOT_DELETE_SELF`). Además
+   `syncFromBackend()` ahora **saca de la lista local** las cuentas con `backendUserId` que `GET /users` ya no
+   devuelve (baja hecha por otra sesión o DB re-sembrada); antes se quedaban para siempre.
+3. **Bitácora real (se eliminó el mock).** `GET /audit-log` y `GET /users/{id}/audit-log` (exigen
+   `view_audit_log`, independiente de `manage_users`) mediante `AuditLogService`. Desaparecen `MOCK_AUDIT_LOG`, la
+   bitácora local en memoria y todas las llamadas a `appendAudit()` en las mutaciones: el backend ya registra cada
+   acción (duplicaría). `AuditAction` ahora es el vocabulario del back (`created`, `updated`,
+   `organization_updated`, `status_changed`, `locked`, `unlocked`, `role_changed`, `permissions_changed`,
+   `password_reset`, `email_verified`, `sessions_closed`, `deleted`); un código nuevo se muestra tal cual
+   (`auditActionLabel`). `actor: null` = "Sistema" (bloqueo/desbloqueo automático).
+   - **"Historial y auditoría de usuarios"** (`/usuarios/auditoria`): búsqueda (detalle, actor o persona),
+     filtro de acción y paginación **del lado del servidor** (`nz-table` con `nzFrontPagination=false`, 15 por
+     página, `switchMap` + debounce de 300 ms).
+   - **Pestaña "Historial" del detalle**: `GET /users/{id}/audit-log` paginado (10 por página, `nz-pagination`);
+     se recarga tras cada mutación; deshabilitada sin `view_audit_log`. Sigue funcionando con cuentas dadas de baja.
+4. **Pruebas.** `dev-env/pruebas-endpoints.mjs` sube a 136 verificaciones (reset con regla de la temporal,
+   sesiones revocadas, contraseña anterior rechazada; historial por persona y global con filtros, paginación,
+   orden, actor nulo del sistema, 404/403/401; baja lógica: 404 posterior, fuera del listado, login rechazado,
+   bitácora conservada, correo reutilizable, `CANNOT_DELETE_SELF`). En navegador contra DEV: reset 2 → 0 sesiones y
+   la fila nueva en Historial, eliminar desde el detalle (vuelve a la lista), botón de la propia cuenta
+   deshabilitado y auditoría global con búsqueda y filtro de acción enviados al servidor.
+5. **VS Code.** `.vscode/tasks.json` suma "Backend: levantar pila DEV (Docker)", "Backend: probar endpoints" y
+   "Front: ng serve Colombia"; F5 usa la configuración `ng serve` existente (puerto 4200).
+
+### Actualización: rama mock (`feature/ded-pantallas-faltantes`) — backend simulado con el mismo contrato
+
+Las tres actualizaciones anteriores (entorno/Gateway, roles-permisos-sesiones, reset/baja/bitácora) viven
+en la rama de integración. En la rama mock se trajeron **las mismas pantallas y servicios sin cambios**
+(`UserManagementService`, `AccessCatalogService`, `AuditLogService`, user-list/detail/audit, "Roles y
+permisos", login, cambio de contraseña), pero **sin HttpClient, interceptores, proxy ni `apiUrl`**:
+
+1. **`AuthService` con la misma API pública** (métodos, Observables, DTOs, `HttpErrorResponse` con
+   `{ error, code }`) respaldada por **`AuthMockBackend`** (`features/auth/data/auth-mock-backend.ts`), un
+   backend en memoria que replica la guía de endpoints: login por correo con bloqueo a los 5 intentos (423
+   con minutos), refresh de un solo uso + `SESSION_IDLE_TIMEOUT` a los 30 min sin actividad, `me`,
+   `change-password` (401/400), `GET/POST/PATCH /users`, `status`, `unlock`, `verify-email`, `roles`
+   (`ROLE_ASSIGNMENT_FORBIDDEN`, `INVALID_ROLE/PERMISSION`), `close-sessions`, `reset-password` (temporal =
+   NOMBRE + APELLIDO + año de alta), `DELETE` (baja lógica, `CANNOT_DELETE_SELF`), `GET /roles`,
+   `GET /permissions` y bitácora (`/audit-log`, `/users/{id}/audit-log`). Su estado se guarda en
+   `sessionStorage` (sobrevive a F5 en la misma pestaña). Semilla: `user-management-mock.data.ts` (cuentas y
+   `backendUserId`) + `auth-mock.data.ts` (contraseñas demo, matriz 7.16, catálogos).
+2. **Interceptores → `AuthService.request()`**: el 401 que invalida la sesión (`authTokenInterceptor`) y la
+   alerta genérica por código (`notifyBackendError`, `mock-http-error-alert.ts`, port de
+   `httpErrorAlertInterceptor`).
+3. **Quién debe cambiar la contraseña lo decide el backend** (también el simulado): la semilla local de
+   `AppUser` ya no fuerza `mustChangePassword`; antes revivía el cambio obligatorio tras un F5.
+4. **No se trajo**: `proxy.conf.js`, `scripts/set-api-url.mjs`, `src/environments/api-url.ts`, `dev-env/`,
+   `core/interceptors/` ni `provideHttpClient`. Despliegue (Vercel, incluido Colombia): ver README.
+
+## Patrón: encabezado de página (`nz-page-header`) — regla general
+
+**Toda pantalla del shell pone su título con `nz-page-header`** (`NzPageHeaderModule`,
+`ng-zorro-antd/page-header`), nunca con un `<h1>` propio ni con un título en el header global (el
+texto "Conciliación Bancaria" del `app-header` se eliminó: el header solo lleva búsqueda,
+notificaciones y el menú del avatar). Los estilos viven una sola vez en `styles.scss` (bloque
+"nz-page-header"): sin padding ni fondo, título en `--font-heading` 18/600, flecha circular con
+hover y breadcrumb en `--color-muted-foreground`. No se repiten reglas de título en el `.scss` de
+cada pantalla.
+
+1. **Pantalla de primer nivel** (Resumen de venta, Conciliación bancaria, Catálogos cargados,
+   Administración de usuarios, Perfil): solo el título. Las acciones de la pantalla (p. ej.
+   "Historial" y "Nuevo usuario") van en `nz-page-header-extra`; un texto de apoyo, en
+   `nz-page-header-content`.
+
+   ```html
+   <nz-page-header class="page-header" nzTitle="Administración de usuarios">
+     <nz-page-header-extra> …botones… </nz-page-header-extra>
+   </nz-page-header>
+   ```
+
+2. **Pantalla hija** (Gestión de diferencias, Historial y auditoría, Nuevo usuario y detalle de
+   usuario): estructura **flecha de volver + título**, más el recorrido de pantallas hasta la
+   actual con `nz-breadcrumb nz-page-header-breadcrumb` (padres como enlace, la actual como
+   texto). La flecha usa `[nzBackIcon]` con un `ng-template` con el SVG de siempre (el proyecto
+   no registra iconos de ng-zorro) y `(nzBack)` navega a la pantalla padre con el `Router` —
+   no `Location.back()`, para que no dependa del historial del navegador.
+
+   ```html
+   <nz-page-header class="page-header" nzTitle="Historial y auditoría de usuarios"
+                   [nzBackIcon]="backIcon" (nzBack)="onBack()">
+     <nz-breadcrumb nz-page-header-breadcrumb>
+       <nz-breadcrumb-item><a routerLink="/usuarios">Administración de usuarios</a></nz-breadcrumb-item>
+       <nz-breadcrumb-item>Historial y auditoría de usuarios</nz-breadcrumb-item>
+     </nz-breadcrumb>
+   </nz-page-header>
+   <ng-template #backIcon><svg …flecha izquierda…/></ng-template>
+   ```
+
+   Un hijo de un hijo suma un `nz-breadcrumb-item` más por nivel. El texto de cada item es el
+   **título** de esa pantalla (no el nombre del menú).
+
+Se retiró el link `.back-link` ("Volver a …") y su partial `_back-link.scss`: lo reemplaza la
+flecha del page-header. `/login` y `/cambiar-password` (fuera del shell) quedan como están.
+
+## Patrón: creación de roles (`/gestion-de-roles/nuevo`) + `nz-collapse` estándar
+
+`features/roles-permissions/role-create/` ("Nuevo rol", pantalla hija de
+"Roles y permisos" — flecha de volver + breadcrumb). Misma protección que su
+padre (`manage_roles` + rol ADMIN, ver la sección siguiente); el botón "Nuevo
+rol" vive en el encabezado de "Roles y permisos" (ya no en `user-list`).
+
+1. **Arriba, una card con nombre + contador + crear** (`.role-create__bar`):
+   input "Nombre del rol" (Reactive Forms: requerido, máx. 50, no repetido
+   contra `GET /roles` sin distinguir mayúsculas/acentos), contador "N permisos
+   asignados de T" y botón "Crear rol" (icono + label, ver "Patrón: botones"
+   punto 5), deshabilitado sin nombre válido o sin permisos.
+2. **Confirmación con `NzModalService.confirm()`** y `nzContent` como
+   `TemplateRef`: nombre del rol, permisos por módulo (solo módulos con al
+   menos uno) y total.
+3. **Sin `POST /roles` en el back** (Guía de endpoints §4: los roles se cargan
+   por migración). Al aceptar NO se simula un guardado: un `nz-message` avisa
+   que el rol no se guardó por falta del endpoint. El día que exista, solo
+   cambia el `nzOnOk` (llamar al servicio y recargar `AccessCatalogService`).
+4. **Abajo, permisos en `nz-collapse`** — un panel por `module` de `GET
+   /permissions` (`AccessCatalogService.permissionGroups`, nunca una lista
+   propia). Header: nombre del módulo + `nzExtra` con "marcados / total" (se
+   tiñe de `--color-primary` cuando hay al menos uno). El primero abre por
+   defecto. Contenido: `<table class="permission-table">` plana con look de
+   `nz-descriptions` con borde: Código (mono) y Descripción sobre
+   `--color-muted` (como las etiquetas), check sobre `--color-card`; checkbox
+   en el encabezado para marcar/desmarcar el módulo (con estado indeterminado).
+   Los checkboxes sin texto visible llevan su nombre en un `.visually-hidden`
+   dentro del `label` (un `aria-label` en el `label` no llega al `input`).
+5. **`nz-collapse` estándar (puente global en `styles.scss`, primer uso)**: sin
+   borde exterior ni radius propio (vive dentro de una card con padding 0),
+   CON divisor entre paneles y CON divisor entre header y contenido
+   (`border-top` del panel, que la variante `nzBordered=false` de Ant quita),
+   todo en `--color-border`; hover del header en `--color-muted`. Gotcha:
+   `ng-zorro-antd.min.css` trae una regla suelta `.ant-collapse
+   .ant-collapse-header { padding: 0 !important }` — el puente usa `html body`
+   + `!important` para ganarle. La flecha va por `[nzExpandedIcon]` con un SVG
+   propio (chevron) y gira 90° por CSS con `.ant-collapse-item-active`.
+   `nz-checkbox` sigue sin bridge (azul de Ant), igual que en el resto de la app.
+
+## Patrón: "Roles y permisos" (`/gestion-de-roles`) — pantalla exclusiva de un rol
+
+`features/roles-permissions/` — entrada propia en el menú lateral (escudo con
+check, después de "Usuarios") y en el buscador del Header.
+
+1. **Solo ADMIN, no solo un permiso.** `manage_roles` también lo tiene ALTAS,
+   así que el permiso no alcanza. `permissionGuard` acepta ahora un
+   `data.role` opcional ADEMÁS de `data.permission` (`{ permission:
+   'manage_roles', role: 'ADMIN' }`), resuelto por
+   `AccessControlService.hasRole()` con el rol REAL del backend
+   (`auth.currentUser().roles`, mismo criterio que `canReprocessSales`). El
+   menú (`hasPermission(...) && hasRole('ADMIN')`) y `SearchablePage.role` usan
+   la misma regla. Sin el rol: rebota a `homeRoute()` como cualquier permiso.
+2. **Tabla** — es la tabla de referencia de la "Regla general: tablas" (abajo):
+   un rol por fila. Columnas: **Rol** (nombre + código en mono), **Permisos**
+   (los `defaultPermissions` de `GET /roles`, con la descripción de `GET
+   /permissions` vía `permissionLabel()`, lista en dos columnas con viñeta
+   `--color-primary`) y **Usuarios** (encabezado con `colspan="2"`: una celda
+   con el chip indicador "N usuarios", centrado, y otra con la lista en dos
+   columnas de avatar + nombre, enlazado a su detalle).
+3. **Usuarios por rol** = `UserManagementService.allUsers` filtrado por
+   `roleIds` — la misma colección de "Administración de usuarios"; la
+   pantalla dispara `syncFromBackend()` al entrar (igual que `UserList`).
+4. **Gotcha de rutas: nunca una ruta del portal que empiece igual que una del
+   API.** En desarrollo `proxy.conf.js` manda al Gateway todo lo que EMPIECE
+   con `/auth`, `/users`, `/roles`, `/permissions`, `/audit-log` o `/sales`
+   (comparación por prefijo). La primera versión de esta pantalla usaba
+   `/roles`: navegando dentro de la app funcionaba, pero una carga directa
+   (F5 o URL escrita) devolvía el 401 "Whitelabel Error Page" del Gateway.
+   Incluso `/roles-y-permisos` chocaría. Por eso `/gestion-de-roles` — mismo
+   criterio que `/usuarios` frente a `/users`.
+
+## Regla general: tablas (referencia: "Roles y permisos")
+
+Toda tabla nueva sigue estas características — se derivan de la tabla de
+`features/roles-permissions/` y complementan "Patrón: card de tabla". Las clases
+de celda viven en `shared/styles/_data-table.scss` y el chip en
+`shared/styles/_chip.scss` (`@use` de ambos en el `.scss` de la pantalla).
+
+1. **Contenedor**: `<nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">`
+   SIEMPRE — **la tabla nunca va pegada a la card** (24px a los lados, arriba y
+   abajo). Con filtros: `.toolbar` + `.table-bleed` (la línea divisoria cruza la
+   card, las celdas conservan los 24px). Sin filtros: la tabla directo, sin
+   `.table-bleed` ni un `.toolbar` vacío para fingir espacio.
+2. **`nz-table`**: `nzSize="middle"`; header sin fondo y sin línea vertical
+   (heredado de `.table-card`). `[nzLoading]` atado al estado de carga y
+   `[nzNoResult]` con texto propio que distingue "falló la carga" de "no hay
+   datos" (nunca una fila `@empty` propia: saldría duplicada). Conjunto chico y
+   acotado (catálogos como roles) → `[nzShowPagination]="false"` +
+   `[nzFrontPagination]="false"`; lista que crece → `[nzPageSize]="10"`.
+3. **Anchos**: columnas de contenido acotado con `style="width: …"` en el `th`
+   (o en el `td` de una sub-celda); la columna con más texto queda libre y
+   absorbe el resto. Texto libre de una sola línea → `.col-truncate` +
+   `[attr.title]`.
+4. **Celda principal** (identifica la fila): `.cell-title` (600, foreground) +
+   `.cell-subtitle` debajo (12px, muted; código en `.font-mono`).
+5. **Varios valores en una celda**: `ul.cell-list` (lista vertical, 6px entre
+   ítems); si la lista puede crecer, `.cell-list--two-columns` (CSS `columns:
+   2`, se lee de arriba abajo y luego la segunda columna, un ítem nunca se
+   parte). Esas celdas y las de su fila llevan `.cell-top` (`vertical-align:
+   top`) para que todo arranque a la misma altura.
+6. **Indicadores** (conteo, estado de solo lectura): en su PROPIA celda con
+   `.cell-indicator` (centrado horizontal y vertical, 140px), aunque el resto de
+   la fila esté arriba. Si el encabezado agrupa indicador + detalle, el `th`
+   lleva `colspan` y `.text-center`. El indicador es un `.chip` — mismas
+   métricas que `StatusChip` (pastilla, 12px/600, padding 2px 10px) pero SIN
+   menú, chevron ni cursor de acción: solo muestra. `.chip--primary` cuando el
+   valor es > 0 (borde/texto `--color-primary`); en 0, el `.chip` neutro
+   (`--color-muted`). Si el chip debe cambiar algo, no es `.chip`: es un
+   `StatusChip`.
+7. **Referencias a personas**: `nz-avatar nzSize="small"` (foto o iniciales con
+   `avatarTokensFor`) + nombre como enlace a su detalle, con ellipsis y
+   `[attr.title]`.
+8. **Números** siempre `.font-mono`; colores solo con tokens (`var(--color-*)`).
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

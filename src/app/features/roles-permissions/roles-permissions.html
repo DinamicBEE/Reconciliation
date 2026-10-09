@@ -1,0 +1,92 @@
+<div class="roles-permissions">
+  <nz-page-header class="page-header" nzTitle="Roles y permisos">
+    <nz-page-header-extra>
+      <button nz-button nzType="primary" type="button" routerLink="/gestion-de-roles/nuevo">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+        </svg>
+        Nuevo rol
+      </button>
+    </nz-page-header-extra>
+  </nz-page-header>
+
+  <!-- Tabla sin filtros: card con padding 24px, la tabla nunca toca la card —
+       ver MASTER.md "Regla general: tablas". -->
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
+    <div class="table-bleed">
+      <nz-table
+        #tbl
+        [nzData]="rows()"
+        [nzLoading]="catalog.loading()"
+        [nzShowPagination]="false"
+        [nzFrontPagination]="false"
+        nzSize="middle"
+        [nzNoResult]="catalog.loadFailed() ? 'No se pudo cargar el catálogo de roles.' : 'No hay roles registrados.'"
+      >
+        <thead>
+          <tr>
+            <th style="width: 220px">Rol</th>
+            <th>Permisos</th>
+            <th class="text-center" colspan="2">Usuarios</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (role of tbl.data; track role.id) {
+            <tr>
+              <td class="cell-top">
+                <span class="cell-title">{{ role.label }}</span>
+                <span class="cell-subtitle font-mono">{{ role.id }}</span>
+              </td>
+              <td class="cell-top">
+                @if (role.permissions.length) {
+                  <ul class="cell-list cell-list--two-columns">
+                    @for (permission of role.permissions; track permission) {
+                      <li class="permission-item">{{ permission }}</li>
+                    }
+                  </ul>
+                } @else {
+                  <span class="text-muted">Sin permisos</span>
+                }
+              </td>
+              <td class="cell-top" style="width: 400px">
+                @if (role.users.length) {
+                  <div class="user-container">
+
+                     
+                    <span class="chip chip-color" [ngStyle]="{ margin: '8px' }">
+                      <span class="font-mono">{{ role.users.length }}</span>
+                      {{ role.users.length === 1 ? 'usuario' : 'usuarios' }}
+                    </span>
+                     
+                    <ul class="cell-list cell-list--two-columns">
+                      @for (user of role.users; track user.id) {
+                        <li class="user-item">
+                          <nz-avatar
+                            nzSize="small"
+                            class="user-item__avatar"
+                            [nzSrc]="user.avatarUrl ?? undefined"
+                            [nzText]="initials(user)"
+                            [ngStyle]="avatarStyle(user)"
+                          />
+                          <a class="user-item__name" [routerLink]="['/usuarios', user.id]" [attr.title]="fullName(user)">
+                            {{ fullName(user) }}
+                          </a>
+                        </li>
+                      }
+                    </ul>
+
+
+                  </div>
+
+
+                } @else {
+                  <span class="text-muted">Sin usuarios asignados</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </nz-table>
+    </div>
+  </nz-card>
+</div>

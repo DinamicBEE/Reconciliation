@@ -3,10 +3,9 @@ import { AuthService } from '../../features/auth/data/auth.service';
 import { CatalogEntry } from '../../shared/models/catalog-entry.model';
 
 /**
- * Catálogos de subsidiaria/ubicación — deriva de `AuthService` (la sesión
- * ya trae las listas del login, ver `AuthUser.subsidiarias`/`.ubicaciones`;
- * en esta rama, las mock de `MOCK_SUBSIDIARIAS`/`MOCK_UBICACIONES` en
- * `features/auth/data/auth-mock.data.ts`), mismo criterio que `AccessControlService` derivando de
+ * Catálogos REALES de subsidiaria/ubicación — deriva de `AuthService`
+ * (la sesión ya trae las listas del login, ver `AuthUser.subsidiarias`/
+ * `.ubicaciones`), mismo criterio que `AccessControlService` derivando de
  * `AuthService` en vez de duplicar el dato.
  *
  * REGLA GENERAL (ver MASTER.md, "Catálogos reales: subsidiaria/ubicación"):

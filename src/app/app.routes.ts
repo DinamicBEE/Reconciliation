@@ -64,6 +64,21 @@ export const routes: Routes = [
         loadComponent: () => import('./features/profile/profile').then((m) => m.Profile),
       },
       {
+        // "Roles y permisos": exclusiva del rol ADMIN (`data.role`) — además de
+        // `manage_roles`, que es lo que piden `GET /roles`/`GET /permissions`
+        // (ALTAS también lo tiene, por eso no basta el permiso solo).
+        path: 'gestion-de-roles',
+        canActivate: [permissionGuard],
+        data: { permission: 'manage_roles', role: 'ADMIN' },
+        loadComponent: () => import('./features/roles-permissions/roles-permissions').then((m) => m.RolesPermissions),
+      },
+      {
+        path: 'gestion-de-roles/nuevo',
+        canActivate: [permissionGuard],
+        data: { permission: 'manage_roles', role: 'ADMIN' },
+        loadComponent: () => import('./features/roles-permissions/role-create/role-create').then((m) => m.RoleCreate),
+      },
+      {
         path: 'usuarios',
         canActivate: [permissionGuard],
         data: { permission: 'manage_users' },

@@ -81,6 +81,55 @@
   white-space: nowrap;
 }
 
+// --- Celdas (ver MASTER.md, "Regla general: tablas") ------------------------
+// Fila con contenido de alturas distintas (listas): todo arranca arriba.
+.cell-top {
+  vertical-align: top;
+}
+
+// Celda principal de la fila: título (600) + subtítulo (código/correo) debajo.
+.cell-title {
+  display: block;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.cell-subtitle {
+  display: block;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+}
+
+// Varios valores en una celda: lista vertical sin viñetas del navegador.
+.cell-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  > li {
+    break-inside: avoid; // en dos columnas, un ítem nunca se parte
+    padding-bottom: 6px;
+  }
+
+  > li:last-child {
+    padding-bottom: 0;
+  }
+
+  // Lista larga: dos columnas, se lee de arriba abajo y luego la 2.ª columna.
+  &--two-columns {
+    columns: 2;
+    column-gap: 24px;
+  }
+}
+
+// Indicador (conteo/estado de solo lectura) en su PROPIA celda, centrado en
+// ambos ejes aunque el resto de la fila arranque arriba.
+.cell-indicator {
+  width: 140px;
+  text-align: center;
+  vertical-align: middle;
+}
+
 .text-right {
   text-align: right;
 }

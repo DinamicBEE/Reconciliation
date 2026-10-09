@@ -9,18 +9,13 @@
 export type UserStatus = 'active' | 'inactive' | 'blocked';
 
 // Códigos TAL CUAL los sembró coctel-del-mar/coctel_midd (`app_role.code`,
-// ver V1__init_schema.sql / V2__auth_schema.sql de esos repos y
-// `UserSummaryDto.roles` en /auth/login) — el backend es la fuente de
-// verdad de qué roles EXISTEN; este frontend ya no inventa los suyos (ver
-// MASTER.md, "Actualización: unificación de roles con el backend real").
-// Cada uno con acceso a su propio módulo (ver `ROLES` abajo): `ADMIN` ve
-// todo, `ALTAS`/`CONTABILIDAD`/`TESORERIA` ven su módulo (Administración de
-// usuarios / Resumen de venta / Conciliación bancaria), y la consulta de
-// Catálogos cargados es transversal — la comparten ADMIN, CONTABILIDAD,
-// TESORERIA y COSTOS (matriz 7.16 del DED; COSTOS solo tiene esa pantalla
-// por ahora). Aplicado por
-// `permissionGuard` (`features/auth/data/permission.guard.ts`) sobre las
-// rutas en `app.routes.ts`.
+// ver V1__init_schema.sql de ese repo y `UserSummaryDto.roles` en /auth/login)
+// — el backend es la fuente de verdad de qué roles EXISTEN y de sus nombres y
+// permisos por defecto: `GET /roles` (ver `AccessCatalogService`). Este tipo
+// solo da nombre a los códigos que el código del front compara (p. ej.
+// `MANAGER_ROLE_IDS`, `canReprocessSales`); NO hay lista de roles propia del
+// front. El acceso a cada pantalla lo decide el PERMISO (`permissionGuard`,
+// `features/auth/data/permission.guard.ts`, rutas en `app.routes.ts`), no el rol.
 export type RoleId = 'ADMIN' | 'ALTAS' | 'CONTABILIDAD' | 'TESORERIA' | 'COSTOS';
 
 export type PermissionKey =
@@ -32,22 +27,25 @@ export type PermissionKey =
   | 'manage_users'
   | 'manage_roles'
   | 'view_audit_log'
-  | 'view_catalogs';
+  | 'view_catalogs'
+  | 'capture_sales';
 
+// Una entrada de `GET /permissions` (`code` → key, `description` → label,
+// `module` → group: título del bloque en el grid de "Seguridad y acceso").
 export interface PermissionDef {
   key: PermissionKey;
   label: string;
   group: string;
 }
 
+// Una entrada de `GET /roles` (`code` → id, `name` → label). Permisos que una
+// persona recién asignada a este rol recibe por defecto — el admin puede
+// ajustarlos después por usuario (ver "Seguridad y acceso" en user-detail).
+// Cambiar los roles asignados RESETEA a la unión de estos sets
+// (`AccessCatalogService.defaultPermissionsForRoles`).
 export interface RoleDef {
   id: RoleId;
   label: string;
-  description: string;
-  // Permisos que un usuario recién asignado a este rol recibe por defecto —
-  // el admin puede ajustarlos después por usuario (ver "Seguridad y acceso"
-  // en user-detail). Cambiar los roles asignados RESETEA a la unión de estos
-  // sets (ver UserManagementService.changeRoles / defaultPermissionsForRoles).
   defaultPermissions: PermissionKey[];
 }
 
@@ -99,6 +97,11 @@ export interface AppUser {
   emailVerified: boolean;
   lastActivityAt: string | null; // ISO datetime — distinto de lastAccessAt: es la última acción dentro de la app, no el último login
   failedLoginAttempts: number;
+  // Fin del bloqueo TEMPORAL por intentos fallidos (`GET /users/{id}`,
+  // `lockedUntil`): a partir de ahí el backend desbloquea solo (2 h por
+  // defecto, ver Guía_Endpoints §6). `null` = no está bloqueada o el bloqueo es
+  // MANUAL (`status: blocked`, no vence solo). Mock: siempre `null`.
+  lockedUntil: string | null; // ISO datetime
   twoFactorEnabled: boolean;
   activeSessions: number;
   // true en la creación de la cuenta o tras un `resetPassword` (ver
@@ -109,12 +112,11 @@ export interface AppUser {
   // cambio obligatorio de contraseña".
   mustChangePassword: boolean;
   // Contraseña inicial GENERADA POR EL BACKEND al dar de alta la cuenta
-  // (acuerdo con backend: el detalle del usuario trae la key
-  // `temporaryPassword`). Si llega y no está vacía, `user-detail` la muestra
-  // en la sección "Organización" para que el administrador la entregue.
-  // `null` cuando no hay contraseña temporal vigente (el usuario ya definió
-  // la suya). El frontend nunca la genera — en esta rama la simula el mock
-  // de `UserManagementService` (ver `createUser`/`resetPassword`).
+  // (`POST /users` → `NewUserResponseDto.temporaryPassword`, o
+  // recalculada por `GET /users/{id}` mientras `mustChangePassword` siga en
+  // true). Si llega y no está vacía, `user-detail` la muestra en la sección
+  // "Organización" para que el administrador la entregue. `null` = sin
+  // contraseña temporal vigente.
   temporaryPassword: string | null;
 
   // "Organización" — todos opcionales/editables en cualquier momento; no se
@@ -129,18 +131,30 @@ export interface AppUser {
   // Subsidiaria(s) (negocio/marca/empresa) y ubicación(es) (tienda/store/
   // punto de venta/sucursal) — a diferencia del resto de "Organización", SÍ
   // se piden al crear la cuenta (ver CreateUserInput). `id`s numéricos
-  // porque referencian el catálogo de la sesión (`CatalogService`,
-  // `core/services/` — hoy mock, ver `MOCK_SUBSIDIARIAS`/`MOCK_UBICACIONES`
-  // en auth-mock.data.ts), no un valor propio de este registro. ARREGLOS,
-  // no un solo valor: el backend modela acceso a VARIAS subsidiarias/
-  // ubicaciones por persona (`empleado_subsidiaria`/`empleado_ubicacion`,
-  // tablas N:M) — mismo modelo que la rama de integración. `[]` = sin
+  // porque referencian el catálogo REAL del backend (`CatalogService`,
+  // `core/services/`), no un valor propio de este mock. ARREGLOS, no un
+  // solo valor: el backend modela acceso a VARIAS subsidiarias/ubicaciones
+  // por persona (`empleado_subsidiaria`/`empleado_ubicacion`, tablas de
+  // relación N:M, ver `CreateUserRequest.subsidiariaIds`/`.ubicacionIds` en
+  // `AuthService`) — este frontend ya NO lo simplifica a una sola de cada
+  // una (ver MASTER.md, "Actualización: endpoints de administración de
+  // usuarios (CRUD real) + multi-subsidiaria/ubicación"). `[]` = sin
   // asignar ninguna.
   subsidiariaIds: number[];
   ubicacionIds: number[];
+  // Id del `app_user` REAL en el backend (`AppUser.id` allá, un Long) —
+  // presente para cualquier cuenta sembrada/creada ahí (ver
+  // `UserManagementService.createUser`/`syncFromBackend`,
+  // `UserDetail.onUnlockBackendClick`); `null` para un registro que solo
+  // vive en este mock (no debería quedar ninguno tras sembrar los 26 en el
+  // backend, ver el mismo punto de MASTER.md). NO confundir con
+  // `AppUser.id` (el id 'uXXXX' de ESTE registro mock) ni con
+  // `AuthUser.appUserId` (que apunta al revés, del `AuthUser` de sesión
+  // hacia este mismo `AppUser.id`).
+  backendUserId: number | null;
 }
 
-// Género — lista cerrada (mismo criterio que STATUS_OPTIONS/ROLE_OPTIONS):
+// Género — lista cerrada (mismo criterio que STATUS_OPTIONS):
 // un `<nz-select>`, no texto libre.
 export const GENDER_OPTIONS: string[] = ['Femenino', 'Masculino', 'Otro', 'Prefiero no decir'];
 
@@ -149,109 +163,38 @@ export const GENDER_OPTIONS: string[] = ['Femenino', 'Masculino', 'Otro', 'Prefi
 // criterio entre pantallas.
 export const PHONE_PATTERN = /^[+]?[0-9()\-\s]{7,20}$/;
 
-// Umbral de bloqueo automático por intentos fallidos de inicio de sesión —
-// dato del contrato real del backend (Auth_Service_Endpoints.pdf, "Usuario
-// bloqueado (5 intentos fallidos)"), no una decisión de este frontend. Ver
-// `UserManagementService.recordFailedLogin`/`Login.onSubmit`.
-export const MAX_FAILED_LOGIN_ATTEMPTS = 5;
-
 export function fullName(user: Pick<AppUser, 'firstName' | 'lastName'>): string {
   return `${user.firstName} ${user.lastName}`.trim();
 }
 
-// Unión de los defaultPermissions de cada rol asignado — punto de partida al
-// crear un usuario o al cambiar sus roles (ver UserManagementService).
-export function defaultPermissionsForRoles(roleIds: RoleId[]): PermissionKey[] {
-  const set = new Set<PermissionKey>();
-  for (const roleId of roleIds) {
-    const role = ROLES.find((r) => r.id === roleId);
-    role?.defaultPermissions.forEach((p) => set.add(p));
-  }
-  return [...set];
-}
-
-// created/updated/role_changed/permissions_changed/activated/deactivated/
-// password_reset/deleted/organization_updated/email_verified/
-// sessions_closed — un enum cerrado en vez de texto libre para poder
-// filtrar y, eventualmente, dar color/ícono propio por tipo (mismo criterio
-// que MatchStatus/SaleStatus, ver MASTER.md).
+// Acciones que registra la bitácora del backend (`GET /audit-log`, guía de
+// endpoints, "Acciones que se registran") — `AuditLogEntry.action` llega como
+// texto; un código que el backend agregue y esta lista no conozca se muestra
+// tal cual (ver `auditActionLabel`).
 export type AuditAction =
   | 'created'
   | 'updated'
+  | 'organization_updated'
+  | 'status_changed'
+  | 'locked'
+  | 'unlocked'
   | 'role_changed'
   | 'permissions_changed'
-  | 'activated'
-  | 'deactivated'
-  | 'blocked'
   | 'password_reset'
-  | 'deleted'
-  | 'organization_updated'
   | 'email_verified'
-  | 'sessions_closed';
+  | 'sessions_closed'
+  | 'deleted';
 
+// Una entrada de la bitácora del backend, ya mapeada para la UI.
 export interface AuditLogEntry {
-  id: string;
-  timestamp: string; // ISO datetime
-  actorName: string; // quién ejecutó la acción (usuario con sesión, vía AuthService)
-  targetUserId: string;
-  targetUserName: string; // snapshot del nombre al momento del evento — sobrevive a que el usuario se elimine o cambie de nombre después
-  action: AuditAction;
+  id: number;
+  timestamp: string; // ISO datetime (`createdAt`)
+  actorName: string; // 'Sistema' cuando lo hizo el sistema (`actor` null: bloqueo/desbloqueo automático)
+  targetBackendUserId: number; // id REAL del backend de la persona afectada (puede ya no existir: baja lógica)
+  targetUserName: string; // nombre al momento de consultar
+  action: string; // AuditAction | código nuevo del backend
   detail: string;
 }
-
-export const ROLES: RoleDef[] = [
-  {
-    id: 'ADMIN',
-    label: 'Administrador',
-    description: 'Acceso total a todas las pantallas y funcionalidades de la aplicación.',
-    defaultPermissions: [
-      'view_dashboard',
-      'view_reconciliation',
-      'manage_differences',
-      'import_settlements',
-      'export_reports',
-      'manage_users',
-      'manage_roles',
-      'view_audit_log',
-      'view_catalogs',
-    ],
-  },
-  {
-    id: 'ALTAS',
-    label: 'Encargado de altas',
-    description: 'Acceso exclusivo al módulo de Administración de usuarios y sus funcionalidades.',
-    defaultPermissions: ['manage_users', 'manage_roles', 'view_audit_log'],
-  },
-  {
-    id: 'CONTABILIDAD',
-    label: 'Contabilidad',
-    description: 'Acceso al Resumen de venta (consulta y exportación) y a la consulta de catálogos cargados.',
-    // Matriz 7.16 del DED: Contabilidad también exporta el listado de ventas.
-    defaultPermissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
-  },
-  {
-    id: 'TESORERIA',
-    label: 'Tesorería',
-    description: 'Acceso al Resumen de venta, Conciliación bancaria y a la consulta de catálogos cargados.',
-    // Matriz 7.16 del DED: Tesorería también consulta (y exporta) ventas —
-    // antes solo tenía Conciliación bancaria.
-    defaultPermissions: [
-      'view_dashboard',
-      'view_reconciliation',
-      'manage_differences',
-      'import_settlements',
-      'export_reports',
-      'view_catalogs',
-    ],
-  },
-  {
-    id: 'COSTOS',
-    label: 'Costos',
-    // Matriz 7.16 del DED: Costos consulta y exporta ventas y catálogos.
-    description: 'Consulta y exportación de ventas, y consulta de catálogos cargados (solo lectura).',
-    defaultPermissions: ['view_dashboard', 'export_reports', 'view_catalogs'],
-  },
-];
 
 // Estado de cuenta — chip con fondo por estado (ver StatusChip) y, en
 // user-detail ("Seguridad y acceso"), el mismo estado como `nz-tag` plano.
@@ -297,49 +240,30 @@ export const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
   { value: 'blocked', label: 'Bloqueado' },
 ];
 
-export const ROLE_LABEL: Record<RoleId, string> = Object.fromEntries(
-  ROLES.map((r) => [r.id, r.label]),
-) as Record<RoleId, string>;
-
-export const ROLE_OPTIONS: { value: RoleId; label: string }[] = ROLES.map((r) => ({ value: r.id, label: r.label }));
-
 // Roles considerados "responsables" a efectos de "Administrador responsable"
 // (Organización) — cualquier AppUser con al menos uno de estos roles puede
 // elegirse como responsable de otro. Contabilidad/Tesorería/Costos quedan
 // fuera a propósito: son roles de un solo módulo operativo (o sin módulo
-// propio, ver COSTOS en `ROLES`), no de gestión de personas.
+// propio), no de gestión de personas.
 export const MANAGER_ROLE_IDS: RoleId[] = ['ADMIN', 'ALTAS'];
-
-// `group` ahora nombra la PANTALLA/módulo al que pertenece cada permiso
-// (antes eran buckets genéricos "Consulta/Operación/Administración") — con
-// cada rol dueño de un módulo (ver `ROLES`; "Catálogos" es la pantalla
-// transversal que comparten varios roles), agrupar por
-// pantalla hace que el grid de "Permisos" en "Seguridad y acceso"
-// (user-detail) se lea directo: cada columna = un módulo = lo que un rol de
-// este set puede tocar.
-export const PERMISSIONS: PermissionDef[] = [
-  { key: 'view_dashboard', label: 'Ver resumen de venta', group: 'Resumen de venta' },
-  { key: 'view_reconciliation', label: 'Ver conciliación', group: 'Conciliación bancaria' },
-  { key: 'manage_differences', label: 'Gestionar diferencias', group: 'Conciliación bancaria' },
-  { key: 'import_settlements', label: 'Importar liquidaciones (CSV)', group: 'Conciliación bancaria' },
-  { key: 'export_reports', label: 'Exportar reportes', group: 'Conciliación bancaria' },
-  { key: 'manage_users', label: 'Administrar usuarios', group: 'Administración de usuarios' },
-  { key: 'manage_roles', label: 'Administrar roles y permisos', group: 'Administración de usuarios' },
-  { key: 'view_audit_log', label: 'Ver historial y auditoría', group: 'Administración de usuarios' },
-  { key: 'view_catalogs', label: 'Consultar catálogos cargados', group: 'Catálogos' },
-];
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   created: 'Usuario creado',
   updated: 'Datos actualizados',
+  organization_updated: 'Datos organizacionales actualizados',
+  status_changed: 'Estado cambiado',
+  locked: 'Cuenta bloqueada',
+  unlocked: 'Cuenta desbloqueada',
   role_changed: 'Roles modificados',
   permissions_changed: 'Permisos modificados',
-  activated: 'Cuenta activada',
-  deactivated: 'Cuenta desactivada',
-  blocked: 'Cuenta bloqueada',
   password_reset: 'Contraseña restablecida',
-  deleted: 'Usuario eliminado',
-  organization_updated: 'Datos organizacionales actualizados',
   email_verified: 'Correo verificado manualmente',
   sessions_closed: 'Sesiones activas cerradas',
+  deleted: 'Usuario eliminado',
 };
+
+// Etiqueta de una acción; un código que el backend agregue y no esté arriba se
+// muestra tal cual en vez de quedar en blanco.
+export function auditActionLabel(action: string): string {
+  return AUDIT_ACTION_LABEL[action as AuditAction] ?? action;
+}

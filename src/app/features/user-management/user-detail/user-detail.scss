@@ -1,8 +1,6 @@
-@use '../../../shared/styles/back-link';
 @use '../../../shared/styles/data-table';
 @use '../../../shared/styles/summary-columns';
 @use '../../../shared/styles/info-fields';
-@use '../../../shared/styles/buttons';
 
 // Sin max-width: las tabs y sus cards deben usar todo el ancho disponible
 // de la pantalla (a diferencia del formulario angosto de un solo campo que
@@ -14,19 +12,7 @@
   gap: var(--grid-gap);
 }
 
-.user-detail__header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 
-.user-detail__title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
 
 .user-detail__title-actions {
   display: flex;
@@ -34,13 +20,6 @@
   gap: 12px;
 }
 
-.user-detail__title {
-  font-family: var(--font-heading);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  margin: 0;
-}
 
 // nz-tabs debe ocupar todo el ancho de la pantalla (a diferencia del resto
 // de la app, que no necesitó forzar esto en ningún otro componente).
@@ -326,4 +305,10 @@ nz-tabs,
   tr:last-child td {
     border-bottom: none;
   }
+}
+
+.audit-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }

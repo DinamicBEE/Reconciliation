@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzDrawerModule } from 'ng-zorro-antd/drawer';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzSelectModule } from 'ng-zorro-antd/select';
@@ -27,6 +28,7 @@ type KindFilter = CatalogKind | 'all';
 @Component({
   selector: 'app-catalogs',
   imports: [
+    NzPageHeaderModule,
     CommonModule,
     FormsModule,
     NzButtonModule,
