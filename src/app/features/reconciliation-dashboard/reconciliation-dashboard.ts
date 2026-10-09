@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
@@ -43,6 +44,7 @@ const ACTIONABLE_STATUSES = new Set<ReconciliationStatus>(['desconciliado', 'por
 @Component({
   selector: 'app-reconciliation-dashboard',
   imports: [
+    NzPageHeaderModule,
     CommonModule,
     MoneyPipe,
     FormsModule,

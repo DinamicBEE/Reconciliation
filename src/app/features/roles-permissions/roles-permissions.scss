@@ -1,0 +1,63 @@
+@use '../../shared/styles/data-table';
+@use '../../shared/styles/chip';
+
+.roles-permissions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+.permission-item {
+  position: relative;
+  padding-left: 14px;
+  color: var(--color-foreground);
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.6em;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-primary);
+  }
+}
+
+// Avatar + nombre — en `.cell-list--two-columns` cada ítem es un bloque propio
+// (flex dentro de un `li`), así el nombre largo se corta con ellipsis.
+.user-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.user-item__avatar {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.user-item__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-foreground);
+
+  &:hover {
+    color: var(--color-primary);
+  }
+}
+
+.user-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.chip-color {
+  background: var(--color-tag-success-bg);
+  color: var(--color-tag-success-fg);
+  border-color: var(--color-tag-success-border);
+}

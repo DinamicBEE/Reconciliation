@@ -4,13 +4,15 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { AuthService } from '../auth/data/auth.service';
 import { UserManagementService } from '../user-management/data/user-management.service';
-import { AppUser, GENDER_OPTIONS, PHONE_PATTERN, ROLE_LABEL, fullName } from '../user-management/data/user-management.model';
+import { AccessCatalogService } from '../user-management/data/access-catalog.service';
+import { AppUser, GENDER_OPTIONS, PHONE_PATTERN, fullName } from '../user-management/data/user-management.model';
 import { avatarTokensFor, initialsFor } from '../../shared/utils/avatar-color.util';
 import { COUNTRY_PROFILE } from '../../core/country/active-country';
 
@@ -42,6 +44,7 @@ function toIsoDate(value: Date | null): string {
 @Component({
   selector: 'app-profile',
   imports: [
+    NzPageHeaderModule,
     ReactiveFormsModule,
     NzAvatarModule,
     NzButtonModule,
@@ -59,6 +62,7 @@ function toIsoDate(value: Date | null): string {
 export class Profile {
   private readonly auth = inject(AuthService);
   private readonly userMgmt = inject(UserManagementService);
+  private readonly accessCatalog = inject(AccessCatalogService);
   private readonly fb = inject(NonNullableFormBuilder);
   // Vocabulario del país activo: identificación personal, dirección, teléfono.
   protected readonly country = inject(COUNTRY_PROFILE);
@@ -72,8 +76,9 @@ export class Profile {
     return id ? this.userMgmt.findUser(id) : null;
   });
 
+  // Roles REALES de la sesión con el nombre de `GET /roles` (ver Header).
   protected readonly roleLabel = computed(() =>
-    (this.user()?.roleIds ?? []).map((roleId) => ROLE_LABEL[roleId]).join(', '),
+    (this.auth.currentUser()?.roles ?? []).map((roleId) => this.accessCatalog.roleLabel(roleId)).join(', '),
   );
 
   // Modo edición de "Información general" + "Dirección" — de solo lectura

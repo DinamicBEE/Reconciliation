@@ -97,6 +97,24 @@
         <span class="app-menu__label">Usuarios</span>
       </a>
     }
+
+    @if (access.hasPermission('manage_roles') && access.hasRole('ADMIN')) {
+      <a
+        class="app-menu__link"
+        routerLink="/gestion-de-roles"
+        routerLinkActive="app-menu__link--active"
+        [attr.title]="!menu.expanded() ? 'Roles y permisos' : null"
+      >
+        <span class="app-menu__icon">
+          <!-- escudo con check: roles y permisos -->
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4" />
+          </svg>
+        </span>
+        <span class="app-menu__label">Roles y permisos</span>
+      </a>
+    }
   </div>
 
   <div class="app-menu__separator"></div>

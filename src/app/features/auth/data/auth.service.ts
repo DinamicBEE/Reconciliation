@@ -1,12 +1,16 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { EMPTY, Observable, catchError, expand, map, of, reduce, switchMap } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
 import { PermissionKey, RoleId, UserStatus } from '../../user-management/data/user-management.model';
 import { SessionEndReason, isSessionIdleTimeout } from './auth-errors';
 
 const STORAGE_KEY = 'conciliation-auth';
+
+// Tamaño de página con el que se recorre `GET /users` (el backend usa 20 por
+// defecto; el front mantiene 100 por petición, ver `listAllUsers`).
+const USERS_PAGE_SIZE = 100;
 
 export interface AuthUser {
   username: string;
@@ -21,18 +25,16 @@ export interface AuthUser {
   // de dónde leer foto/organización (ver AccessControlService.currentAppUser).
   appUserId: string | null;
   // Códigos de rol TAL CUAL los devolvió el backend (`UserSummaryDto.roles`,
-  // p. ej. `['ADMIN']`) — fuente de verdad para permisos vía
-  // `defaultPermissionsForRoles` (ver AccessControlService.permissions), NO
-  // los ids inventados por este frontend (ver MASTER.md, "Actualización:
-  // unificación de roles con el backend real"). Vacío si el backend no
-  // asignó ningún rol.
+  // p. ej. `['ADMIN']`) — NO los ids inventados por este frontend (ver
+  // MASTER.md, "Actualización: unificación de roles con el backend real"). El
+  // nombre de cada rol sale de `GET /roles` (`AccessCatalogService.roleLabel`).
+  // Vacío si el backend no asignó ningún rol.
   roles: RoleId[];
   // `UserSummaryDto.permissions` TAL CUAL los devolvió el backend — fuente de
   // verdad ÚNICA para `AccessControlService.permissions` (antes se ignoraba
-  // este arreglo y se recalculaba siempre desde `roles` vía
-  // `defaultPermissionsForRoles`, ver MASTER.md "Actualización: matriz de
-  // roles y permisos (7.16) completa"). Vacío solo si el backend no asignó
-  // ningún permiso — no debería pasar tras sembrar el catálogo de 9.
+  // este arreglo y se recalculaba siempre desde `roles`, ver MASTER.md
+  // "Actualización: matriz de roles y permisos (7.16) completa"). Vacío = la
+  // persona no tiene ningún permiso.
   permissions: PermissionKey[];
   // Copia de `UserSummaryDto.mustChangePassword` tal como la devolvió el
   // login — fuente de verdad además de/ante la del `AppUser` vinculado (ver
@@ -119,6 +121,12 @@ export interface UserDetailDto {
   // UserDetailDto.java (el backend la recalcula al vuelo, nunca la guarda
   // en texto plano).
   temporaryPassword: string | null;
+  // Contadores de seguridad (Guía_Endpoints, `GET /users/{id}`): intentos
+  // fallidos de login, sesiones activas (refresh tokens sin revocar ni vencer) y
+  // fin del bloqueo temporal (`null` si no está bloqueada o el bloqueo es manual).
+  failedLoginAttempts: number;
+  activeSessions: number;
+  lockedUntil: string | null;
   lastLoginAt: string | null;
   emailVerified: boolean;
   createdAt: string;
@@ -184,13 +192,15 @@ export interface NewUserResult {
 }
 
 // `PATCH /users/{id}` — edición administrativa de información personal +
-// organización. A propósito NO incluye `status`/`roleIds`/subsidiarias/
-// ubicaciones: esos tienen sus propios endpoints (`PATCH /users/{id}/status`,
-// y de roles/subsidiarias/ubicaciones no hay todavía uno — ver
-// UpdateUserRequest.java, comentario "Rol, permisos y estado se manejan en
-// sus propios endpoints, no aqui"). Todo campo es opcional/nullable del lado
-// del backend (solo sobreescribe lo que llega no-null), pero este frontend
-// siempre manda el formulario completo.
+// organización. NO incluye `status` (`PATCH /users/{id}/status`) ni roles/
+// permisos (`PATCH /users/{id}/roles`). Todo campo es opcional/nullable del
+// lado del backend (solo sobreescribe lo que llega no-null — un `null`
+// explícito NO borra un campo de texto), pero este frontend siempre manda el
+// formulario completo.
+// `subsidiariaIds`/`ubicacionIds` (DEV, Guía_Endpoints): una lista REEMPLAZA
+// la actual, una lista vacía las quita todas y omitirla (`undefined`) no toca
+// nada. Un id inexistente rechaza TODA la actualización con 400
+// `INVALID_LOCATION`.
 export interface UpdateUserRequest {
   firstName: string | null;
   lastName: string | null;
@@ -207,6 +217,8 @@ export interface UpdateUserRequest {
   employeeCode: string | null;
   hireDate: string | null;
   contractEndDate: string | null;
+  subsidiariaIds?: number[];
+  ubicacionIds?: number[];
 }
 
 // `POST /users/{id}/verify-email` — el backend fuerza `emailVerified=true`
@@ -215,6 +227,91 @@ export interface UpdateUserRequest {
 export interface EmailVerificationResponse {
   id: number;
   emailVerified: boolean;
+}
+
+// `GET /roles` — catálogo de roles con los permisos que traen por defecto
+// (solo lectura: se cargan por migración). Exige `manage_users` o `manage_roles`.
+export interface RoleDto {
+  code: string;
+  name: string;
+  defaultPermissions: string[];
+}
+
+// `GET /permissions` — catálogo de permisos; `module` es el título del grupo en
+// la pantalla "Seguridad y acceso". Exige `manage_users` o `manage_roles`.
+export interface PermissionDto {
+  code: string;
+  description: string;
+  module: string;
+}
+
+// `PATCH /users/{id}/roles` — los dos campos son opcionales: omitido = no tocar;
+// una lista reemplaza la actual por completo. El endpoint exige `manage_roles` en
+// quien lo ejecuta (403 `ROLE_ASSIGNMENT_FORBIDDEN` si falta) — también para un
+// cambio solo de permisos (probado contra DEV; la guía solo lo dice de los roles). Los permisos
+// son independientes del rol: el front calcula los defaults al cambiar de rol
+// (`AccessCatalogService.defaultPermissionsForRoles`) y envía el resultado final.
+export interface UpdateUserRolesRequest {
+  roleIds?: string[];
+  permissions?: string[];
+}
+
+// `POST /users/{id}/reset-password` — devuelve al usuario a su contraseña
+// temporal (NOMBRE + PRIMER APELLIDO + año de alta), marca `mustChangePassword`
+// y revoca todas sus sesiones. El sistema no envía correos: el administrador
+// debe comunicársela.
+export interface ResetPasswordResponse {
+  id: number;
+  temporaryPassword: string;
+}
+
+// `DELETE /users/{id}` — baja lógica (`enabled = false`): conserva la fila y su
+// bitácora, libera el correo. 404 `USER_NOT_FOUND`, 409 `CANNOT_DELETE_SELF`.
+export interface DeleteUserResponse {
+  success: boolean;
+  id: number;
+}
+
+// Bitácora (`GET /audit-log`, `GET /users/{id}/audit-log`) — exigen
+// `view_audit_log` (independiente de `manage_users`). `actor` es `null` cuando lo
+// hizo el sistema (bloqueo/desbloqueo automático). Siempre de la más reciente a
+// la más antigua.
+export interface AuditPersonDto {
+  id: number;
+  displayName: string;
+}
+
+export interface AuditLogEntryDto {
+  id: number;
+  actor: AuditPersonDto | null;
+  target: AuditPersonDto;
+  action: string;
+  detail: string | null;
+  createdAt: string;
+}
+
+export interface AuditLogPage {
+  content: AuditLogEntryDto[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface AuditLogParams {
+  // Solo `GET /audit-log` (el de un usuario ya lo lleva en la ruta).
+  userId?: number;
+  action?: string;
+  // Texto libre: detalle y nombre o correo de quien actuó o sobre quien se actuó.
+  search?: string;
+  page?: number;
+  size?: number;
+}
+
+// `POST /users/{id}/close-sessions`
+export interface CloseSessionsResponse {
+  id: number;
+  activeSessions: number;
 }
 
 export interface UserListParams {
@@ -267,7 +364,7 @@ export interface LoginResult {
 
 /**
  * Sesión + autenticación contra el backend real (auth-service, vía el
- * gateway en `environment.apiUrl`/`proxy.conf.json` — ver MASTER.md,
+ * gateway en `environment.apiUrl`/`proxy.conf.js` — ver MASTER.md,
  * "Actualización: login apuntado al backend real"). `providedIn: 'root'`
  * porque el guard de rutas y la pantalla de login lo necesitan fuera del
  * árbol de `Shell`.
@@ -323,25 +420,57 @@ export class AuthService {
   // protegida; esto solo evita esperar a que ocurra.
   private validateResumedSession(): void {
     this.me().subscribe({
-      next: (me) => {
-        const current = this.session();
-        if (!current) return;
-        this.session.set({
-          ...current,
-          user: {
-            ...current.user,
-            displayName: me.displayName,
-            roles: me.roles as RoleId[],
-            permissions: me.permissions as PermissionKey[],
-            mustChangePasswordHint: me.mustChangePassword,
-            subsidiarias: me.subsidiarias,
-            ubicaciones: me.ubicaciones,
-          },
-        });
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(this.session()));
-      },
+      next: (me) => this.applyMe(me),
       error: () => {},
     });
+  }
+
+  // Refleja en la sesión lo que `GET /auth/me` dice HOY de la persona (roles,
+  // permisos, organización, bandera de contraseña pendiente).
+  private applyMe(me: UserSummaryDto): void {
+    const current = this.session();
+    if (!current) return;
+    this.session.set({
+      ...current,
+      user: {
+        ...current.user,
+        displayName: me.displayName,
+        roles: me.roles as RoleId[],
+        permissions: me.permissions as PermissionKey[],
+        mustChangePasswordHint: me.mustChangePassword,
+        subsidiarias: me.subsidiarias,
+        ubicaciones: me.ubicaciones,
+      },
+    });
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(this.session()));
+  }
+
+  // Renueva la sesión YA: `POST /auth/refresh` + `GET /auth/me`. El JWT y
+  // `AuthUser.permissions` solo se actualizan en el siguiente refresh (máx.
+  // 15 min); se usa cuando alguien cambia SUS PROPIOS roles/permisos
+  // (`PATCH /users/{id}/roles`) para no esperar. Cancela el timer antes de
+  // pedir el par (dos refresh simultáneos con el mismo token = robo, guía);
+  // `setSession` lo reprograma. Si falla, la sesión ya no es renovable: se cierra.
+  renewSession(): Observable<void> {
+    const current = this.session();
+    if (!current) return of(undefined);
+    this.clearRefreshTimer();
+    return this.requestTokenPair(current.refreshToken).pipe(
+      switchMap((pair) => {
+        this.setSession({
+          user: current.user,
+          accessToken: pair.accessToken,
+          refreshToken: pair.refreshToken,
+          accessTokenExpiresAt: Date.now() + pair.expiresIn * 1000,
+        });
+        return this.me();
+      }),
+      map((me) => this.applyMe(me)),
+      catchError((err: unknown) => {
+        this.invalidateSession(isSessionIdleTimeout(err) ? 'idle_timeout' : 'invalid_token');
+        return of(undefined);
+      }),
+    );
   }
 
   // Valida credenciales contra el backend real — 401 (contraseña/usuario
@@ -357,9 +486,9 @@ export class AuthService {
         displayName: res.user.displayName,
         // Cast sin validar: si el backend algún día agrega un código de rol
         // que este frontend todavía no conoce, se cuela como string suelto
-        // y simplemente no aporta permisos (`defaultPermissionsForRoles`
-        // ignora ids que no están en `ROLES`) — no hay validación en
-        // runtime en ningún otro punto de este service tampoco.
+        // y se muestra con una versión legible del código
+        // (`AccessCatalogService.roleLabel`) — no hay validación en runtime en
+        // ningún otro punto de este service tampoco.
         roles: res.user.roles as RoleId[],
         permissions: res.user.permissions as PermissionKey[],
         mustChangePassword: res.user.mustChangePassword,
@@ -413,33 +542,75 @@ export class AuthService {
   // la actualiza ahí mismo. Requiere sesión activa — `ChangePassword` solo es
   // alcanzable logeado (ver `mustChangePasswordGuard`); el Bearer lo agrega
   // `authTokenInterceptor` automáticamente, no hace falta armarlo aquí.
+  //
+  // Guía del backend (`POST /auth/change-password`, "Ojo"): el accessToken
+  // vigente sigue llevando la marca `mustChangePassword` DENTRO del JWT, así
+  // que el gateway seguiría rechazando todo endpoint protegido con 403
+  // `PASSWORD_CHANGE_REQUIRED` hasta que se emita uno limpio — por eso, al
+  // confirmar el cambio, se encadena `POST /auth/refresh` con el refresh token
+  // guardado y se reemplaza la sesión (tokens nuevos + bandera apagada).
   changePassword(currentPassword: string, newPassword: string): Observable<void> {
-    return this.http.post<void>(`${this.apiUrl}/auth/change-password`, { currentPassword, newPassword }).pipe(
-      map(() => {
-        // Actualiza la bandera EN LA SESIÓN en cuanto el backend confirma —
-        // sin esto, `AccessControlService.mustChangePassword` seguiría en
-        // `true` (viene de `mustChangePasswordHint`) hasta el próximo login,
-        // y `mustChangePasswordGuard` rebotaría de vuelta a esta misma
-        // pantalla en el primer intento de navegar fuera de ella.
-        const latest = this.session();
-        if (latest) {
-          this.session.set({ ...latest, user: { ...latest.user, mustChangePasswordHint: false } });
-          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(this.session()));
-        }
+    return this.http
+      .post<void>(`${this.apiUrl}/auth/change-password`, { currentPassword, newPassword })
+      .pipe(switchMap(() => this.rotateSessionAfterPasswordChange()));
+  }
+
+  // Segundo paso de `changePassword()`. Cancela el timer de refresco ANTES de
+  // pedir el par nuevo: dos `/auth/refresh` simultáneos con el mismo refresh
+  // token se interpretan como robo y el backend cierra TODAS las sesiones
+  // (guía, `POST /auth/refresh`, "Ojo"). `setSession` reprograma el timer con
+  // el access token nuevo. Si el refresh falla la contraseña YA cambió (no se
+  // propaga como error del cambio): se cierra la sesión y la persona entra de
+  // nuevo con su contraseña nueva.
+  private rotateSessionAfterPasswordChange(): Observable<void> {
+    const current = this.session();
+    if (!current) {
+      return of(undefined);
+    }
+    this.clearRefreshTimer();
+    return this.requestTokenPair(current.refreshToken).pipe(
+      map((pair) => {
+        this.setSession({
+          user: { ...current.user, mustChangePasswordHint: false },
+          accessToken: pair.accessToken,
+          refreshToken: pair.refreshToken,
+          accessTokenExpiresAt: Date.now() + pair.expiresIn * 1000,
+        });
+      }),
+      catchError((err: unknown) => {
+        this.invalidateSession(isSessionIdleTimeout(err) ? 'idle_timeout' : 'invalid_token');
+        return of(undefined);
       }),
     );
   }
 
+  // `POST /auth/refresh` — compartido por el timer (`refreshAccessToken`) y
+  // por `changePassword()`. Es público (sin Bearer, ver `authTokenInterceptor`).
+  private requestTokenPair(refreshToken: string): Observable<TokenPairResponseDto> {
+    return this.http.post<TokenPairResponseDto>(`${this.apiUrl}/auth/refresh`, { refreshToken });
+  }
+
+  // El backend respondió 403 `PASSWORD_CHANGE_REQUIRED` en una petición
+  // protegida (el JWT lleva `mustChangePassword`): enciende la bandera de la
+  // sesión para que `authGuard`/`mustChangePasswordGuard` manden a
+  // `/cambiar-password` — ver `httpErrorAlertInterceptor`.
+  markPasswordChangeRequired(): void {
+    const latest = this.session();
+    if (!latest || latest.user.mustChangePasswordHint) return;
+    this.session.set({ ...latest, user: { ...latest.user, mustChangePasswordHint: true } });
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(this.session()));
+  }
+
   // CU3 paso 5: desbloquea una cuenta bloqueada por intentos fallidos
   // (`PATCH /users/{id}/unlock`, ver UserAdminController/UserAdminService en
-  // el auth-service real). Requiere sesión activa con rol ADMIN o ALTAS —
-  // el backend responde 403 si el rol no alcanza, 401 si el token no es
+  // el auth-service real). Requiere sesión activa con el PERMISO
+  // `manage_users` — el backend responde 403 si falta, 401 si el token no es
   // válido; el llamador (`UserDetail`) traduce el error a la UI. `id` es el
   // id NUMÉRICO del `app_user` real (`AppUser.backendUserId` en el mock de
   // `user-management` — no el id 'uXXXX' del mock), NO `AuthUser.appUserId`
   // (que es el id del registro LOCAL, no del backend).
-  unlockUser(backendUserId: number): Observable<void> {
-    return this.http.patch<void>(`${this.apiUrl}/users/${backendUserId}/unlock`, {});
+  unlockUser(backendUserId: number): Observable<UserSummaryDto> {
+    return this.http.patch<UserSummaryDto>(`${this.apiUrl}/users/${backendUserId}/unlock`, {});
   }
 
   // Cierre NO pedido por el usuario (sesión expirada por inactividad, o un
@@ -489,12 +660,45 @@ export class AuthService {
   // último acceso) de cada cuenta con `backendUserId`, y para detectar
   // cuentas reales que este mock todavía no conoce.
   listUsers(params: UserListParams = {}): Observable<UserListPage> {
-    let httpParams = new HttpParams().set('page', String(params.page ?? 0)).set('size', String(params.size ?? 100));
+    let httpParams = new HttpParams().set('page', String(params.page ?? 0)).set('size', String(params.size ?? USERS_PAGE_SIZE));
     if (params.search) httpParams = httpParams.set('search', params.search);
     if (params.role) httpParams = httpParams.set('role', params.role);
     if (params.status) httpParams = httpParams.set('status', params.status);
 
     return this.http.get<UserListPage>(`${this.apiUrl}/users`, { params: httpParams });
+  }
+
+  // Todas las cuentas, recorriendo las páginas de `GET /users` (el backend
+  // pagina con `page` desde 0; el tamaño por defecto allá es 20). Pide de a
+  // `size` (100) y sigue pidiendo mientras `totalPages` indique más — así la
+  // lista no se trunca el día que haya más de 100 usuarios. Las páginas se
+  // piden en serie (la siguiente depende del `totalPages` de la anterior).
+  //
+  // OJO — el backend (DEV) hace `PageRequest.of(page, size)` SIN `Sort` y con
+  // `DISTINCT`: el orden de las filas no está garantizado entre peticiones, así
+  // que recorrer varias páginas puede repetir cuentas y omitir otras (probado:
+  // páginas de 10 sobre 27 cuentas devolvieron 21 distintas). Por eso las
+  // páginas se juntan por `id` (sin duplicados) y, si al final faltan cuentas
+  // respecto de `totalElements`, se pide UNA sola página de ese tamaño — un
+  // solo `SELECT` es una instantánea consistente. Con ≤ 100 cuentas (una
+  // página) nunca se llega a ese respaldo.
+  listAllUsers(filters: Omit<UserListParams, 'page' | 'size'> = {}, size = USERS_PAGE_SIZE): Observable<UserSummaryDto[]> {
+    const fetchPage = (page: number) => this.listUsers({ ...filters, page, size });
+    return fetchPage(0).pipe(
+      expand((res) => (res.page + 1 < res.totalPages ? fetchPage(res.page + 1) : EMPTY)),
+      reduce(
+        (acc, res) => {
+          res.content.forEach((u) => acc.byId.set(u.id, u));
+          return { byId: acc.byId, total: res.totalElements };
+        },
+        { byId: new Map<number, UserSummaryDto>(), total: 0 },
+      ),
+      switchMap(({ byId, total }) =>
+        byId.size >= total
+          ? of([...byId.values()])
+          : this.listUsers({ ...filters, page: 0, size: total }).pipe(map((res) => res.content)),
+      ),
+    );
   }
 
   // CU3 paso 3: edición administrativa (`PATCH /users/{id}`) — devuelve
@@ -524,6 +728,64 @@ export class AuthService {
   // pendiente (ver EmailVerificationResponse).
   verifyEmail(backendUserId: number): Observable<EmailVerificationResponse> {
     return this.http.post<EmailVerificationResponse>(`${this.apiUrl}/users/${backendUserId}/verify-email`, {});
+  }
+
+  // `GET /roles` y `GET /permissions`: catálogos que alimentan TODA lista de roles
+  // y de permisos del portal (ver `AccessCatalogService`). Exigen
+  // `manage_users` o `manage_roles` — sin alguno el backend responde 403.
+  listRoles(): Observable<RoleDto[]> {
+    return this.http.get<RoleDto[]>(`${this.apiUrl}/roles`);
+  }
+
+  listPermissions(): Observable<PermissionDto[]> {
+    return this.http.get<PermissionDto[]>(`${this.apiUrl}/permissions`);
+  }
+
+  // `PATCH /users/{id}/roles` — guarda roles y/o permisos de una persona (ver
+  // `UpdateUserRolesRequest`). Responde `UserSummaryDto` con los roles y
+  // permisos nuevos. 400 `INVALID_ROLE`/`INVALID_PERMISSION`, 403
+  // `ROLE_ASSIGNMENT_FORBIDDEN`, 404 `USER_NOT_FOUND`.
+  updateUserRoles(backendUserId: number, request: UpdateUserRolesRequest): Observable<UserSummaryDto> {
+    return this.http.patch<UserSummaryDto>(`${this.apiUrl}/users/${backendUserId}/roles`, request);
+  }
+
+  // `POST /users/{id}/close-sessions` — revoca todos los refresh tokens vigentes
+  // de la persona (puede volver a entrar; el access token ya emitido vive hasta
+  // 15 min). Responde `{ id, activeSessions: 0 }`. 404 `USER_NOT_FOUND`.
+  closeUserSessions(backendUserId: number): Observable<CloseSessionsResponse> {
+    return this.http.post<CloseSessionsResponse>(`${this.apiUrl}/users/${backendUserId}/close-sessions`, {});
+  }
+
+  // `POST /users/{id}/reset-password` — ver `ResetPasswordResponse`. 404 `USER_NOT_FOUND`.
+  resetUserPassword(backendUserId: number): Observable<ResetPasswordResponse> {
+    return this.http.post<ResetPasswordResponse>(`${this.apiUrl}/users/${backendUserId}/reset-password`, {});
+  }
+
+  // `DELETE /users/{id}` — ver `DeleteUserResponse`. Un administrador no puede darse
+  // de baja a sí mismo (409 `CANNOT_DELETE_SELF`).
+  deleteUser(backendUserId: number): Observable<DeleteUserResponse> {
+    return this.http.delete<DeleteUserResponse>(`${this.apiUrl}/users/${backendUserId}`);
+  }
+
+  // `GET /audit-log` (historial global) y `GET /users/{id}/audit-log` (de una
+  // persona, también si ya fue dada de baja; 404 solo si nunca existió). Filtros
+  // y paginación del lado del servidor (`page` desde 0, `size` 20 por defecto).
+  listAuditLog(params: AuditLogParams = {}): Observable<AuditLogPage> {
+    return this.http.get<AuditLogPage>(`${this.apiUrl}/audit-log`, { params: this.auditHttpParams(params) });
+  }
+
+  listUserAuditLog(backendUserId: number, params: Omit<AuditLogParams, 'userId'> = {}): Observable<AuditLogPage> {
+    return this.http.get<AuditLogPage>(`${this.apiUrl}/users/${backendUserId}/audit-log`, {
+      params: this.auditHttpParams(params),
+    });
+  }
+
+  private auditHttpParams(params: AuditLogParams): HttpParams {
+    let httpParams = new HttpParams().set('page', String(params.page ?? 0)).set('size', String(params.size ?? 20));
+    if (params.userId !== undefined) httpParams = httpParams.set('userId', String(params.userId));
+    if (params.action) httpParams = httpParams.set('action', params.action);
+    if (params.search?.trim()) httpParams = httpParams.set('search', params.search.trim());
+    return httpParams;
   }
 
   // `GET /auth/me` — "Token validado en cada petición": además de servir
@@ -583,7 +845,7 @@ export class AuthService {
       return;
     }
 
-    this.http.post<TokenPairResponseDto>(`${this.apiUrl}/auth/refresh`, { refreshToken: presentedRefreshToken }).subscribe({
+    this.requestTokenPair(presentedRefreshToken).subscribe({
       next: (pair) => {
         this.setSession({
           user: current.user,

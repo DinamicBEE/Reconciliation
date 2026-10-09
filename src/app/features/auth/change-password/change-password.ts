@@ -103,9 +103,18 @@ export class ChangePassword {
       },
       error: (err: HttpErrorResponse) => {
         this.submitting.set(false);
-        this.formError.set(
-          err.status === 401 ? 'La contraseña actual es incorrecta.' : 'No se pudo conectar con el servidor. Intenta de nuevo.',
-        );
+        // 401 INVALID_CREDENTIALS = contraseña actual incorrecta; 400 = el
+        // backend rechazó la nueva (mínimo 8 caracteres). El resto de
+        // códigos de negocio los avisa `httpErrorAlertInterceptor`.
+        if (err.status === 401) {
+          this.formError.set('La contraseña actual es incorrecta.');
+        } else if (err.status === 400) {
+          this.formError.set('La contraseña nueva no cumple los requisitos (mínimo 8 caracteres).');
+        } else if (err.status === 0) {
+          this.formError.set('No se pudo conectar con el servidor. Intenta de nuevo.');
+        } else {
+          this.formError.set('No se pudo actualizar la contraseña. Intenta de nuevo.');
+        }
       },
     });
   }

@@ -1,4 +1,4 @@
-import { AppUser, AppUserAddress, AuditLogEntry } from './user-management.model';
+import { AppUser, AppUserAddress } from './user-management.model';
 
 // Semilla de MOCK_USERS SIN los campos de "Información personal
 // adicional"/"Organización" agregados más tarde (fecha de nacimiento, SSN,
@@ -23,6 +23,7 @@ type MockUserSeed = Omit<
   | 'subsidiariaIds'
   | 'ubicacionIds'
   | 'backendUserId'
+  | 'lockedUntil'
 >;
 
 // Incluye a 'u0001', 'u0006', 'u0011' y 'u0018' — los mismos 4 usuarios demo
@@ -34,8 +35,8 @@ type MockUserSeed = Omit<
 // con lo sembrado en coctel-del-mar. El resto son personas ficticias para dar variedad realista
 // de roles/estado/último acceso (incluyendo "nunca ha iniciado sesión") y de
 // los nuevos campos de seguridad/organización. `jobTitle`/`department`/
-// `area` NO se reescribieron al redefinir los roles (ver `ROLES` en
-// user-management.model.ts) — son datos organizacionales independientes del
+// `area` NO se reescribieron al redefinir los roles (los roles
+// reales viven en el backend, `GET /roles`) — son datos organizacionales independientes del
 // rol de acceso al sistema; un "Auditor de Procesos" puede perfectamente
 // tener hoy el rol `admin`.
 const MOCK_USERS_SEED: MockUserSeed[] = [
@@ -740,50 +741,5 @@ export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   subsidiariaIds: [1],
   ubicacionIds: [(index % 4) + 1],
   backendUserId: BACKEND_USER_ID[seed.id] ?? null,
+  lockedUntil: null,
 }));
-
-// Incluye una entrada para 'u0009', un usuario ELIMINADO que ya no existe en
-// MOCK_USERS — a propósito: el historial de auditoría debe sobrevivir a la
-// eliminación de la cuenta que describe (ver
-// UserManagementService.deleteUser, que nunca borra entradas de auditoría).
-export const MOCK_AUDIT_LOG: AuditLogEntry[] = [
-  { id: 'a1', timestamp: '2025-01-10T09:00:00', actorName: 'Sistema', targetUserId: 'u0001', targetUserName: 'Administrador Principal', action: 'created', detail: 'Usuario creado con rol Administrador.' },
-  { id: 'a2', timestamp: '2025-01-10T09:05:00', actorName: 'Administrador Principal', targetUserId: 'u0002', targetUserName: 'Ana Martínez', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a3', timestamp: '2025-03-02T10:00:00', actorName: 'Administrador Principal', targetUserId: 'u0003', targetUserName: 'Daniela Torres', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a4', timestamp: '2025-04-01T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0009', targetUserName: 'Usuario de Pruebas', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a5', timestamp: '2025-04-20T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0009', targetUserName: 'Usuario de Pruebas', action: 'deleted', detail: 'Usuario eliminado del sistema (cuenta de pruebas).' },
-  { id: 'a6', timestamp: '2025-05-14T09:30:00', actorName: 'Administrador Principal', targetUserId: 'u0004', targetUserName: 'Jorge Ramírez', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a7', timestamp: '2025-06-01T12:00:00', actorName: 'Administrador Principal', targetUserId: 'u0003', targetUserName: 'Daniela Torres', action: 'role_changed', detail: 'Roles cambiados de Analista de Conciliación a Supervisor.' },
-  { id: 'a8', timestamp: '2025-06-20T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0005', targetUserName: 'Marina López', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a9', timestamp: '2025-09-01T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0006', targetUserName: 'Carlos Medina', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-  { id: 'a10', timestamp: '2025-09-15T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0006', targetUserName: 'Carlos Medina', action: 'permissions_changed', detail: 'Se otorgó el permiso adicional "Exportar reportes".' },
-  { id: 'a11', timestamp: '2025-11-11T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0008', targetUserName: 'Luis Fernández', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a12', timestamp: '2026-02-01T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0001', targetUserName: 'Administrador Principal', action: 'updated', detail: 'Se actualizó el correo de contacto.' },
-  { id: 'a13', timestamp: '2026-05-03T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0008', targetUserName: 'Luis Fernández', action: 'deactivated', detail: 'Cuenta desactivada — colaborador dado de baja.' },
-  { id: 'a14', timestamp: '2026-07-31T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0005', targetUserName: 'Marina López', action: 'blocked', detail: 'Cuenta bloqueada por múltiples intentos fallidos de acceso.' },
-  { id: 'a15', timestamp: '2026-08-10T16:45:00', actorName: 'Administrador Principal', targetUserId: 'u0004', targetUserName: 'Jorge Ramírez', action: 'password_reset', detail: 'Se generó una nueva contraseña temporal.' },
-  { id: 'a16', timestamp: '2026-08-24T15:20:00', actorName: 'Administrador Principal', targetUserId: 'u0007', targetUserName: 'Sofía Hernández', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  // a17-a33: alta de u0010-u0026 (relleno de paginación, ver MOCK_USERS) —
-  // cada usuario conserva su propio "creado" para que el historial de
-  // auditoría no se sienta incompleto solo por ser parte del relleno.
-  { id: 'a17', timestamp: '2025-02-03T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0010', targetUserName: 'Fernanda Cruz', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a18', timestamp: '2025-02-10T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0011', targetUserName: 'Roberto Sánchez', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a19', timestamp: '2025-02-18T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0012', targetUserName: 'Patricia Gómez', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-  { id: 'a20', timestamp: '2025-03-05T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0013', targetUserName: 'Fernando Castillo', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a21', timestamp: '2026-08-20T14:00:00', actorName: 'Administrador Principal', targetUserId: 'u0014', targetUserName: 'Alejandra Reyes', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a22', timestamp: '2025-04-02T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0015', targetUserName: 'Diego Morales', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a23', timestamp: '2025-04-18T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0016', targetUserName: 'Valeria Ortiz', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a24', timestamp: '2026-06-10T13:00:00', actorName: 'Administrador Principal', targetUserId: 'u0016', targetUserName: 'Valeria Ortiz', action: 'blocked', detail: 'Cuenta bloqueada por múltiples intentos fallidos de acceso.' },
-  { id: 'a25', timestamp: '2025-05-06T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0017', targetUserName: 'Ricardo Jiménez', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-  { id: 'a26', timestamp: '2025-05-22T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0018', targetUserName: 'Gabriela Vargas', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a27', timestamp: '2025-06-09T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0019', targetUserName: 'Andrés Molina', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a28', timestamp: '2026-02-14T10:00:00', actorName: 'Administrador Principal', targetUserId: 'u0019', targetUserName: 'Andrés Molina', action: 'deactivated', detail: 'Cuenta desactivada — colaborador dado de baja.' },
-  { id: 'a29', timestamp: '2025-06-25T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0020', targetUserName: 'Karla Delgado', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a30', timestamp: '2025-07-14T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0021', targetUserName: 'Emilio Navarro', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-  { id: 'a31', timestamp: '2026-08-22T11:00:00', actorName: 'Administrador Principal', targetUserId: 'u0022', targetUserName: 'Paola Aguilar', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a32', timestamp: '2025-08-11T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0023', targetUserName: 'Héctor Ibarra', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a33', timestamp: '2026-05-28T08:30:00', actorName: 'Administrador Principal', targetUserId: 'u0023', targetUserName: 'Héctor Ibarra', action: 'blocked', detail: 'Cuenta bloqueada por múltiples intentos fallidos de acceso.' },
-  { id: 'a34', timestamp: '2025-09-05T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0024', targetUserName: 'Renata Campos', action: 'created', detail: 'Usuario creado con rol Supervisor.' },
-  { id: 'a35', timestamp: '2025-09-21T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0025', targetUserName: 'Iván Salazar', action: 'created', detail: 'Usuario creado con rol Analista de Conciliación.' },
-  { id: 'a36', timestamp: '2025-10-08T09:00:00', actorName: 'Administrador Principal', targetUserId: 'u0026', targetUserName: 'Camila Rangel', action: 'created', detail: 'Usuario creado con rol Auditor (solo lectura).' },
-];

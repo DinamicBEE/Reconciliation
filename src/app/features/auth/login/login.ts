@@ -9,11 +9,14 @@ import { NzInputModule } from 'ng-zorro-antd/input';
 import { ThemeService } from '../../../core/services/theme.service';
 import { AccessControlService } from '../data/access-control.service';
 import { AuthService } from '../data/auth.service';
+import { extractErrorCode, serverErrorText } from '../data/auth-errors';
 import { UserManagementService } from '../../user-management/data/user-management.service';
 
 // Copys alineados TEXTUAL con el contrato real del backend
 // (Auth_Service_Endpoints.pdf, sección "2. Codigos de error").
 const INVALID_CREDENTIALS_MESSAGE = 'Usuario o contraseña inválidos.';
+// Solo respaldo: el bloqueo temporal (5 intentos → 2 h) llega con el texto del
+// backend, que incluye los minutos restantes (`serverErrorText`).
 const BLOCKED_MESSAGE = 'Usuario bloqueado por intentos fallidos. Contacte al administrador.';
 const CONNECTION_ERROR_MESSAGE = 'No se pudo conectar con el servidor. Intenta de nuevo.';
 // Texto propio del frontend (el backend decide por `code`, no por texto —
@@ -101,8 +104,12 @@ export class Login {
         // caído, CORS, red) — un mensaje genérico, no "usuario inválido",
         // que llevaría a la persona a sospechar de su contraseña en vez del
         // servidor.
-        if (err.status === 423) {
-          this.loginError.set(BLOCKED_MESSAGE);
+        // Bloqueo (423 / ACCOUNT_LOCKED): se muestra el mensaje del backend
+        // tal cual — trae los minutos que faltan para que la cuenta se
+        // desbloquee sola (bloqueo temporal) o indica que debe contactar al
+        // administrador (bloqueo manual).
+        if (err.status === 423 || extractErrorCode(err) === 'ACCOUNT_LOCKED') {
+          this.loginError.set(serverErrorText(err) ?? BLOCKED_MESSAGE);
         } else if (err.status === 401) {
           this.loginError.set(INVALID_CREDENTIALS_MESSAGE);
         } else {

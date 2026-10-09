@@ -1,5 +1,5 @@
 import { Injectable, computed, inject } from '@angular/core';
-import { AppUser, PermissionKey, defaultPermissionsForRoles } from '../../user-management/data/user-management.model';
+import { AppUser, PermissionKey, RoleId } from '../../user-management/data/user-management.model';
 import { UserManagementService } from '../../user-management/data/user-management.service';
 import { AuthService } from './auth.service';
 
@@ -16,14 +16,11 @@ import { AuthService } from './auth.service';
  * tal cual lo devolvió el backend real en el login/`GET /auth/me`) — FUENTE
  * ÚNICA, ya no de `AppUser.permissions` (el registro mock vinculado). Antes
  * de esta actualización se ignoraba el arreglo real del backend y siempre
- * se recalculaba desde `roles` vía `defaultPermissionsForRoles` (o, peor,
- * desde la personalización LOCAL de "Seguridad y acceso" en user-detail, que
- * nunca persiste en el backend — ver `UserManagementService.changeRoles`);
- * eso era una de las desviaciones documentadas en la matriz 7.16 del DED
- * ("el arreglo permissions que devuelve el backend en el login se ignora").
- * `defaultPermissionsForRoles` se queda solo como fallback de seguridad si
- * por lo que sea el backend devolviera un arreglo vacío (no debería pasar
- * tras sembrar el catálogo de 9 permisos).
+ * se recalculaba desde `roles` (o, peor, desde la personalización LOCAL de
+ * "Seguridad y acceso", que no persistía) — una de las desviaciones de la matriz
+ * 7.16 del DED. Ya no hay recálculo ni fallback por rol: lo que el backend
+ * devuelve en `permissions` ES lo que la persona puede hacer (vacío = nada), y
+ * `PATCH /users/{id}/roles` es el único que lo cambia.
  */
 @Injectable({ providedIn: 'root' })
 export class AccessControlService {
@@ -37,15 +34,13 @@ export class AccessControlService {
 
   readonly permissions = computed<ReadonlySet<PermissionKey>>(() => {
     const user = this.auth.currentUser();
-    if (!user) return new Set<PermissionKey>();
-    if (user.permissions.length > 0) return new Set(user.permissions);
-    return new Set(defaultPermissionsForRoles(user.roles));
+    return new Set<PermissionKey>(user?.permissions ?? []);
   });
 
   // "Reproceso de ventas" (matriz 7.16 del DED): sin permiso propio — el DED
   // lo limita a Admin/Contabilidad directamente por rol, un subconjunto MÁS
   // ANGOSTO que `view_dashboard` (que desde esta actualización también
-  // incluye Tesorería y Costos, ver ROLES en user-management.model.ts) — por
+  // incluye Tesorería y Costos, matriz 7.16) — por
   // eso no puede expresarse con `hasPermission('view_dashboard')` sola. Vive
   // aquí (no en sales-dashboard) por el mismo motivo que `hasPermission`: un
   // solo lugar que sabe "quién puede qué". Por rol REAL del backend
@@ -75,6 +70,14 @@ export class AccessControlService {
 
   hasPermission(key: PermissionKey): boolean {
     return this.permissions().has(key);
+  }
+
+  // Por rol REAL del backend (`auth.currentUser()?.roles`), mismo criterio que
+  // `canReprocessSales` — para pantallas exclusivas de un rol que ningún
+  // permiso del catálogo expresa por sí solo (p. ej. "Roles y permisos", solo
+  // ADMIN: `manage_roles` también lo tiene ALTAS).
+  hasRole(role: RoleId): boolean {
+    return (this.auth.currentUser()?.roles ?? []).includes(role);
   }
 
   // Primera pantalla accesible para el usuario logeado — usada tanto para

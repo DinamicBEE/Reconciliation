@@ -156,6 +156,84 @@ html.dark body {
   color: var(--color-foreground);
 }
 
+// ---------------------------------------------------------------------------
+// nz-page-header — título de TODA pantalla (regla general, ver MASTER.md,
+// "Patrón: encabezado de página"). Sin padding ni fondo propios: la pantalla ya
+// reserva su espacio con `--grid-gap`. Pantalla hija = flecha de volver + título
+// + `nz-breadcrumb nz-page-header-breadcrumb` con el recorrido hasta ella.
+// `html body` sube la especificidad sobre la hoja de ng-zorro (orden de carga
+// distinto entre dev y build, mismo criterio que `html.dark body` arriba).
+// ---------------------------------------------------------------------------
+html body .ant-page-header {
+  padding: 0;
+  background: transparent;
+}
+
+html body .ant-page-header-heading {
+  align-items: center;
+}
+
+html body .ant-page-header-heading-title {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-foreground);
+}
+
+html body .ant-page-header-back {
+  margin-right: 12px;
+}
+
+html body .ant-page-header-back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--color-muted-foreground);
+  transition: color 0.15s ease, background-color 0.15s ease;
+
+  &:hover {
+    color: var(--color-foreground);
+    background-color: var(--color-muted);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+html body .ant-page-header-content {
+  padding-top: 4px;
+}
+
+html body .ant-page-header .ant-breadcrumb {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+
+  a {
+    color: var(--color-muted-foreground);
+
+    &:hover {
+      color: var(--color-foreground);
+      background: transparent;
+    }
+  }
+
+  li:last-child,
+  li:last-child a {
+    color: var(--color-foreground);
+  }
+
+  .ant-breadcrumb-separator {
+    color: var(--color-muted-foreground);
+  }
+}
+
 // Cifras/tablas numéricas en monospace para alinear dígitos (guía "Dashboard Data")
 .font-mono,
 .nz-table-numeric-cell {
@@ -408,6 +486,23 @@ html body .ant-table-thead > tr > th {
   color: var(--color-foreground) !important;
 }
 
+// REGLA GENERAL — botón "icono + label" (ver MASTER.md, "Patrón: botones",
+// y CLAUDE.md). Todo `nz-button` de la app, actual o futuro, alinea su SVG y
+// su texto en una sola fila centrada con 6px de separación, sin declarar nada
+// en el `.scss` de la pantalla. Antes vivía en `shared/styles/_buttons.scss`
+// como opt-in por pantalla (cada consumidor tenía que agregarse a la lista) —
+// se volvió global para que un botón nuevo no pueda olvidarla.
+// `justify-content: center` mantiene centrado el icono de los botones solo
+// icono (`.row-actions`, 34×34) — sin él, el flex lo pegaría a la izquierda.
+// `!important` en `display`: Ant declara `display: inline-block` en `.ant-btn`
+// con la misma especificidad.
+.ant-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .ant-btn-primary {
   background: var(--color-primary) !important;
   border-color: var(--color-primary) !important;
@@ -481,4 +576,75 @@ html body .ant-table-thead > tr > th {
   border-color: var(--color-border) !important;
   color: var(--color-muted-foreground) !important;
   filter: none;
+}
+
+// ---------------------------------------------------------------------------
+// nz-collapse — estándar de la app (primer uso: "Nuevo rol", ver MASTER.md
+// "Patrón: creación de roles"). Ant trae fondo #fafafa, bordes #d9d9d9 y texto
+// rgba(0,0,0,.85) fijos — ilegible en oscuro y ajeno a la paleta. Look:
+//   - SIN borde exterior (ni marco ni radius propio): vive dentro de una card.
+//   - CON divisor entre paneles (`border-bottom` de cada item, salvo el último).
+//   - CON divisor entre el header del panel y su contenido (`border-top` del
+//     panel), que la variante `nzBordered=false` de Ant quita por defecto.
+// Además, ng-zorro-antd.min.css incluye una regla suelta
+// `.ant-collapse .ant-collapse-header { padding: 0 !important; font-size: 12px }`
+// (ajena a la variante bordered/borderless) que deja el header pegado a los
+// bordes — `html body` sube la especificidad para poder ganarle con
+// `!important` (mismo gotcha de siempre, ver "Patrón: card base").
+// La flecha: el proyecto no registra iconos de ng-zorro, así que cada panel
+// pasa su SVG por `[nzExpandedIcon]` y aquí se gira al abrir (`-item-active`).
+// ---------------------------------------------------------------------------
+html body .ant-collapse {
+  display: block;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--color-foreground) !important;
+}
+
+html body .ant-collapse > .ant-collapse-item {
+  border-bottom: 1px solid var(--color-border) !important;
+  border-radius: 0 !important;
+}
+
+html body .ant-collapse > .ant-collapse-item:last-child {
+  border-bottom: 0 !important;
+}
+
+html body .ant-collapse > .ant-collapse-item > .ant-collapse-header {
+  align-items: center;
+  padding: 14px 24px !important;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-foreground) !important;
+  border-radius: 0 !important;
+}
+
+html body .ant-collapse > .ant-collapse-item > .ant-collapse-header:hover {
+  background: var(--color-muted);
+}
+
+html body .ant-collapse > .ant-collapse-item > .ant-collapse-header .ant-collapse-expand-icon {
+  height: auto;
+  color: var(--color-muted-foreground);
+}
+
+html body .ant-collapse .ant-collapse-expand-icon svg {
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+html body .ant-collapse > .ant-collapse-item-active > .ant-collapse-header .ant-collapse-expand-icon svg {
+  transform: rotate(90deg);
+}
+
+html body .ant-collapse > .ant-collapse-item > .ant-collapse-panel {
+  background: transparent !important;
+  color: var(--color-foreground) !important;
+  border-top: 1px solid var(--color-border) !important;
+  border-radius: 0 !important;
+}
+
+html body .ant-collapse > .ant-collapse-item > .ant-collapse-panel > .ant-collapse-body {
+  padding: 16px 24px !important;
 }

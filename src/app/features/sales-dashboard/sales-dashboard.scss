@@ -9,21 +9,7 @@
   gap: var(--grid-gap);
 }
 
-.sales-dashboard__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
 
-.sales-dashboard__title {
-  font-family: var(--font-heading);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  margin: 0;
-}
 
 // --- Drawer de detalle de venta --------------------------------------------
 .sale-drawer {

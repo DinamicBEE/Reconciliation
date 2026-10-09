@@ -1,4 +1,4 @@
-import { PermissionKey } from '../../../features/user-management/data/user-management.model';
+import { PermissionKey, RoleId } from '../../../features/user-management/data/user-management.model';
 
 // Registro de pantallas buscables desde el Header — cada una declara el
 // permiso que hace falta para verla (`AccessControlService.hasPermission`,
@@ -11,6 +11,7 @@ export interface SearchablePage {
   path: string;
   keywords: string[];
   permission?: PermissionKey;
+  role?: RoleId; // además del permiso, exclusiva de este rol (ver permissionGuard)
 }
 
 export const SEARCHABLE_PAGES: SearchablePage[] = [
@@ -34,6 +35,14 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
     permission: 'manage_users',
   },
   { label: 'Nuevo usuario', path: '/usuarios/nuevo', keywords: ['crear', 'alta'], permission: 'manage_users' },
+  {
+    label: 'Roles y permisos',
+    path: '/gestion-de-roles',
+    keywords: ['roles', 'permisos', 'accesos'],
+    permission: 'manage_roles',
+    role: 'ADMIN',
+  },
+  { label: 'Nuevo rol', path: '/gestion-de-roles/nuevo', keywords: ['crear', 'roles', 'permisos'], permission: 'manage_roles', role: 'ADMIN' },
   {
     label: 'Auditoría de usuarios',
     path: '/usuarios/auditoria',

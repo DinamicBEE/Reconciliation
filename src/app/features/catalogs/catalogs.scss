@@ -9,19 +9,7 @@
   gap: var(--grid-gap);
 }
 
-.catalogs__header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
 
-.catalogs__title {
-  font-family: var(--font-heading);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  margin: 0;
-}
 
 .catalogs__subtitle {
   font-size: 13px;

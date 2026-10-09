@@ -3,6 +3,25 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Backend: levantar pila DEV (Docker)",
+      "type": "shell",
+      "command": "powershell -ExecutionPolicy Bypass -File dev-env/levantar-backend.ps1",
+      "problemMatcher": []
+    },
+    {
+      "label": "Backend: probar endpoints",
+      "type": "shell",
+      "command": "node dev-env/pruebas-endpoints.mjs",
+      "problemMatcher": []
+    },
+    {
+      "label": "Front: ng serve Colombia",
+      "type": "npm",
+      "script": "start:co",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
       "type": "npm",
       "script": "start",
       "isBackground": true,

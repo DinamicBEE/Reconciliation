@@ -1,0 +1,185 @@
+@use '../../../shared/styles/data-table';
+
+.role-create {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+// --- Barra superior: nombre + contador + crear ------------------------------
+.role-create__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 24px;
+  padding: 20px 24px;
+}
+
+.role-create__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 280px;
+  max-width: 420px;
+}
+
+.role-create__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+}
+
+.role-create__error {
+  font-size: 12px;
+  color: var(--color-destructive);
+}
+
+.role-create__spacer {
+  flex: 1 1 0;
+}
+
+.role-create__counter {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-muted);
+}
+
+.role-create__counter-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.role-create__counter-label {
+  font-size: 13px;
+  color: var(--color-foreground);
+}
+
+.role-create__state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 24px;
+}
+
+// Contador "marcados / total" en el header de cada panel (`nzExtra`).
+.role-create__module-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+
+  &--active {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+}
+
+// --- Tabla de permisos: look de `nz-descriptions` con borde -----------------
+// Código y descripción sobre `--color-muted` (como las etiquetas de un
+// descriptions), la columna del check sobre `--color-card`. Bordes y radius
+// propios — es una `<table>` plana, no hereda el bridge de `nz-table`.
+.permission-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+
+  th,
+  td {
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+  }
+
+  tr > :last-child {
+    border-right: 0;
+  }
+
+  tbody tr:last-child > * {
+    border-bottom: 0;
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--color-muted-foreground);
+  }
+}
+
+.permission-table__label {
+  background: var(--color-muted);
+  color: var(--color-foreground);
+}
+
+.permission-table__code {
+  width: 220px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.permission-table__check {
+  width: 72px;
+  text-align: center !important;
+  background: var(--color-card);
+
+  // Sin el padding del texto que Ant agrega al label (aquí solo es nombre accesible).
+  ::ng-deep .ant-checkbox + span {
+    padding: 0;
+  }
+}
+
+// Nombre accesible del checkbox sin texto visible (lo lee el lector de pantalla).
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+// --- Modal de confirmación --------------------------------------------------
+.role-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.role-confirm__name,
+.role-confirm__total {
+  margin: 0;
+}
+
+.role-confirm__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--color-border);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+}

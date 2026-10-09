@@ -1,23 +1,16 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, map, throwError } from 'rxjs';
-import { AuthService, CreateUserRequest, UpdateUserRequest, UserDetailDto } from '../../auth/data/auth.service';
+import { Observable, catchError, map, of, throwError } from 'rxjs';
+import { AuthService, CreateUserRequest, UpdateUserRequest, UpdateUserRolesRequest, UserDetailDto } from '../../auth/data/auth.service';
 import {
   AppUser,
   AppUserAddress,
-  AuditAction,
-  AuditLogEntry,
   MANAGER_ROLE_IDS,
-  MAX_FAILED_LOGIN_ATTEMPTS,
   PermissionKey,
-  ROLE_LABEL,
   RoleId,
-  STATUS_META,
   UserStatus,
-  defaultPermissionsForRoles,
   fullName,
 } from './user-management.model';
-import { MOCK_AUDIT_LOG, MOCK_USERS } from './user-management-mock.data';
-import { generateTempPassword } from './password.util';
+import { MOCK_USERS } from './user-management-mock.data';
 
 // `UserSummaryDto.status`/`UserDetailDto.status` (backend, mayúsculas) ↔
 // `UserStatus` (este frontend, minúsculas) — ver `syncFromBackend` y
@@ -30,17 +23,6 @@ const BACKEND_STATUS_TO_LOCAL: Record<string, UserStatus> = {
 
 export function backendStatusToLocal(status: string): UserStatus {
   return BACKEND_STATUS_TO_LOCAL[status] ?? 'active';
-}
-
-// Mensaje para un 403 de `/users/**` SIN código de negocio (bloqueado por
-// `SecurityConfig` antes de llegar al controller/`GlobalExceptionHandler` —
-// a diferencia de `ROLE_ASSIGNMENT_FORBIDDEN` al crear, que SÍ trae código
-// y ya lo muestra `httpErrorAlertInterceptor`) — mismo caso que ya manejaba
-// a mano `UserDetail.onUnlockBackendClick`. `null` para cualquier otro
-// status: esos YA tienen su propio aviso vía el interceptor (p. ej. un 404
-// con `USER_NOT_FOUND`), así que el llamador no debe repetirlo.
-export function forbiddenRoleMessage(status: number): string | null {
-  return status === 403 ? 'Tu sesión no tiene el rol necesario (ADMIN o ALTAS) para esta acción.' : null;
 }
 
 export type StatusFilter = 'all' | UserStatus;
@@ -111,12 +93,7 @@ export interface UpdateUserProfileInput {
   ubicacionIds: number[];
 }
 
-// El siguiente id debe ser mayor al de CUALQUIER id 'uN' ya usado, no solo
-// los de MOCK_USERS — el mock de auditoría incluye a propósito un
-// targetUserId ('u0009') de un usuario YA ELIMINADO que no vive en MOCK_USERS
-// (ver user-management-mock.data.ts). Si nextUserSeq solo mirara
-// MOCK_USERS.length, el primer usuario creado en esta sesión reciclaría ese
-// mismo id y heredaría el historial del usuario fantasma.
+// El siguiente id debe ser mayor al de cualquier id 'uN' ya usado en MOCK_USERS.
 function maxSeq(ids: string[]): number {
   return ids.reduce((max, id) => {
     const match = /^u(\d+)$/.exec(id);
@@ -124,8 +101,7 @@ function maxSeq(ids: string[]): number {
   }, 0);
 }
 
-let nextUserSeq = Math.max(maxSeq(MOCK_USERS.map((u) => u.id)), maxSeq(MOCK_AUDIT_LOG.map((e) => e.targetUserId))) + 1;
-let nextAuditSeq = MOCK_AUDIT_LOG.length + 1;
+let nextUserSeq = maxSeq(MOCK_USERS.map((u) => u.id)) + 1;
 
 /**
  * `providedIn: 'root'` — a diferencia de los servicios de un solo feature
@@ -141,10 +117,8 @@ export class UserManagementService {
   private readonly auth = inject(AuthService);
 
   private readonly usersSignal = signal<AppUser[]>(MOCK_USERS);
-  private readonly auditLogSignal = signal<AuditLogEntry[]>(MOCK_AUDIT_LOG);
 
   readonly allUsers = this.usersSignal.asReadonly();
-  readonly auditLog = this.auditLogSignal.asReadonly();
 
   readonly search = signal('');
   readonly roleFilter = signal<RoleFilter>('all');
@@ -198,12 +172,6 @@ export class UserManagementService {
     this.usersSignal().filter((u) => u.roleIds.some((r) => MANAGER_ROLE_IDS.includes(r))),
   );
 
-  // Más reciente primero — todas las pantallas que muestran auditoría
-  // (historial por usuario, historial global) parten de este mismo orden.
-  readonly recentAuditLog = computed(() =>
-    [...this.auditLogSignal()].sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
-  );
-
   setSearch(value: string): void {
     this.search.set(value);
   }
@@ -251,10 +219,6 @@ export class UserManagementService {
       }
       return next;
     });
-  }
-
-  auditForUser(userId: string): AuditLogEntry[] {
-    return this.recentAuditLog().filter((entry) => entry.targetUserId === userId);
   }
 
   findUser(userId: string): AppUser | null {
@@ -334,10 +298,12 @@ export class UserManagementService {
           createdAt: new Date().toISOString(),
           lastAccessAt: null,
           roleIds: result.roles,
-          permissions: defaultPermissionsForRoles(result.roles),
+          // Los que el backend asignó al crear (copia de los defaults de los roles).
+          permissions: result.permissions as PermissionKey[],
           emailVerified: false,
           lastActivityAt: null,
           failedLoginAttempts: 0,
+          lockedUntil: null,
           twoFactorEnabled: false,
           activeSessions: 0,
           mustChangePassword: result.mustChangePassword,
@@ -362,11 +328,6 @@ export class UserManagementService {
         };
 
         this.usersSignal.update((list) => [user, ...list]);
-        this.appendAudit(
-          user,
-          'created',
-          `Usuario creado con rol${result.roles.length > 1 ? 'es' : ''} ${result.roles.map((r) => ROLE_LABEL[r]).join(', ')}.`,
-        );
         return user;
       }),
     );
@@ -388,18 +349,27 @@ export class UserManagementService {
   // este frontend) nunca tenía un registro local con el que reconciliarse —
   // `GET /users` la devolvía, pero el `.map()` de arriba la ignoraba por
   // completo al no encontrar ningún `user.backendUserId` que hiciera match.
+  //
+  // Pagina: `GET /users` devuelve de a `size` (100) y el backend informa
+  // `totalPages` — `AuthService.listAllUsers()` recorre todas las páginas, así
+  // que con más de 100 cuentas la lista ya no se trunca.
   syncFromBackend(): void {
-    this.auth.listUsers({ size: 100 }).subscribe({
-      next: (page) => {
-        const byBackendId = new Map(page.content.map((u) => [u.id, u]));
+    this.auth.listAllUsers().subscribe({
+      next: (users) => {
+        const byBackendId = new Map(users.map((u) => [u.id, u]));
         const knownBackendIds = new Set(
           this.usersSignal()
             .map((u) => u.backendUserId)
             .filter((id): id is number => id !== null),
         );
 
+        // El backend es la fuente de verdad: una cuenta con `backendUserId` que ya
+        // no aparece en `GET /users` se dio de baja (o la base se re-sembró) y sale
+        // de la lista local; antes se quedaba para siempre.
         this.usersSignal.update((list) =>
-          list.map((user) => {
+          list
+            .filter((user) => user.backendUserId === null || byBackendId.has(user.backendUserId))
+            .map((user) => {
             if (user.backendUserId === null) return user;
             const real = byBackendId.get(user.backendUserId);
             if (!real) return user;
@@ -445,7 +415,8 @@ export class UserManagementService {
   // mapeo de campos que `UserDetail.mergeBackendDetail`, pero construyendo un
   // registro NUEVO en vez de fusionar sobre una base del mock (no hay base:
   // esta cuenta no vivía en `MOCK_USERS`). Lo que el backend no modela
-  // (avatarUrl, 2FA, sesiones activas, intentos fallidos) cae a su default.
+  // (avatarUrl, 2FA, última actividad) cae a su default; intentos fallidos,
+  // sesiones activas y fin del bloqueo SÍ vienen del detalle real.
   private buildUserFromDetail(detail: UserDetailDto): AppUser {
     const managerId = detail.manager ? (this.findByBackendUserId(detail.manager.id)?.id ?? null) : null;
 
@@ -475,9 +446,10 @@ export class UserManagementService {
       permissions: detail.permissions as PermissionKey[],
       emailVerified: detail.emailVerified,
       lastActivityAt: null,
-      failedLoginAttempts: 0,
+      failedLoginAttempts: detail.failedLoginAttempts ?? 0,
+      lockedUntil: detail.lockedUntil ?? null,
       twoFactorEnabled: false,
-      activeSessions: 0,
+      activeSessions: detail.activeSessions ?? 0,
       mustChangePassword: detail.mustChangePassword,
       temporaryPassword: detail.temporaryPassword,
       department: detail.department ?? '',
@@ -521,7 +493,6 @@ export class UserManagementService {
       },
     };
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-    this.appendAudit(updated, 'updated', 'Se actualizó información personal.');
   }
 
   // Administrativo: un admin edita a OTRO usuario, información personal Y
@@ -537,13 +508,11 @@ export class UserManagementService {
   // mandar, así que el `AppUser` resultante combina el `input` (lo que el
   // backend acaba de guardar) con lo que SÍ trae la respuesta (roles,
   // permisos, estado, mustChangePassword, emailVerified — autoritativo).
-  // `subsidiariaIds`/`ubicacionIds` NO viajan en este request (el backend no
-  // las modela en este endpoint, ver `UpdateUserRequest` — comentario "Rol,
-  // permisos y estado se manejan en sus propios endpoints, no aqui" aplica
-  // también a ellas): se quedan con lo que devuelve la respuesta (sin
-  // cambios reales), descartando cualquier edición que el form haya
-  // permitido — ver la nota en `user-detail.html` sobre por qué esos 2
-  // campos son de solo lectura en modo edición.
+  // `subsidiariaIds`/`ubicacionIds` SÍ viajan (DEV, Guía_Endpoints: una lista
+  // reemplaza la actual, vacía las quita, omitirla no toca nada): este form
+  // siempre manda las dos listas. Un id inexistente rechaza TODO el PATCH con
+  // 400 `INVALID_LOCATION` (lo avisa `httpErrorAlertInterceptor`). Tras
+  // guardar, el `AppUser` toma las listas de la RESPUESTA (autoritativas).
   updateUserProfile(userId: string, input: UpdateUserProfileInput): Observable<AppUser> {
     const user = this.findUser(userId);
     if (!user) {
@@ -583,6 +552,8 @@ export class UserManagementService {
       employeeCode: input.employeeId.trim() || null,
       hireDate: input.hireDate || null,
       contractEndDate: input.contractEndDate,
+      subsidiariaIds: input.subsidiariaIds,
+      ubicacionIds: input.ubicacionIds,
     };
 
     return this.auth.updateUser(backendUserId, request).pipe(
@@ -613,32 +584,79 @@ export class UserManagementService {
           mustChangePassword: summary.mustChangePassword,
         };
         this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-        this.appendAudit(updated, 'updated', 'Se actualizó información personal y de organización.');
         return updated;
       }),
     );
   }
 
-  // Cambiar los roles asignados resetea los permisos a la UNIÓN de los
-  // defaults de esos roles — el componente parte de ahí y el admin ajusta
-  // manualmente lo que necesite (mismo criterio que un selector de rol en
-  // cualquier admin panel: el rol es un punto de partida, no una regla que
-  // se re-derive sola en cada render).
-  changeRoles(userId: string, roleIds: RoleId[], permissions: PermissionKey[]): void {
+  // ¿Hay algo que guardar en "Seguridad y acceso"? (roles o permisos distintos a los actuales)
+  accessChanged(userId: string, roleIds: RoleId[], permissions: PermissionKey[]): boolean {
     const user = this.findUser(userId);
-    if (!user || roleIds.length === 0) return;
+    return !!user && (!sameSet(user.roleIds, roleIds) || !sameSet(user.permissions, permissions));
+  }
 
-    const rolesChanged = user.roleIds.length !== roleIds.length || user.roleIds.some((r) => !roleIds.includes(r));
-    const updated: AppUser = { ...user, roleIds, permissions };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-
-    if (rolesChanged) {
-      const from = user.roleIds.map((r) => ROLE_LABEL[r]).join(', ');
-      const to = roleIds.map((r) => ROLE_LABEL[r]).join(', ');
-      this.appendAudit(updated, 'role_changed', `Roles cambiados de ${from} a ${to}.`);
-    } else {
-      this.appendAudit(updated, 'permissions_changed', 'Se actualizaron los permisos asignados.');
+  // `PATCH /users/{id}/roles` real (ver `AuthService.updateUserRoles`). Cambiar los
+  // roles asignados resetea los permisos a la UNIÓN de los defaults de esos
+  // roles (`AccessCatalogService.defaultPermissionsForRoles`) — el componente
+  // parte de ahí y el admin ajusta lo que necesite; aquí llega el RESULTADO
+  // FINAL y el backend lo guarda tal cual. Solo se manda lo que cambió (omitido =
+  // no tocar). El endpoint EXIGE `manage_roles` (403 `ROLE_ASSIGNMENT_FORBIDDEN`)
+  // aunque solo se cambien permisos.
+  // La respuesta (`UserSummaryDto`) es autoritativa para roles/permisos/estado.
+  // Si la persona editada es la de la sesión, se renueva la sesión YA
+  // (`AuthService.renewSession`) en vez de esperar al siguiente refresh.
+  changeRoles(userId: string, roleIds: RoleId[], permissions: PermissionKey[]): Observable<AppUser> {
+    const user = this.findUser(userId);
+    if (!user) {
+      return throwError(() => new Error('Usuario no encontrado.'));
     }
+    if (roleIds.length === 0) {
+      return throwError(() => new Error('Selecciona al menos un rol.'));
+    }
+    if (!user.backendUserId) {
+      return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
+    }
+
+    const rolesChanged = !sameSet(user.roleIds, roleIds);
+    const permissionsChanged = !sameSet(user.permissions, permissions);
+    if (!rolesChanged && !permissionsChanged) {
+      return of(user);
+    }
+
+    const request: UpdateUserRolesRequest = {
+      ...(rolesChanged ? { roleIds } : {}),
+      ...(permissionsChanged ? { permissions } : {}),
+    };
+
+    return this.auth.updateUserRoles(user.backendUserId, request).pipe(
+      map((summary) => {
+        const updated: AppUser = {
+          ...user,
+          roleIds: summary.roles as RoleId[],
+          permissions: summary.permissions as PermissionKey[],
+          status: backendStatusToLocal(summary.status),
+          emailVerified: summary.emailVerified,
+          mustChangePassword: summary.mustChangePassword,
+          subsidiariaIds: summary.subsidiarias.map((x) => x.id),
+          ubicacionIds: summary.ubicaciones.map((x) => x.id),
+        };
+        this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+
+        if (this.auth.currentUser()?.appUserId === userId) {
+          this.auth.renewSession().subscribe();
+        }
+        return updated;
+      }),
+      // Si el backend rechaza el cambio, el registro no cambió: se re-emite con
+      // arreglos NUEVOS para que los selectores de rol (ngModel) vuelvan a
+      // mostrar los roles reales en vez de la selección que se descartó.
+      catchError((err: unknown) => {
+        this.usersSignal.update((list) =>
+          list.map((u) => (u.id === userId ? { ...u, roleIds: [...u.roleIds], permissions: [...u.permissions] } : u)),
+        );
+        return throwError(() => err);
+      }),
+    );
   }
 
   // 3 estados posibles (activo/inactivo/bloqueado, ver StatusChip) — cada
@@ -673,11 +691,44 @@ export class UserManagementService {
           mustChangePassword: summary.mustChangePassword,
           subsidiariaIds: summary.subsidiarias.map((s) => s.id),
           ubicacionIds: summary.ubicaciones.map((u) => u.id),
+          // Guía_Endpoints (`PATCH /users/{id}/status`): `active` también
+          // desbloquea (borra el vencimiento y el contador de intentos);
+          // `blocked` es manual y no vence solo (`lockedUntil` null). La
+          // respuesta es un `UserSummaryDto` sin estos 2 campos, así que se
+          // reflejan aquí.
+          ...(status === 'active' ? { failedLoginAttempts: 0, lockedUntil: null } : {}),
+          ...(status === 'blocked' ? { lockedUntil: null } : {}),
         };
         this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
 
-        const action: AuditAction = status === 'active' ? 'activated' : status === 'blocked' ? 'blocked' : 'deactivated';
-        this.appendAudit(updated, action, `Cuenta cambiada a estado "${STATUS_META[status].label}".`);
+        return updated;
+      }),
+    );
+  }
+
+  // CU3 paso 5: `PATCH /users/{id}/unlock` real (ver `AuthService.unlockUser`)
+  // — desbloquea una cuenta bloqueada (por intentos fallidos o manual). El
+  // backend responde un `UserSummaryDto`; además deja en cero el contador de
+  // intentos y borra `lockedUntil` (ver `setStatus`, mismo efecto que
+  // `status: active`).
+  unlockAccount(userId: string): Observable<AppUser> {
+    const user = this.findUser(userId);
+    if (!user) {
+      return throwError(() => new Error('Usuario no encontrado.'));
+    }
+    if (!user.backendUserId) {
+      return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
+    }
+
+    return this.auth.unlockUser(user.backendUserId).pipe(
+      map((summary) => {
+        const updated: AppUser = {
+          ...user,
+          status: backendStatusToLocal(summary.status),
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        };
+        this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
         return updated;
       }),
     );
@@ -704,92 +755,86 @@ export class UserManagementService {
       map(() => {
         const updated: AppUser = { ...user, emailVerified: true };
         this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-        this.appendAudit(updated, 'email_verified', 'Un administrador marcó el correo como verificado.');
         return updated;
       }),
     );
   }
 
-  // Cerrar sesiones activas no revoca 2FA ni cambia contraseña — solo el
-  // contador de sesiones abiertas (mismo alcance que un botón "cerrar todas
-  // las sesiones" real: obliga a re-autenticar en cada dispositivo).
-  closeSessions(userId: string): void {
+  // `POST /users/{id}/close-sessions` real (ver `AuthService.closeUserSessions`):
+  // revoca todos los refresh tokens vigentes de la persona — no cambia su
+  // contraseña ni su estado, puede volver a entrar (el access token ya emitido
+  // vive hasta 15 min). La respuesta trae el contador resultante.
+  closeSessions(userId: string): Observable<AppUser> {
     const user = this.findUser(userId);
-    if (!user || user.activeSessions === 0) return;
-
-    const updated: AppUser = { ...user, activeSessions: 0 };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-    this.appendAudit(updated, 'sessions_closed', `Se cerraron ${user.activeSessions} sesión(es) activa(s).`);
-  }
-
-  // No hay backend/correo real todavía — genera una contraseña temporal y la
-  // devuelve para que el componente la muestre UNA vez (toast). El día que
-  // exista backend, esto pasa a disparar un correo real y deja de devolver
-  // la contraseña en claro. También limpia los intentos fallidos Y desbloquea
-  // la cuenta si el bloqueo fue POR ESOS intentos (ver `recordFailedLogin`)
-  // — mismo criterio que un "desbloqueo" real: una contraseña nueva reinicia
-  // el contador Y el estado que ese contador había disparado. Si el estado
-  // era 'inactive' (decisión administrativa aparte, no ligada a intentos
-  // fallidos), NO se reactiva solo — eso sigue siendo una acción explícita
-  // en "Seguridad y acceso" (`setStatus`), no un efecto secundario de esto.
-  // `mustChangePassword: true` obliga a la persona a definir SU PROPIA
-  // contraseña en el siguiente login en vez de quedarse con la temporal
-  // indefinidamente (ver `authGuard`/`ChangePassword`, MASTER.md "Patrón:
-  // refresh token de un solo uso + cambio obligatorio de contraseña").
-  resetPassword(userId: string): string | null {
-    const user = this.findUser(userId);
-    if (!user) return null;
-
-    const updated: AppUser = {
-      ...user,
-      failedLoginAttempts: 0,
-      status: user.status === 'blocked' ? 'active' : user.status,
-      mustChangePassword: true,
-      // Reemplaza la temporal anterior (la del alta, si seguía vigente) — así
-      // "Organización" nunca muestra una contraseña que ya no sirve.
-      temporaryPassword: generateTempPassword(),
-    };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-
-    this.appendAudit(updated, 'password_reset', 'Se generó una nueva contraseña temporal.');
-    return updated.temporaryPassword;
-  }
-
-  // Se llama tras una contraseña incorrecta (ver `Login.onSubmit`) —
-  // incrementa el contador y, al llegar a `MAX_FAILED_LOGIN_ATTEMPTS`,
-  // bloquea la cuenta automáticamente (umbral y comportamiento del backend
-  // real, ver Auth_Service_Endpoints.pdf — "Usuario bloqueado (5 intentos
-  // fallidos)", HTTP 423). No hace nada si la cuenta YA está bloqueada — no
-  // tiene sentido seguir sumando intentos sobre una cuenta que ya no deja
-  // entrar a nadie.
-  recordFailedLogin(userId: string): void {
-    const user = this.findUser(userId);
-    if (!user || user.status === 'blocked') return;
-
-    const failedLoginAttempts = user.failedLoginAttempts + 1;
-    const justBlocked = failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
-    const updated: AppUser = { ...user, failedLoginAttempts, status: justBlocked ? 'blocked' : user.status };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-
-    if (justBlocked) {
-      this.appendAudit(
-        updated,
-        'blocked',
-        `Cuenta bloqueada automáticamente tras ${MAX_FAILED_LOGIN_ATTEMPTS} intentos fallidos de inicio de sesión.`,
-      );
+    if (!user) {
+      return throwError(() => new Error('Usuario no encontrado.'));
     }
+    if (!user.backendUserId) {
+      return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
+    }
+
+    return this.auth.closeUserSessions(user.backendUserId).pipe(
+      map((res) => {
+        const updated: AppUser = { ...user, activeSessions: res.activeSessions };
+        this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+        return updated;
+      }),
+    );
   }
 
-  // Login correcto — reinicia el contador de intentos fallidos, mismo
-  // criterio que `resetPassword`. No hay entrada de auditoría propia: un
-  // login correcto no es un evento de seguridad que reportar, es lo
-  // esperado.
-  clearFailedLogins(userId: string): void {
+  // `POST /users/{id}/reset-password` real (ver `AuthService.resetUserPassword`): el
+  // backend devuelve a la persona a su contraseña temporal (NOMBRE + PRIMER
+  // APELLIDO + año de alta), marca `mustChangePassword` y REVOCA todas sus
+  // sesiones (`activeSessions` queda en 0); no cambia su estado — un bloqueo se
+  // levanta con "Desbloquear". El sistema no envía correos: la contraseña se
+  // devuelve para que el administrador la entregue (toast).
+  resetPassword(userId: string): Observable<string> {
     const user = this.findUser(userId);
-    if (!user || user.failedLoginAttempts === 0) return;
+    if (!user) {
+      return throwError(() => new Error('Usuario no encontrado.'));
+    }
+    if (!user.backendUserId) {
+      return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
+    }
 
-    const updated: AppUser = { ...user, failedLoginAttempts: 0 };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+    return this.auth.resetUserPassword(user.backendUserId).pipe(
+      map((res) => {
+        const updated: AppUser = {
+          ...user,
+          mustChangePassword: true,
+          temporaryPassword: res.temporaryPassword,
+          activeSessions: 0,
+        };
+        this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
+        return res.temporaryPassword;
+      }),
+    );
+  }
+
+  // `DELETE /users/{id}` real (ver `AuthService.deleteUser`): baja LÓGICA — la
+  // cuenta deja de poder entrar y desaparece de listados y detalle, pero su fila
+  // y su bitácora se conservan y su correo queda libre. Un administrador no
+  // puede darse de baja a sí mismo (409 `CANNOT_DELETE_SELF`; la UI además lo
+  // deshabilita). Al responder, el registro sale de la lista local.
+  deleteUser(userId: string): Observable<void> {
+    const user = this.findUser(userId);
+    if (!user) {
+      return throwError(() => new Error('Usuario no encontrado.'));
+    }
+    if (!user.backendUserId) {
+      return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
+    }
+
+    return this.auth.deleteUser(user.backendUserId).pipe(
+      map(() => {
+        this.usersSignal.update((list) => list.filter((u) => u.id !== userId));
+        this.selectedIdsSignal.update((current) => {
+          const next = new Set(current);
+          next.delete(userId);
+          return next;
+        });
+      }),
+    );
   }
 
   // Llamado por `ChangePassword` tras confirmar el cambio (ver
@@ -809,16 +854,9 @@ export class UserManagementService {
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
   }
 
-  private appendAudit(user: AppUser, action: AuditAction, detail: string): void {
-    const entry: AuditLogEntry = {
-      id: `a${nextAuditSeq++}`,
-      timestamp: new Date().toISOString(),
-      actorName: this.auth.currentUser()?.displayName ?? 'Sistema',
-      targetUserId: user.id,
-      targetUserName: fullName(user),
-      action,
-      detail,
-    };
-    this.auditLogSignal.update((list) => [entry, ...list]);
-  }
+}
+
+// Igualdad de conjuntos (sin importar el orden) — roles/permisos son conjuntos.
+function sameSet<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a.length === b.length && a.every((x) => b.includes(x));
 }

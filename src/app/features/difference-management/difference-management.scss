@@ -1,5 +1,4 @@
 @use '../../shared/styles/summary-strip';
-@use '../../shared/styles/back-link';
 @use '../../shared/styles/import-dropzone';
 
 // Solo 2 utilidades de shared/styles/_data-table.scss hacen falta aquí — se
@@ -22,19 +21,7 @@
   gap: var(--grid-gap);
 }
 
-.difference-management__header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
 
-.difference-management__title {
-  font-family: var(--font-heading);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  margin: 0;
-}
 
 // Info de identidad de la orden (no sumas) — mismo grid que .summary-strip,
 // pero 4 columnas (7 campos = 4+3) en vez de las 5 del resumen del día.

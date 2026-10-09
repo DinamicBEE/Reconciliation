@@ -42,3 +42,12 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Variables locales de la pila del backend (dev-env/levantar-backend.ps1)
+/dev-env/.env
+
+# Documentos de seguimiento
+/docs/avances
+/docs/fuentes
+/docs/implementaciones
+

@@ -3,6 +3,7 @@ import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../features/auth/data/auth.service';
+import { INVALID_CREDENTIALS_CODE, extractErrorCode, isSessionIdleTimeout } from '../../features/auth/data/auth-errors';
 
 // Endpoints del auth-service real que NO llevan Bearer — `permitAll()` en
 // SecurityConfig.java (coctel_midd): login todavía no tiene sesión, refresh
@@ -41,7 +42,9 @@ function isPublicPath(url: string): boolean {
  * este interceptor porque ESE 401 ya lo maneja
  * `AuthService.refreshAccessToken` de forma específica (distingue
  * `SESSION_IDLE_TIMEOUT` de cualquier otro rechazo) — manejarlo aquí TAMBIÉN
- * duplicaría el cierre de sesión.
+ * duplicaría el cierre de sesión. Un 401 con código `INVALID_CREDENTIALS`
+ * (contraseña actual incorrecta en change-password) NO cierra la sesión, y
+ * uno con `SESSION_IDLE_TIMEOUT` la cierra con el aviso de inactividad.
  */
 export const authTokenInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
@@ -56,7 +59,13 @@ export const authTokenInterceptor: HttpInterceptorFn = (req, next) => {
   return next(authReq).pipe(
     catchError((err: unknown) => {
       if (err instanceof HttpErrorResponse && err.status === 401) {
-        auth.invalidateSession('invalid_token');
+        // `INVALID_CREDENTIALS` en una llamada autenticada es un error de
+        // NEGOCIO, no un token rechazado: `POST /auth/change-password` lo
+        // devuelve (401) cuando la contraseña ACTUAL es incorrecta. Cerrar la
+        // sesión ahí sacaría al usuario por un simple error de tecleo.
+        if (extractErrorCode(err) !== INVALID_CREDENTIALS_CODE) {
+          auth.invalidateSession(isSessionIdleTimeout(err) ? 'idle_timeout' : 'invalid_token');
+        }
       }
       return throwError(() => err);
     }),

@@ -17,7 +17,8 @@ import { ThemeService } from '../../services/theme.service';
 import { PaletteService } from '../../services/palette.service';
 import { AccessControlService } from '../../../features/auth/data/access-control.service';
 import { AuthService } from '../../../features/auth/data/auth.service';
-import { ROLE_LABEL, fullName as appUserFullName } from '../../../features/user-management/data/user-management.model';
+import { AccessCatalogService } from '../../../features/user-management/data/access-catalog.service';
+import { fullName as appUserFullName } from '../../../features/user-management/data/user-management.model';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { SEARCHABLE_PAGES, SearchablePage, searchPages } from './header-search.util';
 
@@ -39,6 +40,7 @@ export class Header {
   protected readonly theme = inject(ThemeService);
   protected readonly palette = inject(PaletteService);
   protected readonly access = inject(AccessControlService);
+  private readonly accessCatalog = inject(AccessCatalogService);
   private readonly router = inject(Router);
 
   private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
@@ -52,7 +54,10 @@ export class Header {
   // Menu lateral, ver AccessControlService).
   protected readonly results = computed(() =>
     searchPages(
-      SEARCHABLE_PAGES.filter((page) => !page.permission || this.access.hasPermission(page.permission)),
+      SEARCHABLE_PAGES.filter(
+        (page) =>
+          (!page.permission || this.access.hasPermission(page.permission)) && (!page.role || this.access.hasRole(page.role)),
+      ),
       this.query(),
     ),
   );
@@ -107,8 +112,10 @@ export class Header {
     return user ? appUserFullName(user) : '';
   });
 
+  // Roles REALES de la sesión (`AuthUser.roles`) con el nombre de `GET /roles`
+  // (sin permiso para pedirlo, una versión legible del código).
   protected readonly roleLabel = computed(() =>
-    (this.currentAppUser()?.roleIds ?? []).map((roleId) => ROLE_LABEL[roleId]).join(', '),
+    (this.auth.currentUser()?.roles ?? []).map((roleId) => this.accessCatalog.roleLabel(roleId)).join(', '),
   );
 
   // Mismo criterio que user-list/user-detail: foto real (`avatarUrl`) con

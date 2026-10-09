@@ -5,6 +5,8 @@ import { Router, RouterLink } from '@angular/router';
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
+import { NzBreadCrumbModule } from 'ng-zorro-antd/breadcrumb';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzSelectModule } from 'ng-zorro-antd/select';
@@ -12,26 +14,26 @@ import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
+import { NzPaginationModule } from 'ng-zorro-antd/pagination';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import {
   AppUser,
-  AUDIT_ACTION_LABEL,
+  AuditLogEntry,
   GENDER_OPTIONS,
-  PERMISSIONS,
-  PermissionDef,
   PermissionKey,
   PHONE_PATTERN,
-  ROLE_LABEL,
-  ROLE_OPTIONS,
   RoleId,
   STATUS_META,
   UserStatus,
-  defaultPermissionsForRoles,
+  auditActionLabel,
   fullName,
 } from '../data/user-management.model';
-import { UserManagementService, backendStatusToLocal, forbiddenRoleMessage } from '../data/user-management.service';
+import { AuditLogService } from '../data/audit-log.service';
+import { UserManagementService, backendStatusToLocal } from '../data/user-management.service';
+import { AccessCatalogService } from '../data/access-catalog.service';
+import { AccessControlService } from '../../auth/data/access-control.service';
 import { AREAS, DEPARTMENTS, JOB_TITLES } from '../data/organization-catalog';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
@@ -39,18 +41,6 @@ import { CatalogService } from '../../../core/services/catalog.service';
 import { COUNTRY_PROFILE } from '../../../core/country/active-country';
 import { AuthService, UserDetailDto } from '../../auth/data/auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
-
-// Agrupación estática de PERMISSIONS por `group` — se calcula una sola vez
-// al cargar el módulo (la lista de permisos no cambia en runtime), no en
-// cada render.
-const PERMISSION_GROUPS: { group: string; items: PermissionDef[] }[] = (() => {
-  const byGroup = new Map<string, PermissionDef[]>();
-  for (const permission of PERMISSIONS) {
-    if (!byGroup.has(permission.group)) byGroup.set(permission.group, []);
-    byGroup.get(permission.group)!.push(permission);
-  }
-  return [...byGroup.entries()].map(([group, items]) => ({ group, items }));
-})();
 
 // `nz-date-picker` trabaja con `Date | null` — el model guarda fecha (sin
 // hora) como ISO string (`'yyyy-MM-dd'`) o `null`. Estas 2 funciones son las
@@ -70,6 +60,8 @@ function toIsoDateOrNull(value: Date | null): string | null {
 @Component({
   selector: 'app-user-detail',
   imports: [
+    NzPageHeaderModule,
+    NzBreadCrumbModule,
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
@@ -84,6 +76,7 @@ function toIsoDateOrNull(value: Date | null): string | null {
     NzCheckboxModule,
     NzTagModule,
     NzTabsModule,
+    NzPaginationModule,
     NzTooltipModule,
     NzModalModule,
     StatusChip,
@@ -108,12 +101,28 @@ export class UserDetail {
   private readonly modal = inject(NzModalService);
   private readonly router = inject(Router);
 
+  // Flecha del nz-page-header: de vuelta a la pantalla padre (Administración de usuarios).
+  protected onBack(): void {
+    void this.router.navigateByUrl('/usuarios');
+  }
+
   protected readonly fullName = fullName;
   protected readonly statusMeta = STATUS_META;
-  protected readonly roleLabel = ROLE_LABEL;
-  protected readonly roleOptions = ROLE_OPTIONS;
-  protected readonly permissionGroups = PERMISSION_GROUPS;
-  protected readonly auditActionLabel = AUDIT_ACTION_LABEL;
+  // Roles y permisos REALES (`GET /roles`, `GET /permissions`) — ver AccessCatalogService.
+  protected readonly accessCatalog = inject(AccessCatalogService);
+  protected readonly roleOptions = this.accessCatalog.roleOptions;
+  protected readonly permissionGroups = this.accessCatalog.permissionGroups;
+  protected readonly catalogLoading = this.accessCatalog.loading;
+  private readonly access = inject(AccessControlService);
+  // `PATCH /users/{id}/roles` COMPLETO (roles Y permisos) exige `manage_roles` en
+  // quien lo ejecuta — probado contra DEV: con solo `manage_users`, incluso un
+  // cambio solo de permisos responde 403 ROLE_ASSIGNMENT_FORBIDDEN. Sin él, esta
+  // sección queda de solo lectura.
+  protected readonly canEditAccess = computed(() => this.access.hasPermission('manage_roles'));
+  protected readonly savingAccess = signal(false);
+  protected readonly closingSessions = signal(false);
+  protected readonly auditActionLabel = auditActionLabel;
+  private readonly auditLogService = inject(AuditLogService);
   protected readonly departments = DEPARTMENTS;
   protected readonly areas = AREAS;
   protected readonly jobTitles = JOB_TITLES;
@@ -159,8 +168,8 @@ export class UserDetail {
   protected readonly temporaryPassword = computed(() => this.user()?.temporaryPassword?.trim() || null);
 
   // Superpone `UserDetailDto` (backend real) sobre `base` (registro mock) —
-  // todo lo que el backend modela gana; lo que no (avatarUrl, 2FA, sesiones
-  // activas, `id` 'uXXXX' de este mock) se queda de `base`.
+  // todo lo que el backend modela gana; lo que no (avatarUrl, 2FA, última
+  // actividad, `id` 'uXXXX' de este mock) se queda de `base`.
   private mergeBackendDetail(base: AppUser, detail: UserDetailDto): AppUser {
     // `manager.id` es un id REAL del backend — se resuelve de vuelta al
     // 'uXXXX' de ESTE mock vía `backendUserId` (ver
@@ -180,6 +189,9 @@ export class UserDetail {
       emailVerified: detail.emailVerified,
       lastAccessAt: detail.lastLoginAt,
       createdAt: detail.createdAt,
+      failedLoginAttempts: detail.failedLoginAttempts ?? 0,
+      activeSessions: detail.activeSessions ?? 0,
+      lockedUntil: detail.lockedUntil ?? null,
       mustChangePassword: detail.mustChangePassword,
       temporaryPassword: detail.temporaryPassword,
       birthDate: detail.birthDate ?? '',
@@ -210,10 +222,46 @@ export class UserDetail {
   // inexistente. Distinto de isCreate() (sin :userId en absoluto).
   protected readonly notFound = computed(() => !!this.userId() && this.user() === null);
 
-  protected readonly userAudit = computed(() => {
-    const id = this.userId();
-    return id ? this.service.auditForUser(id) : [];
-  });
+  // Pestaña "Historial": `GET /users/{id}/audit-log` (bitácora REAL, paginada en el
+  // servidor). Exige `view_audit_log` — sin él la pestaña queda deshabilitada
+  // (no se pide, daría 403). Funciona aunque la cuenta ya esté dada de baja.
+  protected readonly canViewAudit = computed(() => this.access.hasPermission('view_audit_log'));
+  protected readonly auditPageSize = 10;
+  protected readonly auditEntries = signal<AuditLogEntry[]>([]);
+  protected readonly auditTotal = signal(0);
+  protected readonly auditPage = signal(1); // 1-based (nz-pagination); el backend usa 0-based
+  protected readonly auditLoading = signal(false);
+  protected readonly auditFailed = signal(false);
+  private auditSub: { unsubscribe(): void } | null = null;
+
+  // Una petición a la vez: una consulta nueva cancela la anterior (el usuario cambia
+  // de página rápido, o se guarda algo mientras carga).
+  private loadAudit(backendUserId: number, page = 1): void {
+    if (!this.canViewAudit()) return;
+    this.auditSub?.unsubscribe();
+    this.auditPage.set(page);
+    this.auditLoading.set(true);
+    this.auditFailed.set(false);
+    this.auditSub = this.auditLogService.listForUser(backendUserId, { page: page - 1, size: this.auditPageSize }).subscribe({
+      next: (result) => {
+        this.auditEntries.set(result.entries);
+        this.auditTotal.set(result.totalElements);
+        this.auditLoading.set(false);
+      },
+      // El aviso (403, 404...) lo da `httpErrorAlertInterceptor`.
+      error: () => {
+        this.auditEntries.set([]);
+        this.auditTotal.set(0);
+        this.auditLoading.set(false);
+        this.auditFailed.set(true);
+      },
+    });
+  }
+
+  protected onAuditPageChange(page: number): void {
+    const backendUserId = this.user()?.backendUserId;
+    if (backendUserId) this.loadAudit(backendUserId, page);
+  }
 
   // Candidatos a "Administrador responsable" — cualquier admin/supervisor
   // EXCEPTO el propio usuario que se está editando (no puede ser su propio
@@ -328,13 +376,19 @@ export class UserDetail {
     effect((onCleanup) => {
       const id = this.userId();
       this.backendDetail.set(null);
+      this.auditEntries.set([]);
+      this.auditTotal.set(0);
       const backendUserId = id ? untracked(() => this.service.findUser(id)?.backendUserId ?? null) : null;
       if (backendUserId === null) return;
       const sub = this.auth.getUserDetail(backendUserId).subscribe({
         next: (detail) => this.backendDetail.set(detail),
         error: () => this.backendDetail.set(null),
       });
-      onCleanup(() => sub.unsubscribe());
+      untracked(() => this.loadAudit(backendUserId));
+      onCleanup(() => {
+        sub.unsubscribe();
+        this.auditSub?.unsubscribe();
+      });
     });
 
     // effect (no computed): reinicia formularios + borradores al entrar a un
@@ -470,7 +524,7 @@ export class UserDetail {
   // UserManagementService.changeRoles).
   protected onRolesSelectChange(roleIds: RoleId[]): void {
     this.draftRoleIds.set(roleIds);
-    this.draftPermissions.set(new Set(defaultPermissionsForRoles(roleIds)));
+    this.draftPermissions.set(new Set(this.accessCatalog.defaultPermissionsForRoles(roleIds)));
   }
 
   // Un solo guardado para TODA "Información general" (datos personales +
@@ -522,8 +576,36 @@ export class UserDetail {
       return;
     }
 
-    this.service.changeRoles(id, this.draftRoleIds(), [...this.draftPermissions()]);
-    this.message.success('Roles y permisos actualizados.');
+    const roleIds = this.draftRoleIds();
+    const permissions = [...this.draftPermissions()];
+    if (!this.service.accessChanged(id, roleIds, permissions)) {
+      this.message.info('No hay cambios que guardar.');
+      return;
+    }
+
+    // `PATCH /users/{id}/roles` real: solo manda lo que cambió; la respuesta es
+    // autoritativa, así que el borrador se alinea con ella.
+    this.savingAccess.set(true);
+    this.service.changeRoles(id, roleIds, permissions).subscribe({
+      next: (updated) => {
+        this.savingAccess.set(false);
+        this.draftRoleIds.set([...updated.roleIds]);
+        this.draftPermissions.set(new Set(updated.permissions));
+        this.message.success('Roles y permisos actualizados.');
+        // El detalle real (`backendDetail`) se mezcla ENCIMA del registro local: se vuelve a pedir para que no muestre lo anterior.
+        if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+      },
+      error: (err: unknown) => {
+        this.savingAccess.set(false);
+        // Vuelve al estado guardado: lo que el backend rechazó no se queda "a medias".
+        const current = this.user();
+        if (current) {
+          this.draftRoleIds.set([...current.roleIds]);
+          this.draftPermissions.set(new Set(current.permissions));
+        }
+        this.showMutationError(err);
+      },
+    });
   }
 
   // El chip emite la intención, la confirmación vive aquí — mismo patrón
@@ -588,21 +670,21 @@ export class UserDetail {
       next: (detail) => this.backendDetail.set(detail),
       error: () => {},
     });
+    // El backend registra cada acción en su bitácora: se vuelve a pedir la
+    // primera página para que "Historial" muestre lo que acaba de pasar.
+    this.loadAudit(backendUserId);
   }
 
-  // Aviso genérico para las 3 mutaciones reales de este componente
-  // (`onSaveProfile`/`onStatusChangeRequest`/`onVerifyEmailClick`): un 403
-  // de `/users/**` sin código de negocio (bloqueado por `SecurityConfig`
-  // antes del `GlobalExceptionHandler`) no lo cubre
-  // `httpErrorAlertInterceptor` — ver `forbiddenRoleMessage`. Cualquier
-  // otro `HttpErrorResponse` (404 `USER_NOT_FOUND`, etc.) ya tiene su
-  // propio aviso vía el interceptor; un error LOCAL (guard de
-  // `UserManagementService` por usuario sin `backendUserId`, no debería
-  // pasar en la práctica) sí necesita mostrarse aquí, sea lo que sea.
+  // Aviso para las mutaciones reales de este componente (`onSaveProfile`/
+  // `onStatusChangeRequest`/`onVerifyEmailClick`). Todo error con respuesta
+  // del backend (códigos de negocio Y el 403 sin código por falta de
+  // permiso) ya lo avisa `httpErrorAlertInterceptor`; aquí solo quedan la
+  // caída de red (status 0, sin respuesta que interpretar) y los errores
+  // LOCALES (guard de `UserManagementService` por usuario sin
+  // `backendUserId`, no debería pasar en la práctica).
   private showMutationError(err: unknown): void {
     if (err instanceof HttpErrorResponse) {
-      const text = forbiddenRoleMessage(err.status);
-      if (text) this.message.error(text);
+      if (err.status === 0) this.message.error('No se pudo conectar con el servidor. Intenta de nuevo.');
       return;
     }
     const text = err instanceof Error ? err.message : 'No se pudo completar la acción.';
@@ -613,24 +695,80 @@ export class UserDetail {
     const id = this.userId();
     if (!id) return;
 
-    this.service.closeSessions(id);
-    this.message.success('Sesiones activas cerradas.');
+    // `POST /users/{id}/close-sessions` real: la persona puede volver a entrar; el
+    // access token ya emitido vive hasta 15 min.
+    this.closingSessions.set(true);
+    this.service.closeSessions(id).subscribe({
+      next: (updated) => {
+        this.closingSessions.set(false);
+        this.message.success('Sesiones activas cerradas.');
+        if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+      },
+      error: (err: unknown) => {
+        this.closingSessions.set(false);
+        this.showMutationError(err);
+      },
+    });
   }
 
+  // `POST /users/{id}/reset-password` real: la persona vuelve a su contraseña
+  // temporal (se muestra una sola vez en el toast y en "Organización" mientras siga
+  // pendiente), debe cambiarla al entrar y se CIERRAN todas sus sesiones. El
+  // modal queda girando hasta que el backend responde.
   protected onResetPasswordClick(): void {
     const user = this.user();
     if (!user) return;
 
     this.modal.confirm({
       nzTitle: 'Restablecer contraseña',
-      nzContent: `¿Restablecer la contraseña de <b>${fullName(user)}</b>? Se generará una nueva contraseña temporal.`,
+      nzContent: `¿Restablecer la contraseña de <b>${fullName(user)}</b>? Se generará una nueva contraseña temporal, deberá cambiarla al iniciar sesión y se cerrarán todas sus sesiones activas.`,
       nzOkText: 'Restablecer',
-      nzOnOk: () => {
-        const tempPassword = this.service.resetPassword(user.id);
-        if (tempPassword) {
-          this.message.success(`Contraseña restablecida. Temporal: ${tempPassword}`, { nzDuration: 8000 });
-        }
-      },
+      nzOnOk: () =>
+        new Promise<void>((resolve, reject) => {
+          this.service.resetPassword(user.id).subscribe({
+            next: (tempPassword) => {
+              this.message.success(`Contraseña restablecida. Temporal: ${tempPassword}`, { nzDuration: 8000 });
+              if (user.backendUserId) this.refreshBackendDetail(user.backendUserId);
+              resolve();
+            },
+            error: (err: unknown) => {
+              this.showMutationError(err);
+              reject();
+            },
+          });
+        }),
+    });
+  }
+
+  // Nadie puede darse de baja a sí mismo (409 CANNOT_DELETE_SELF).
+  protected readonly isSelf = computed(() => !!this.userId() && this.access.currentAppUser()?.id === this.userId());
+
+  // `DELETE /users/{id}` real: baja LÓGICA — la cuenta deja de poder entrar y sale
+  // de la lista, pero su historial se conserva (sigue consultable) y su correo
+  // queda libre. Al terminar vuelve a la lista.
+  protected onDeleteClick(): void {
+    const user = this.user();
+    if (!user) return;
+
+    this.modal.confirm({
+      nzTitle: 'Eliminar usuario',
+      nzContent: `¿Eliminar a <b>${fullName(user)}</b>? Dejará de poder iniciar sesión y se cerrarán sus sesiones. Su historial se conserva y su correo quedará libre.`,
+      nzOkText: 'Eliminar',
+      nzOkDanger: true,
+      nzOnOk: () =>
+        new Promise<void>((resolve, reject) => {
+          this.service.deleteUser(user.id).subscribe({
+            next: () => {
+              this.message.success('Usuario eliminado.');
+              resolve();
+              void this.router.navigateByUrl('/usuarios');
+            },
+            error: (err: unknown) => {
+              this.showMutationError(err);
+              reject();
+            },
+          });
+        }),
     });
   }
 
@@ -652,23 +790,21 @@ export class UserDetail {
 
     this.modal.confirm({
       nzTitle: 'Desbloquear cuenta (backend real)',
-      nzContent: `¿Desbloquear en el backend real la cuenta de <b>${fullName(user)}</b> (id ${backendUserId})? Aplica si quedó bloqueada tras 5 intentos fallidos de inicio de sesión.`,
+      nzContent: `¿Desbloquear en el backend real la cuenta de <b>${fullName(user)}</b> (id ${backendUserId})? Aplica si quedó bloqueada tras 5 intentos fallidos de inicio de sesión (bloqueo temporal de 2 horas) o por bloqueo manual; también reinicia el contador de intentos.`,
       nzOkText: 'Desbloquear',
       nzOnOk: () =>
         new Promise<void>((resolve, reject) => {
-          this.auth.unlockUser(backendUserId).subscribe({
-            next: () => {
+          // `unlockAccount` también deja en cero intentos fallidos y
+          // `lockedUntil`; el 403 (falta `manage_users`) y el 404 los avisa
+          // `httpErrorAlertInterceptor`.
+          this.service.unlockAccount(user.id).subscribe({
+            next: (updated) => {
               this.message.success('Cuenta desbloqueada en el backend real.');
+              if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
               resolve();
             },
-            error: (err: HttpErrorResponse) => {
-              const text =
-                err.status === 403
-                  ? 'Tu sesión no tiene el rol necesario (ADMIN o ALTAS) para desbloquear cuentas.'
-                  : err.status === 404
-                    ? 'El backend no encontró esa cuenta (id ' + backendUserId + ').'
-                    : 'No se pudo conectar con el servidor. Intenta de nuevo.';
-              this.message.error(text);
+            error: (err: unknown) => {
+              this.showMutationError(err);
               reject();
             },
           });

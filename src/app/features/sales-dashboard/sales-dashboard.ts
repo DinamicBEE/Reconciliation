@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
@@ -48,6 +49,7 @@ const LABEL_TO_STORE: Record<string, Store> = Object.fromEntries(
 @Component({
   selector: 'app-sales-dashboard',
   imports: [
+    NzPageHeaderModule,
     CommonModule,
     MoneyPipe,
     FormsModule,
