@@ -1,7 +1,6 @@
 @use '../../../shared/styles/toolbar';
 @use '../../../shared/styles/data-table';
 @use '../../../shared/styles/row-actions';
-@use '../../../shared/styles/buttons';
 
 .user-list {
   display: flex;
@@ -9,21 +8,7 @@
   gap: var(--grid-gap);
 }
 
-.user-list__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
 
-.user-list__title {
-  font-family: var(--font-heading);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  margin: 0;
-}
 
 .user-list__header-actions {
   display: flex;
@@ -31,9 +16,6 @@
   gap: 16px;
 }
 
-// Mismo look que .back-link (ver _back-link.scss) pero es un link hacia
-// adelante ("ver historial"), no "volver a ..." — no se reutiliza esa clase
-// para no confundir su nombre con su semántica en un futuro lector.
 .user-list__audit-link {
   display: inline-flex;
   align-items: center;

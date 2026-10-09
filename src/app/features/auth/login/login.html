@@ -57,6 +57,8 @@
 
       @if (loginError()) {
         <nz-alert class="login-card__alert" nzType="error" [nzMessage]="loginError()" nzShowIcon />
+      } @else if (sessionNotice(); as notice) {
+        <nz-alert class="login-card__alert" nzType="warning" [nzMessage]="notice" nzShowIcon />
       }
 
       <form nz-form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
@@ -156,26 +158,30 @@
       </form>
 
       <div class="login-card__demo">
-        <p class="login-card__demo-title">Cuentas de demo</p>
+        <p class="login-card__demo-title">Cuentas de demo (datos locales)</p>
         <ul class="login-card__demo-list">
           <li>
-            <span class="login-card__demo-role">Superadministrador</span>
-            <code>superadmin</code> / <code>Conciliacion2026</code>
+            <span class="login-card__demo-role">Administrador</span>
+            <code>admin&#64;conciliacion.mx</code> / <code>Conciliacion2026</code>
           </li>
           <li>
-            <span class="login-card__demo-role">Administrador</span>
-            <code>administrador</code> / <code>Administrador2026</code>
+            <span class="login-card__demo-role">Encargado de altas</span>
+            <code>carlos.medina&#64;conciliacion.mx</code> / <code>Administrador2026</code>
           </li>
           <li>
             <span class="login-card__demo-role">
               Contabilidad
               <span class="login-card__demo-hint">(pide cambiar contraseña)</span>
             </span>
-            <code>contabilidad</code> / <code>Contabilidad2026</code>
+            <code>gabriela.vargas&#64;conciliacion.mx</code> / <code>Contabilidad2026</code>
           </li>
           <li>
             <span class="login-card__demo-role">Tesorería</span>
-            <code>tesoreria</code> / <code>Tesoreria2026</code>
+            <code>roberto.sanchez&#64;conciliacion.mx</code> / <code>Tesoreria2026</code>
+          </li>
+          <li>
+            <span class="login-card__demo-role">Costos</span>
+            <code>laura.pineda&#64;conciliacion.mx</code> / <code>Costos2026</code>
           </li>
         </ul>
       </div>

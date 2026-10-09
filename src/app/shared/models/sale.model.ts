@@ -20,52 +20,48 @@ export interface SaleItem {
   unitPrice: number;
 }
 
-// Tipo de persona ante la DIAN — parte de la "identificación del cliente"
-// en el Drawer de detalle de venta (`sales-dashboard`). Opcional: un
-// consumidor final sin registro (`Cliente mostrador`) no lo trae y el
-// Drawer cae al fallback "Sin tipo de persona registrado".
+// Tipo de persona del cliente — la etiqueta depende del país
+// (`CountryProfile.personType`: física/moral en MX, natural/jurídica en CO).
+// Opcional: un receptor genérico sin registro (`Cliente mostrador`) no lo
+// trae y el Drawer cae al fallback "Sin tipo de persona registrado".
 export type PersonType = 'natural' | 'juridica';
-
-export const PERSON_TYPE_LABEL: Record<PersonType, string> = {
-  natural: 'Persona natural',
-  juridica: 'Persona jurídica',
-};
-
-// Responsabilidad de IVA del cliente — terminología vigente de la DIAN
-// (reemplazó "Régimen común"/"Régimen simplificado" tras la Ley 2010 de
-// 2019). Mismo criterio opcional que `personType`.
-export type TaxRegime = 'responsable_iva' | 'no_responsable';
-
-export const TAX_REGIME_LABEL: Record<TaxRegime, string> = {
-  responsable_iva: 'Responsable de IVA',
-  no_responsable: 'No responsable de IVA',
-};
 
 export interface SaleCustomer {
   name: string;
   email?: string;
   phone?: string;
-  // Identificación fiscal básica del cliente — opcional: ver `PersonType`/
-  // `TaxRegime` arriba.
+  // Identificación fiscal del cliente — RFC (MX) / NIT o cédula (CO). Un
+  // cliente sin identificar lleva el id genérico del país
+  // (`CountryProfile.taxId.genericId`: XAXX010101000 / 222222222222).
+  taxId: string;
   personType?: PersonType;
-  taxRegime?: TaxRegime;
+  // Código del régimen fiscal en el catálogo del país activo
+  // (`CountryProfile.taxRegime.options`: c_RegimenFiscal del SAT o
+  // responsabilidad de IVA de la DIAN). Opcional, igual que `personType`.
+  taxRegime?: string;
 }
 
-// Factura electrónica de venta (DIAN) — el documento FISCAL de la venta,
-// distinto de `Sale.folio` (el folio interno del POS, sin validez ante la
-// DIAN). `prefix` + `number` son el consecutivo autorizado por la
-// resolución de facturación vigente; `cufe` (Código Único de Facturación
-// Electrónica) identifica el documento de forma inequívoca ante la DIAN — es
-// lo que trae codificado el QR de una factura electrónica real, y lo que
-// permite consultarla en el catálogo público de la DIAN (ver `dianQueryUrl`
-// en `sale.util.ts`). A diferencia de `personType`/`taxRegime` del cliente,
-// NO es opcional: la facturación electrónica es un requisito legal de la
-// DIAN para toda venta, sin importar quién compre.
+// Comprobante fiscal de la venta — CFDI (México, SAT) o factura electrónica
+// (Colombia, DIAN). Distinto de `Sale.folio` (el folio interno del POS, sin
+// validez fiscal). Nombres de campo neutros; la etiqueta de cada uno sale de
+// `CountryProfile.invoice`:
+// - `series` + `number`: serie y folio del CFDI / prefijo y consecutivo de
+//   la resolución de facturación DIAN.
+// - `fiscalId`: folio fiscal (UUID) que asigna el SAT al timbrar / CUFE
+//   (Código Único de Facturación Electrónica) de la DIAN. Es lo que trae
+//   codificado el QR del documento y permite consultarlo ante la autoridad
+//   (`CountryProfile.invoice.queryUrl`).
+// NO es opcional: la facturación electrónica es obligatoria en ambos países
+// para toda venta, sin importar quién compre.
 export interface ElectronicInvoice {
-  prefix: string;
+  series: string;
   number: string;
-  cufe: string;
-  issuedAt: string; // ISO datetime, con offset -05:00 (Colombia no observa horario de verano)
+  fiscalId: string;
+  issuedAt: string; // ISO datetime con el offset fiscal del país
+  // Solo CFDI (México): uso del CFDI (c_UsoCFDI) y método de pago
+  // (c_MetodoPago). Ausentes en Colombia (`CountryProfile.invoice.hasCfdiFields`).
+  cfdiUse?: string;
+  paymentMethod?: string;
 }
 
 // Un pago aplicado a la venta — normalmente uno solo, pero se modela como
@@ -81,6 +77,26 @@ export interface SalePayment {
 
 export type SaleStatus = 'completada' | 'cancelada';
 
+// Referencia de la transacción NetSuite cuando la venta ya está contabilizada
+// (CU4/CU11 del DED) — mismo patrón que ElectronicInvoice: objeto nombrado
+// con campos propios, no sueltos a nivel Sale. `null` en `Sale.netsuite`
+// mientras no se haya contabilizado (la mayoría del mock, ver
+// sales-mock.data.ts — solo los primeros 3 traen valor).
+export interface NetSuiteReference {
+  entryId: string; // Id del asiento contable en NetSuite
+  postedAt: string; // ISO datetime en que se contabilizó
+}
+
+// Conciliación relacionada y su fecha, cuando la venta ya está conciliada
+// (CU4/CU7 del DED). `null` en `Sale.reconciliation` mientras siga "por
+// conciliar" o haya sido "desconciliada" — distinto de
+// `Sale.reconciliationStatus` (el estado en sí, `MatchStatus`), esto es la
+// REFERENCIA a la conciliación ya registrada.
+export interface SaleReconciliationReference {
+  id: string; // Id de la conciliación relacionada
+  date: string; // ISO date en que se concilió
+}
+
 export interface Sale {
   id: string;
   folio: string;
@@ -91,6 +107,11 @@ export interface Sale {
   date: string; // ISO date
   time: string; // HH:mm
   store: Store;
+  // Empresa/subsidiaria dueña de la venta — id del catálogo de la sesión
+  // (`CatalogService.subsidiarias()`, arreglo que llega en el login vía
+  // `AuthUser.subsidiarias`), no un valor propio de este mock. Filtro
+  // "Empresa" del toolbar (ver sales-dashboard.ts). `null` si no aplica.
+  subsidiariaId: number | null;
   tenderMedia: TenderMedia;
   // Estado de conciliación de esta venta contra el medio de pago, a nivel de
   // ORDEN — reusa MatchStatus (mismo tipo/tag que difference-management; NO
@@ -101,6 +122,13 @@ export interface Sale {
   // tabla). Sigue viva aquí para el Drawer ("Estado de conciliación"),
   // que sí necesita la granularidad de 4 estados por orden.
   reconciliationStatus: MatchStatus;
+  // Referencia de la transacción NetSuite cuando está contabilizada — `null`
+  // si todavía no se contabiliza (ver NetSuiteReference arriba).
+  netsuite: NetSuiteReference | null;
+  // Conciliación relacionada y su fecha cuando está conciliada — `null` si
+  // sigue "por conciliar" o fue "desconciliada" (ver SaleReconciliationReference
+  // arriba).
+  reconciliation: SaleReconciliationReference | null;
   customer: SaleCustomer;
   invoice: ElectronicInvoice;
   items: SaleItem[];

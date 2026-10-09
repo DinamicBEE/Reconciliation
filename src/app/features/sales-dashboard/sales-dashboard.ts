@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
@@ -15,28 +16,42 @@ import { SaleStatusTag } from '../../shared/components/sale-status-tag/sale-stat
 import { MatchStatusTag } from '../../shared/components/match-status-tag/match-status-tag';
 import { ReconciliationStatusTag } from '../../shared/components/reconciliation-status-tag/reconciliation-status-tag';
 import { ReconciliationStatus, TENDER_MEDIA_LABEL } from '../../shared/models/reconciliation-item.model';
-import { PERSON_TYPE_LABEL, Sale, STORE_LABEL, TAX_REGIME_LABEL } from '../../shared/models/sale.model';
+import { Sale, STORE_LABEL, Store } from '../../shared/models/sale.model';
+import { COUNTRY_PROFILE } from '../../core/country/active-country';
+import { CatalogService } from '../../core/services/catalog.service';
+import { AccessControlService } from '../auth/data/access-control.service';
 import {
   DateRangeFilter,
   SalesDashboardService,
   StatusFilter,
   StoreFilter,
+  SubsidiariaFilter,
   TenderMediaFilter,
 } from './data/sales-dashboard.service';
 import {
-  dianQueryUrl as computeDianQueryUrl,
   saleReconciliationStatus,
   saleSubtotal as computeSaleSubtotal,
   saleTaxAmount as computeSaleTaxAmount,
   saleTaxableBase,
+  saleTaxLines,
   saleTotal as computeSaleTotal,
 } from './data/sale.util';
 import { buildSalesCsv } from './data/sale-export.util';
+import { MoneyPipe } from '../../core/country/money.pipe';
+
+// Lookup inverso de `STORE_LABEL` ("Sucursal Polanco" → 'polanco') — ver el
+// comentario de `storeOptions` en el componente sobre por qué existe este
+// puente por nombre en vez de usar el id numérico real de la ubicación.
+const LABEL_TO_STORE: Record<string, Store> = Object.fromEntries(
+  Object.entries(STORE_LABEL).map(([slug, label]) => [label, slug as Store]),
+);
 
 @Component({
   selector: 'app-sales-dashboard',
   imports: [
+    NzPageHeaderModule,
     CommonModule,
+    MoneyPipe,
     FormsModule,
     NzCardModule,
     NzTableModule,
@@ -58,20 +73,47 @@ import { buildSalesCsv } from './data/sale-export.util';
 })
 export class SalesDashboard {
   protected readonly service = inject(SalesDashboardService);
+  private readonly catalog = inject(CatalogService);
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
+  protected readonly access = inject(AccessControlService);
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
   protected readonly storeLabel = STORE_LABEL;
-  protected readonly personTypeLabel = PERSON_TYPE_LABEL;
-  protected readonly taxRegimeLabel = TAX_REGIME_LABEL;
+  // Vocabulario fiscal y general del país activo (`environment.country`):
+  // tipo de persona, régimen, comprobante (CFDI / factura electrónica),
+  // RFC / NIT, impuestos y el nombre del punto de venta.
+  protected readonly country = inject(COUNTRY_PROFILE);
 
-  protected readonly storeOptions: { value: StoreFilter; label: string }[] = [
-    { value: 'all', label: 'Todas las tiendas' },
-    { value: 'polanco', label: 'Sucursal Polanco' },
-    { value: 'condesa', label: 'Sucursal Condesa' },
-    { value: 'roma', label: 'Sucursal Roma' },
-    { value: 'centro', label: 'Sucursal Centro' },
-  ];
+  // Opciones del catálogo de la sesión (`CatalogService.ubicaciones()`, ver
+  // MASTER.md "Catálogos reales: subsidiaria/ubicación" — regla general
+  // para todo select de este tipo), no un array hardcodeado como antes.
+  // `Store` (el slug interno que usa el mock de ventas, `sale.model.ts`)
+  // sigue fijo — no hay backend real de ventas todavía, así que este mock
+  // no puede recibir ids numéricos de ubicación como valor de `Sale.store`.
+  // El puente es por NOMBRE: las 4 ubicaciones del catálogo (mock hoy, las
+  // sembradas en el backend real después) se llaman EXACTAMENTE igual que los 4 valores de `STORE_LABEL`
+  // ("Sucursal Polanco", etc.) — `LABEL_TO_STORE` hace el lookup inverso.
+  // Una ubicación real que el backend agregue/quite con un nombre que NO
+  // está en `STORE_LABEL` simplemente no aparece en el filtro (no hay datos
+  // mock para ella); el día que exista un backend real de ventas, `Store`
+  // pasa a ser el id numérico de la ubicación directamente, sin este mapeo.
+  protected readonly storeOptions = computed<{ value: StoreFilter; label: string }[]>(() => {
+    const known = this.catalog
+      .ubicaciones()
+      .filter((u) => LABEL_TO_STORE[u.nombre])
+      .map((u) => ({ value: LABEL_TO_STORE[u.nombre], label: u.nombre }));
+    return [{ value: 'all' as const, label: this.country.vocabulary.allLocations }, ...known];
+  });
+
+  // Filtro "Empresa" — a diferencia de `storeOptions` (que traduce por
+  // NOMBRE a un slug fijo del mock, ver LABEL_TO_STORE), aquí sí hay un id
+  // real (`Sale.subsidiariaId`) que comparar 1:1 contra
+  // `CatalogService.subsidiarias()` (arreglo que llega en el login vía
+  // `AuthUser.subsidiarias`), sin indirección por nombre.
+  protected readonly subsidiariaOptions = computed<{ value: SubsidiariaFilter; label: string }[]>(() => {
+    const known = this.catalog.subsidiarias().map((s) => ({ value: s.id, label: s.nombre }));
+    return [{ value: 'all' as const, label: 'Todas las empresas' }, ...known];
+  });
 
   // Mismo vocabulario/orden que reconciliation-dashboard.ts (statusOptions)
   // — "los mismos estados que los de la conciliación".
@@ -107,6 +149,7 @@ export class SalesDashboard {
     return {
       subtotal: computeSaleSubtotal(sale),
       taxableBase: saleTaxableBase(sale),
+      taxLines: saleTaxLines(sale),
       taxAmount: computeSaleTaxAmount(sale),
       total: computeSaleTotal(sale),
     };
@@ -114,6 +157,10 @@ export class SalesDashboard {
 
   protected onDateRangeChange(value: [Date, Date] | null): void {
     this.service.setDateRange(value as DateRangeFilter);
+  }
+
+  protected onSubsidiariaFilterChange(value: SubsidiariaFilter): void {
+    this.service.setSubsidiariaFilter(value);
   }
 
   protected onStoreFilterChange(value: StoreFilter): void {
@@ -164,10 +211,11 @@ export class SalesDashboard {
     return saleReconciliationStatus(sale);
   }
 
-  // Enlace de consulta del CUFE en el catálogo público de la DIAN —
-  // "Documento electrónico" del Drawer ("Consultar en la DIAN").
-  protected dianQueryUrl(sale: Sale): string {
-    return computeDianQueryUrl(sale.invoice);
+  // Enlace de consulta del comprobante ante la autoridad del país —
+  // verificador de CFDI del SAT (por UUID) o catálogo público de la DIAN
+  // (por CUFE).
+  protected fiscalQueryUrl(sale: Sale): string {
+    return this.country.invoice.queryUrl(sale.invoice.fiscalId);
   }
 
   // Botón "Exportar" del toolbar — exporta lo que los 5 filtros están
@@ -176,7 +224,13 @@ export class SalesDashboard {
   // formato/fórmulas. BOM UTF-8 al inicio del Blob para que Excel respete los
   // acentos (nombres de cliente, "Sucursal ...") al abrirlo directamente.
   protected exportCsv(): void {
+    // Matriz 7.16 del DED: exportar requiere `export_reports` propio, no solo
+    // poder VER la pantalla (`view_dashboard`) — ver el botón en el template,
+    // que ya lo oculta; este guard es defensa en profundidad.
+    if (!this.access.hasPermission('export_reports')) return;
+
     const csv = buildSalesCsv(this.service.filteredSales(), {
+      location: this.country.vocabulary.location,
       store: this.storeLabel,
       tenderMedia: this.tenderMediaLabel,
       status: this.statusLabel,
@@ -202,6 +256,11 @@ export class SalesDashboard {
   // backend sin necesitar un spinner propio (mismo patrón de
   // `modal.confirm()` que "Desconciliar" en reconciliation-dashboard.ts).
   protected onReprocessClick(): void {
+    // Matriz 7.16 del DED: "Reproceso de ventas" es Admin/Contabilidad
+    // únicamente — sin permiso propio, por rol directo (ver
+    // AccessControlService.canReprocessSales); el botón en el template ya lo
+    // oculta, este guard es defensa en profundidad.
+    if (!this.access.canReprocessSales()) return;
     const target = this.service.reprocessTarget();
     if (!target) return;
 

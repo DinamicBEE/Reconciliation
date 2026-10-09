@@ -1,4 +1,4 @@
-import { PermissionKey } from '../../../features/user-management/data/user-management.model';
+import { PermissionKey, RoleId } from '../../../features/user-management/data/user-management.model';
 
 // Registro de pantallas buscables desde el Header — cada una declara el
 // permiso que hace falta para verla (`AccessControlService.hasPermission`,
@@ -11,6 +11,7 @@ export interface SearchablePage {
   path: string;
   keywords: string[];
   permission?: PermissionKey;
+  role?: RoleId; // además del permiso, exclusiva de este rol (ver permissionGuard)
 }
 
 export const SEARCHABLE_PAGES: SearchablePage[] = [
@@ -22,6 +23,12 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
     permission: 'view_reconciliation',
   },
   {
+    label: 'Catálogos cargados',
+    path: '/catalogos',
+    keywords: ['catalogos', 'listas', 'homologaciones', 'dian', 'netsuite', 'maestros'],
+    permission: 'view_catalogs',
+  },
+  {
     label: 'Usuarios',
     path: '/usuarios',
     keywords: ['administración', 'administracion', 'cuentas'],
@@ -29,10 +36,19 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   },
   { label: 'Nuevo usuario', path: '/usuarios/nuevo', keywords: ['crear', 'alta'], permission: 'manage_users' },
   {
+    label: 'Roles y permisos',
+    path: '/gestion-de-roles',
+    keywords: ['roles', 'permisos', 'accesos'],
+    permission: 'manage_roles',
+    role: 'ADMIN',
+  },
+  { label: 'Nuevo rol', path: '/gestion-de-roles/nuevo', keywords: ['crear', 'roles', 'permisos'], permission: 'manage_roles', role: 'ADMIN' },
+  {
     label: 'Auditoría de usuarios',
     path: '/usuarios/auditoria',
     keywords: ['historial', 'log'],
-    permission: 'manage_users',
+    // Permiso propio (matriz 7.16 del DED) — ver app.routes.ts.
+    permission: 'view_audit_log',
   },
   { label: 'Perfil', path: '/perfil', keywords: ['cuenta', 'yo', 'información general'] },
 ];

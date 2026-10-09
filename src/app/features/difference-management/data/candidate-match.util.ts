@@ -31,7 +31,7 @@ export function findMatchCandidates(
     .map((settlement) => ({
       settlement,
       suggestedByBackend: settlement.id === linkedSettlementId,
-      amountDiff: Math.abs(settlement.amount - sale.amount),
+      amountDiff: Math.abs(settlement.grossAmount - sale.amount),
       dateDiff: daysBetween(settlement.date, sale.date),
     }))
     .sort((a, b) => {

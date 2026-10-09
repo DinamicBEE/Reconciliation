@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
@@ -15,22 +16,24 @@ import { ReconciliationStatusTag } from '../../shared/components/reconciliation-
 import { Sparkline } from '../../shared/components/sparkline/sparkline';
 import { RadialProgress } from '../../shared/components/radial-progress/radial-progress';
 import { ReconciliationStatus, TENDER_MEDIA_LABEL, TenderMedia } from '../../shared/models/reconciliation-item.model';
-import { MOCK_SETTLEMENTS } from '../../shared/mock-data/sales-settlements.mock-data';
 import { DateRangeFilter, ReconciliationService, StatusFilter, TenderMediaFilter } from './data/reconciliation.service';
 import { TenderDaySummary } from './data/group-by-tender-day.util';
-import { BankAccount, BANK_ACCOUNTS } from './data/bank-accounts.mock-data';
+import { importTargetsFor } from './data/bank-accounts.mock-data';
+import { BankImportApi } from './data/bank-import.api';
 import {
   BankImportRejection,
   BankImportSummary,
-  parseBankImportFile,
-  simulateBankImportRejection,
-  summarizeBankImport,
-} from './data/bank-import.util';
-
-// Tiempo simulado de la llamada al backend (ver `onImportFileSelected`) —
-// deliberadamente perceptible para que el spinner/estado "Conectando con el
-// banco…" tengan tiempo de leerse, no un valor real de ninguna API.
-const IMPORT_SIMULATED_DELAY_MS = 1800;
+  IMPORT_FILE_ACCEPT,
+  IMPORT_ORIGINS,
+  ImportOrigin,
+  ImportOriginId,
+  ImportTarget,
+  extractImportRejection,
+  isAcceptedImportFile,
+  summaryFromResponse,
+} from './data/bank-import.model';
+import { MoneyPipe } from '../../core/country/money.pipe';
+import { AccessControlService } from '../auth/data/access-control.service';
 
 // "Gestionar" en ambos — un mismo día+medio "no cuadra" ya sea porque el
 // proveedor aún no liquida nada (`por_conciliar`) o porque lo liquidado no
@@ -41,7 +44,9 @@ const ACTIONABLE_STATUSES = new Set<ReconciliationStatus>(['desconciliado', 'por
 @Component({
   selector: 'app-reconciliation-dashboard',
   imports: [
+    NzPageHeaderModule,
     CommonModule,
+    MoneyPipe,
     FormsModule,
     RouterLink,
     NzCardModule,
@@ -65,6 +70,7 @@ export class ReconciliationDashboard {
   protected readonly service = inject(ReconciliationService);
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
+  protected readonly access = inject(AccessControlService);
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
 
   protected readonly statusOptions: { value: StatusFilter; label: string }[] = [
@@ -193,66 +199,74 @@ export class ReconciliationDashboard {
 
   // --- "Importar movimientos bancarios" -----------------------------------
   // Botón propio arriba de la tabla (no una fila de acción) — carga masiva
-  // de un estado de cuenta completo, a diferencia del "Importar CSV" de
-  // difference-management (que agrega candidatos para UNA orden puntual).
-  // No hay backend real: se simula la llamada con un `setTimeout` de
-  // `IMPORT_SIMULATED_DELAY_MS` (ver `onImportFileSelected`, que también
-  // loguea en consola lo que el parser obtuvo del archivo) y el resultado
-  // nunca se inyecta de vuelta a `MOCK_SALES`/`MOCK_SETTLEMENTS` — es un
-  // resumen de la carga, no una fuente nueva de datos para la tabla (ver
-  // MASTER.md).
-  protected readonly bankAccounts: BankAccount[] = BANK_ACCOUNTS;
-
-  protected readonly importTenderMediaOptions: { value: TenderMedia; label: string }[] = [
-    { value: 'bbva', label: 'BBVA' },
-    { value: 'rappi', label: 'Rappi' },
-    { value: 'didi_food', label: 'DiDi Food' },
-    { value: 'efectivo', label: 'Efectivo' },
-  ];
+  // de un estado de cuenta o liquidación completo (DED, CU5), a diferencia
+  // del "Importar CSV" de difference-management (que agrega candidatos para
+  // UNA orden puntual). El frontend no lee ni normaliza el archivo: lo envía
+  // tal cual al backend con su origen y cuenta/lote (`BankImportApi`, hoy
+  // simulado) y muestra el resultado — el import no se inyecta de vuelta a
+  // `MOCK_SETTLEMENTS` (ver MASTER.md).
+  private readonly bankImportApi = inject(BankImportApi);
+  protected readonly importOrigins: ImportOrigin[] = IMPORT_ORIGINS;
+  protected readonly importFileAccept = IMPORT_FILE_ACCEPT;
 
   protected readonly importModalOpen = signal(false);
-  protected readonly importTenderMedia = signal<TenderMedia | null>(null);
-  protected readonly importBankAccountId = signal<string | null>(null);
+  protected readonly importOrigin = signal<ImportOriginId | null>(null);
+  protected readonly importTargetId = signal<string | null>(null);
   protected readonly importing = signal(false);
   protected readonly importSummary = signal<BankImportSummary | null>(null);
   protected readonly importRejection = signal<BankImportRejection | null>(null);
   // Nombre del archivo elegido — se muestra debajo del label del botón de
   // importación en cuanto se selecciona, independiente de si ya hay
-  // resultado o todavía está "Conectando con el banco…".
+  // resultado o todavía se está enviando.
   protected readonly selectedFileName = signal<string | null>(null);
 
-  // Cuenta los intentos de ESTA sesión de la pantalla (se reinicia si se
-  // navega fuera de /conciliacion y se vuelve, igual que el resto del
-  // estado del componente) — "la segunda vez" del enunciado, no algo que
-  // necesite sobrevivir a un refresh real.
-  private importAttempts = 0;
+  // Opciones de "Cuenta/lote" — dependen del origen: cuentas bancarias del
+  // banco del origen, o lotes de liquidación (Rappi).
+  protected readonly importTargets = computed<ImportTarget[]>(() => {
+    const origin = this.importOrigin();
+    return origin ? importTargetsFor(origin) : [];
+  });
+
+  protected readonly importTargetPlaceholder = computed(() => {
+    const origin = IMPORT_ORIGINS.find((o) => o.id === this.importOrigin());
+    if (!origin) return 'Selecciona primero un origen';
+    return origin.targetKind === 'batch' ? 'Selecciona un lote de liquidación' : 'Selecciona una cuenta bancaria';
+  });
 
   protected openImportModal(): void {
+    // Matriz 7.16 del DED: "Carga de extractos y liquidaciones" requiere
+    // `import_settlements` propio — hoy coincide con quien ve la pantalla
+    // (`view_reconciliation`, solo Admin/Tesorería tienen ambos), pero ahora
+    // se evalúa de verdad en vez de depender de esa coincidencia. El botón
+    // en el template ya lo oculta; este guard es defensa en profundidad.
+    if (!this.access.hasPermission('import_settlements')) return;
     this.importModalOpen.set(true);
   }
 
   protected closeImportModal(): void {
     this.importModalOpen.set(false);
-    this.importTenderMedia.set(null);
-    this.importBankAccountId.set(null);
+    this.importOrigin.set(null);
+    this.importTargetId.set(null);
     this.importSummary.set(null);
     this.importRejection.set(null);
     this.selectedFileName.set(null);
   }
 
-  protected onImportTenderMediaChange(value: TenderMedia): void {
-    this.importTenderMedia.set(value);
+  // Cambiar el origen invalida la cuenta/lote elegida (pertenece a otro
+  // origen).
+  protected onImportOriginChange(value: ImportOriginId): void {
+    this.importOrigin.set(value);
+    this.importTargetId.set(null);
   }
 
-  protected onImportBankAccountChange(value: string): void {
-    this.importBankAccountId.set(value);
+  protected onImportTargetChange(value: string): void {
+    this.importTargetId.set(value);
   }
 
-  // El botón de importar (dropzone) solo se habilita con AMBOS selectores
-  // completos — "una vez que los campos estén completos", tal cual se pidió
-  // — y se deshabilita mientras la llamada simulada está en curso.
+  // El botón de importar (dropzone) solo se habilita con origen y
+  // cuenta/lote elegidos, y se deshabilita mientras el envío está en curso.
   protected canImportFile(): boolean {
-    return this.importTenderMedia() !== null && this.importBankAccountId() !== null && !this.importing();
+    return this.importOrigin() !== null && this.importTargetId() !== null && !this.importing();
   }
 
   protected onImportFileSelected(event: Event): void {
@@ -260,46 +274,34 @@ export class ReconciliationDashboard {
     const file = input.files?.[0];
     input.value = ''; // permite volver a elegir el mismo archivo dos veces seguidas
 
-    const tenderMedia = this.importTenderMedia();
-    if (!file || !tenderMedia || !this.canImportFile()) return;
+    const origin = IMPORT_ORIGINS.find((o) => o.id === this.importOrigin());
+    const targetId = this.importTargetId();
+    if (!file || !origin || !targetId || !this.canImportFile()) return;
 
     this.selectedFileName.set(file.name);
     this.importSummary.set(null);
     this.importRejection.set(null);
+
+    // Única validación del lado del frontend: la extensión (CSV, Excel o
+    // TXT). Estructura, separador y contenido los valida el backend.
+    if (!isAcceptedImportFile(file.name)) {
+      this.importRejection.set({ line: 0, reason: 'formato no admitido. Usa un archivo .csv, .xlsx, .xls o .txt.' });
+      return;
+    }
+
     this.importing.set(true);
-    this.importAttempts += 1;
-    const isSecondAttemptOrLater = this.importAttempts >= 2;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = typeof reader.result === 'string' ? reader.result : '';
-
-      // Un solo parseo — se loguea tal cual (lo que "se obtiene" del
-      // archivo) y se reutiliza para el resumen/rechazo de abajo, en vez de
-      // volver a leerlo/parsearlo por cada cosa.
-      const parsed = parseBankImportFile(text);
-      console.log('[Importar movimientos bancarios] archivo procesado', {
-        archivo: file.name,
-        medioDePago: tenderMedia,
-        cuentaBancaria: this.importBankAccountId(),
-        intento: this.importAttempts,
-        filas: parsed.rows,
-        erroresDeFormato: parsed.errors,
-      });
-
-      // Simula la latencia de una llamada real al backend.
-      setTimeout(() => {
+    this.bankImportApi.upload({ origin: origin.id, targetKind: origin.targetKind, targetId, file }).subscribe({
+      next: (res) => {
         this.importing.set(false);
-
-        if (isSecondAttemptOrLater) {
-          this.importRejection.set(simulateBankImportRejection(parsed));
-          return;
-        }
-
-        const existingReferences = new Set(MOCK_SETTLEMENTS[tenderMedia].map((s) => s.orderId));
-        this.importSummary.set(summarizeBankImport(parsed, existingReferences));
-      }, IMPORT_SIMULATED_DELAY_MS);
-    };
-    reader.readAsText(file);
+        this.importSummary.set(summaryFromResponse(res));
+      },
+      error: (err: unknown) => {
+        this.importing.set(false);
+        this.importRejection.set(
+          extractImportRejection(err) ?? { line: 0, reason: 'no se pudo enviar el archivo. Intenta de nuevo.' },
+        );
+      },
+    });
   }
+
 }

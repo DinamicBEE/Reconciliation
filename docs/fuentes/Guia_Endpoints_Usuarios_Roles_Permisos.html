@@ -1,0 +1,625 @@
+<!doctype html>
+<!--
+  FUENTE del PDF "Guía de endpoints — Usuarios, roles y permisos · versión del front"
+  (docs/Guia_Endpoints_Usuarios_Roles_Permisos_v2.pdf).
+  Es la guía del backend (docs/implementaciones/Guia_Endpoints_Usuarios_Roles_Permisos_v1.0.pdf, NO modificada)
+  con la implementación del front en cada endpoint.
+  Regenerar: powershell -ExecutionPolicy Bypass -File docs/fuentes/generar-pdf.ps1 -Name Guia_Endpoints_Usuarios_Roles_Permisos -Output docs/Guia_Endpoints_Usuarios_Roles_Permisos_v2.pdf
+  Al actualizar: subir <meta name="doc-version">, la portada y el "Historial de versiones".
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="doc-version" content="2.0">
+<title>Guía de endpoints: usuarios, roles y permisos — v2.0 (front)</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 9.2pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 20pt; margin: 0 0 6px; color: #fff; }
+  h2 { font-size: 13.5pt; margin: 22px 0 8px; color: #0f172a; border-bottom: 2px solid #142850; padding-bottom: 4px; page-break-after: avoid; }
+  h3 { font-size: 10.4pt; margin: 14px 0 6px; color: #142850; }
+  code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 8pt; font-family: Consolas, "Courier New", monospace; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 6px 9px; border-radius: 4px; font-size: 7.6pt; line-height: 1.35; margin: 0; white-space: pre-wrap; font-family: Consolas, "Courier New", monospace; }
+  .cover { background: #0f1b3d; color: #fff; padding: 20px 22px; border-radius: 6px; margin-bottom: 16px; }
+  .eyebrow { font-size: 8pt; letter-spacing: 1.5px; color: #93c5fd; font-weight: bold; text-transform: uppercase; }
+  .subtitle { font-size: 11pt; color: #cbd5e1; margin-bottom: 12px; }
+  .meta { width: 100%; border-collapse: collapse; font-size: 8.6pt; }
+  .meta td { padding: 3px 0; vertical-align: top; }
+  .meta td.l { color: #93c5fd; width: 140px; font-weight: bold; }
+  .meta td.v { color: #e2e8f0; }
+  .meta code { background: #1e2f5c; color: #e2e8f0; }
+  table.data { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 8.4pt; }
+  table.data th { background: #142850; color: #fff; text-align: left; padding: 5px 7px; font-size: 8pt; }
+  table.data td { padding: 4px 7px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  table.data tr:nth-child(even) td { background: #f8fafc; }
+  .m { display: inline-block; min-width: 42px; text-align: center; padding: 1px 6px; border-radius: 4px; font-size: 7.4pt; font-weight: bold; color: #fff; font-family: Consolas, monospace; }
+  .m.GET { background: #2563eb; } .m.POST { background: #16a34a; } .m.PATCH { background: #d97706; } .m.DELETE { background: #dc2626; }
+  .b { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 7.4pt; font-weight: bold; white-space: nowrap; }
+  .b.ok { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  .b.chg { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }
+  .b.miss { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+  .b.und { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+  .callout { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 5px; padding: 9px 13px; margin: 8px 0; font-size: 8.7pt; }
+  .callout.warn { background: #fffbeb; border-color: #fde68a; }
+  .callout ul { margin: 4px 0 0; padding-left: 17px; } .callout li { margin-bottom: 3px; }
+  .ep { border: 1px solid #e2e8f0; border-radius: 5px; margin-bottom: 11px; }
+  .ep-head { background: #f8fafc; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; border-radius: 5px 5px 0 0; page-break-after: avoid; }
+  .ep-head .path { font-family: Consolas, monospace; font-weight: bold; font-size: 9pt; }
+  .ep-head .desc { margin-left: auto; color: #475569; font-size: 8pt; }
+  .ep table { width: 100%; border-collapse: collapse; font-size: 8.2pt; }
+  .ep td { padding: 3px 10px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+  .ep td.k { width: 92px; color: #64748b; font-weight: bold; font-size: 7.8pt; }
+  .ep ul { margin: 0; padding-left: 15px; } .ep li { margin-bottom: 2px; }
+  .front { border-top: 2px solid #142850; background: #f0f5ff; padding: 6px 10px 7px; border-radius: 0 0 5px 5px; font-size: 8.2pt; }
+  .front.chg { background: #fffbeb; border-top-color: #d97706; }
+  .front.miss { background: #fef2f2; border-top-color: #dc2626; }
+  .front.und { background: #f5f3ff; border-top-color: #7c3aed; }
+  .front-h { margin-bottom: 3px; } .front ul { margin: 2px 0 0; padding-left: 15px; } .front li { margin-bottom: 3px; }
+  .small { font-size: 8pt; color: #475569; }
+  .pb { page-break-before: always; }
+  .footer { margin-top: 18px; padding-top: 7px; border-top: 1px solid #e2e8f0; font-size: 7.4pt; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="eyebrow">Cóctel del Mar · Portal de conciliación</div>
+  <h1>Guía de endpoints</h1>
+  <div class="subtitle">Usuarios, roles y permisos — versión 2.0, con la implementación del front en cada endpoint</div>
+  <table class="meta">
+    <tr><td class="l">Base</td><td class="v">Guía del backend (v1.0, sin modificar): <code>docs/implementaciones/Guia_Endpoints_Usuarios_Roles_Permisos_v1.0.pdf</code>. El contenido de cada endpoint (sirve para / hace / cómo / petición / respuesta / errores / ojo) se conserva tal cual.</td></tr>
+    <tr><td class="l">Qué agrega v2.0</td><td class="v">En cada endpoint, un bloque <b>"En el front"</b> con su estado y los ajustes de esta versión; resumen de endpoints con estado; tabla de códigos de error con su gestión en el front.</td></tr>
+    <tr><td class="l">Front</td><td class="v">Rama <code>feature/login-coctel-del-mar-integration</code> — proyecto <code>reconciliation</code> (Angular 22 + ng-zorro-antd)</td></tr>
+    <tr><td class="l">Back</td><td class="v">Rama <code>DEV</code> — proyecto <code>coctel_midd</code> (gateway :8080, auth-service :8081)</td></tr>
+    <tr><td class="l">Versión</td><td class="v">2.0 — 06-Oct-2026 · Responsable portal: Irving Canul</td></tr>
+  </table>
+</div>
+
+<h2 style="margin-top:0;">Historial de versiones</h2>
+<table class="data">
+  <tr><th style="width:9%">Versión</th><th style="width:13%">Fecha</th><th>Cambios</th></tr>
+  <tr><td>1.0</td><td>06-Oct-2026</td><td>Guía original del backend (Auth Service). Archivada en <code>docs/implementaciones/</code> sin modificar.</td></tr>
+  <tr><td>2.0</td><td>06-Oct-2026</td><td>Ajustes del front a <code>POST /auth/login</code>, <code>POST /auth/change-password</code>, <code>GET /users</code>, <code>GET /users/{id}</code> y <code>PATCH /users/{id}</code>; lista completa de códigos de error en el interceptor con su gestión; estado de cada endpoint en el front.</td></tr>
+</table>
+
+<h2>Cómo está armado</h2>
+<ul>
+  <li><b>Gateway (puerto 8080):</b> es el único punto de entrada. Valida que el token JWT sea auténtico y no haya vencido, responde el CORS del navegador y reenvía la petición al servicio correspondiente.</li>
+  <li><b>Auth Service (puerto 8081):</b> no es accesible desde fuera; vuelve a validar el token por seguridad y aplica los permisos de cada endpoint. Es quien guarda usuarios, roles, permisos y bitácora.</li>
+  <li><b>Base de datos:</b> PostgreSQL compartida. El esquema lo crea únicamente el módulo db-migration; el Auth Service solo lo valida al arrancar.</li>
+  <li><b>Front:</b> dos interceptores funcionales (<code>withInterceptors([authTokenInterceptor, httpErrorAlertInterceptor])</code>): el primero agrega el Bearer a todo lo que va al backend salvo <code>/auth/login</code>, <code>/auth/refresh</code> y <code>/auth/logout</code>; el segundo avisa los errores del backend (sección 5).</li>
+</ul>
+
+<h3>Conceptos que se repiten en todo el documento</h3>
+<table class="data">
+  <tr><th style="width:18%">Concepto</th><th>Qué significa</th></tr>
+  <tr><td>accessToken</td><td>Credencial corta (JWT firmado) que se manda en cada petición: <code>Authorization: Bearer ...</code>. Dura 15 minutos. Lleva dentro el id, el correo, los roles, los permisos y si debe cambiar su contraseña.</td></tr>
+  <tr><td>refreshToken</td><td>Credencial larga y opaca (cadena aleatoria) que solo sirve para pedir un par de tokens nuevo. Dura 8 horas y se usa una sola vez. En la base solo se guarda su huella (hash), nunca el valor.</td></tr>
+  <tr><td>Permiso</td><td>Una acción concreta que se puede otorgar (por ejemplo <code>manage_users</code>). Cada endpoint exige uno. Se asignan por persona.</td></tr>
+  <tr><td>Rol</td><td>Una plantilla de permisos por defecto (ADMIN, ALTAS, CONTABILIDAD, TESORERIA, COSTOS). Al asignar un rol se copian sus permisos al usuario; después se pueden editar sin tocar el rol.</td></tr>
+  <tr><td>Baja lógica</td><td>Nada se borra de la base: los registros se marcan <code>enabled = false</code> y dejan de aparecer.</td></tr>
+  <tr><td>Bitácora</td><td>Historial de auditoría: quién hizo qué sobre qué usuario y cuándo.</td></tr>
+</table>
+
+<table class="data">
+  <tr><th style="width:42%">Tiempos y límites</th><th>Valor</th></tr>
+  <tr><td>Vida del accessToken</td><td>15 minutos</td></tr>
+  <tr><td>Vida del refreshToken</td><td>8 horas</td></tr>
+  <tr><td>Inactividad máxima</td><td>30 minutos sin renovar el token: la sesión se cierra</td></tr>
+  <tr><td>Intentos fallidos de login</td><td>5; al quinto la cuenta se bloquea</td></tr>
+  <tr><td>Duración del bloqueo automático</td><td>2 horas (después se desbloquea sola)</td></tr>
+  <tr><td>Contraseña nueva</td><td>Mínimo 8 caracteres</td></tr>
+  <tr><td>Páginas de <code>GET /users</code></td><td>Por defecto 20; el front usa <b>100</b> y recorre todas las páginas (v2.0)</td></tr>
+</table>
+
+<h3>Formato de los errores</h3>
+<p>El Auth Service responde siempre <code>{ "error": "mensaje", "code": "CODIGO" }</code>. El Gateway, cuando rechaza por token ausente, vencido o contraseña pendiente, usa el formato estándar de Spring (<code>{ "timestamp", "status", "error", "path" }</code>), sin código ni mensaje. El front decide siempre por <code>code</code> (estable), nunca por el texto de <code>error</code>; el único texto del back que se muestra tal cual es el de <code>ACCOUNT_LOCKED</code>, porque trae los minutos restantes.</p>
+
+<div class="pb"></div>
+<h2 style="margin-top:0;">Resumen de endpoints y estado en el front</h2>
+<table class="data">
+  <tr><th style="width:8%">Método</th><th style="width:27%">Endpoint</th><th style="width:20%">Permiso</th><th style="width:17%">Estado en el front</th><th>Nota</th></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/auth/login</code></td><td>Público</td><td><span class="b chg">Ajustado en v2.0</span></td><td>Muestra el mensaje del back (minutos de bloqueo).</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/auth/refresh</code></td><td>Público</td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/auth/logout</code></td><td>Público</td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/auth/me</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/auth/change-password</code></td><td>Sesión</td><td><span class="b chg">Ajustado en v2.0</span></td><td>Refresh posterior + 401 de negocio sin cerrar sesión.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b chg">Ajustado en v2.0</span></td><td>Por permiso; size 100 y paginación completa.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b chg">Ajustado en v2.0</span></td><td>3 campos nuevos mapeados.</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Código INVALID_LOCATION agregado.</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b chg">Ajustado en v2.0</span></td><td>Envía subsidiariaIds / ubicacionIds.</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/roles</code></td><td><code>manage_users (+ manage_roles)</code></td><td><span class="b miss">Pendiente</span></td><td>Pendiente.</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/status</code></td><td><code>manage_users</code></td><td><span class="b chg">Ajustado en v2.0</span></td><td>Estado local coherente con el back.</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/users/{id}/verify-email</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/users/{id}/close-sessions</code></td><td><code>manage_users</code></td><td><span class="b miss">Pendiente</span></td><td>Pendiente.</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/users/{id}/reset-password</code></td><td><code>manage_users</code></td><td><span class="b miss">Pendiente</span></td><td>Pendiente.</td></tr>
+  <tr><td><span class="m DELETE">DELETE</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b miss">Pendiente</span></td><td>Pendiente (opción retirada del front).</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/users/{id}/audit-log</code></td><td><code>view_audit_log</code></td><td><span class="b miss">Pendiente</span></td><td>Pendiente.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/audit-log</code></td><td><code>view_audit_log</code></td><td><span class="b miss">Pendiente</span></td><td>Pendiente.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/roles</code></td><td><code>manage_users o manage_roles</code></td><td><span class="b miss">Pendiente</span></td><td>Pendiente.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/permissions</code></td><td><code>manage_users o manage_roles</code></td><td><span class="b miss">Pendiente</span></td><td>Pendiente.</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/unlock</code></td><td><code>manage_users</code></td><td><span class="b und">Sin documentar</span></td><td>No está en la guía; el front lo usa.</td></tr>
+</table>
+<p class="small">Conteo: 19 endpoints en la guía → <b>11 implementados</b> en el front (5 de <code>/auth</code> + <code>GET /users</code>, <code>GET /users/{id}</code>, <code>POST /users</code>, <code>PATCH /users/{id}</code>, <code>PATCH …/status</code>, <code>POST …/verify-email</code>) y <b>8 pendientes</b>; más <code>PATCH …/unlock</code>, que existe en DEV pero no está en la guía.</p>
+
+<h2>1. Sesión y autenticación</h2>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/auth/login</span><span class="desc">Iniciar sesión</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Es la pantalla de inicio de sesión. Entrega al front todo lo necesario para trabajar: los tokens y los datos del usuario (roles, permisos, subsidiarias, ubicaciones).</td></tr>
+    <tr><td class="k">Qué hace</td><td>Valida el correo y la contraseña, abre una sesión y devuelve un par de tokens más el resumen del usuario. Cuenta los intentos fallidos y bloquea la cuenta al quinto.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Busca al usuario por correo (solo los que no están dados de baja). Si el correo no existe responde lo mismo que una contraseña mala, para no revelar qué correos existen.</li><li>Si el usuario estaba bloqueado temporalmente y ya pasaron las 2 horas, lo desbloquea antes de seguir (y deja constancia en la bitácora).</li><li>Si sigue bloqueado responde 423 aunque la contraseña sea correcta, indicando cuántos minutos faltan.</li><li>Compara la contraseña contra su hash bcrypt (la contraseña nunca se guarda en claro).</li><li>Si falla, suma un intento en una transacción aparte para que el conteo se guarde aunque el login termine con error. Al quinto intento marca la cuenta como bloqueada por 2 horas.</li><li>Si acierta, reinicia el contador, registra la fecha de último acceso y genera los tokens: un JWT firmado (HS256, 15 min) y un refresh token aleatorio (8 h) del que solo se guarda el hash.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>POST /auth/login
+{ "username": "laura.gomez@cocteldelmar.com", "password": "Passw0rd!" }
+(el campo "username" lleva el correo)</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "accessToken": "eyJhbGciOi...", "refreshToken": "q8Zk...", "expiresIn": 900,
+  "user": { "id": 12, "email": "laura.gomez@cocteldelmar.com", "displayName": "Laura Gomez",
+    "phone": "3001234567", "status": "ACTIVE",
+    "roles": ["CONTABILIDAD"], "permissions": ["view_dashboard"],
+    "subsidiarias": [{"id": 1, "nombre": "..."}], "ubicaciones": [{"id": 7, "nombre": "..."}],
+    "mustChangePassword": false, "lastLoginAt": "2026-10-06T19:04:03Z", "emailVerified": true } }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>401 INVALID_CREDENTIALS · 423 ACCOUNT_LOCKED (el mensaje dice cuánto falta para poder reintentar).</td></tr>
+    <tr><td class="k">Ojo</td><td>expiresIn está en segundos. Si mustChangePassword es true, el usuario debe cambiar su contraseña antes de usar la app.</td></tr>
+  </table>
+  <div class="front chg">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado y ajustado</span> <span class="small"><code>AuthService.login</code> · <code>Login.onSubmit</code></span></div>
+    <ul><li><b>Cambio v2.0:</b> el 423 / <code>ACCOUNT_LOCKED</code> ya no muestra un texto fijo: <code>Login.onSubmit</code> muestra el <code>error</code> que manda el back (<code>serverErrorText()</code> en <code>auth-errors.ts</code>), que incluye los minutos restantes del bloqueo temporal o indica contactar al administrador si el bloqueo es manual. El texto fijo (<code>BLOCKED_MESSAGE</code>) queda solo de respaldo.</li><li>401 → "Usuario o contraseña inválidos."; sin respuesta (status 0) → mensaje de conexión. <code>INVALID_CREDENTIALS</code> y <code>ACCOUNT_LOCKED</code> los pinta el propio formulario, por eso el interceptor no duplica el aviso.</li><li><code>expiresIn</code> (segundos) programa el refresh proactivo; si <code>mustChangePassword</code> es true se redirige a <code>/cambiar-password</code>.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/auth/refresh</span><span class="desc">Renovar los tokens</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Mantiene viva la sesión sin pedir la contraseña otra vez. El front lo llama antes de que venza el accessToken.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Cambia un refresh token vigente por un par nuevo (accessToken y refreshToken).</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Busca el token por su hash. Si no existe: INVALID_REFRESH_TOKEN.</li><li>Si el token ya se había usado (está revocado) lo trata como robo: cierra todas las sesiones del usuario y responde REFRESH_TOKEN_REUSED.</li><li>Si pasaron las 8 h: REFRESH_TOKEN_EXPIRED. Si pasaron más de 30 minutos desde la última actividad: SESSION_IDLE_TIMEOUT (inactividad).</li><li>Si el usuario ya está bloqueado o inactivo: USER_LOCKED_OR_INACTIVE.</li><li>Si todo está bien emite un par nuevo (con los roles y permisos actuales de la base) y revoca el anterior.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>POST /auth/refresh
+{ "refreshToken": "q8Zk..." }</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "accessToken": "...", "refreshToken": "...", "expiresIn": 900 }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>401 con INVALID_REFRESH_TOKEN, REFRESH_TOKEN_EXPIRED, REFRESH_TOKEN_REUSED, SESSION_IDLE_TIMEOUT o USER_LOCKED_OR_INACTIVE.</td></tr>
+    <tr><td class="k">Ojo</td><td>Nunca lances dos renovaciones al mismo tiempo con el mismo token: la segunda se interpreta como robo y cierra todas las sesiones. Esta es también la forma en que el usuario recibe sus permisos actualizados.</td></tr>
+  </table>
+  <div class="front ok">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado</span> <span class="small"><code>AuthService.refreshAccessToken</code> · <code>requestTokenPair</code></span></div>
+    <ul><li>Un solo refresh en vuelo (timer en <code>scheduleRefresh</code>); <code>requestTokenPair</code> es el único punto que llama al endpoint y lo comparten el refresh programado y el de <code>change-password</code>.</li><li>Cualquier 401 de este endpoint cierra la sesión; <code>SESSION_IDLE_TIMEOUT</code> la cierra con el aviso de inactividad en el login. <code>REFRESH_TOKEN_REUSED</code> lo avisa el interceptor de errores.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/auth/logout</span><span class="desc">Cerrar sesión</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>El botón "Cerrar sesión".</td></tr>
+    <tr><td class="k">Qué hace</td><td>Invalida el refresh token de la sesión actual para que no pueda renovarse más.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Marca el token como revocado. Si el token no existe responde igual con éxito (es idempotente).</li><li>No exige un accessToken vigente a propósito: así se puede cerrar sesión aunque el token ya haya vencido.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>POST /auth/logout
+{ "refreshToken": "q8Zk..." }</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "success": true }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>—</td></tr>
+    <tr><td class="k">Ojo</td><td>El accessToken que ya se emitió sigue siendo válido hasta que venza (máximo 15 min); lo que se impide es renovarlo.</td></tr>
+  </table>
+  <div class="front ok">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado</span> <span class="small"><code>AuthService.logout</code></span></div>
+    <ul><li>Se llama "fire and forget" y la sesión local se limpia siempre; es ruta pública en <code>authTokenInterceptor</code> (no lleva Bearer).</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/auth/me</span><span class="desc">Datos de la sesión actual</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Al recargar la página, el front necesita saber quién es el usuario sin pedir la contraseña otra vez.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Devuelve los mismos datos del campo user del login.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Toma el id del usuario del token (nunca de un parámetro que el cliente pueda falsificar) y lee sus datos actuales.</li><li>Es una de las tres rutas permitidas mientras la contraseña temporal no se haya cambiado.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>GET /auth/me</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "id": 12, "email": "...", "displayName": "...", "roles": [...], "permissions": [...], ... }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>401 si el token venció o es inválido.</td></tr>
+  </table>
+  <div class="front ok">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado</span> <span class="small"><code>AuthService.me</code></span></div>
+    <ul><li><code>validateResumedSession</code> la usa al recargar la página para validar la sesión guardada en <code>sessionStorage</code>.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/auth/change-password</span><span class="desc">Cambiar la contraseña</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Pantalla de cambio obligatorio de contraseña (primer ingreso o después de un reinicio) y cambio voluntario.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Reemplaza la contraseña del usuario autenticado y apaga la marca de contraseña pendiente.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Comprueba que la contraseña actual coincida con el hash guardado.</li><li>Guarda el hash bcrypt de la nueva (mínimo 8 caracteres) y pone mustChangePassword en false.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>POST /auth/change-password
+{ "currentPassword": "LAURAGOMEZ2026", "newPassword": "NuevaClave2026" }</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "success": true }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>401 INVALID_CREDENTIALS (la actual no coincide) · 400 (la nueva es muy corta).</td></tr>
+    <tr><td class="k">Ojo</td><td>El token que ya tiene el usuario sigue marcado como "contraseña pendiente". Hay que llamar a /auth/refresh justo después para obtener uno limpio.</td></tr>
+  </table>
+  <div class="front chg">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado y ajustado</span> <span class="small"><code>AuthService.changePassword</code> · <code>ChangePassword</code></span></div>
+    <ul><li><b>Cambio v2.0 — refresh posterior:</b> <code>changePassword()</code> encadena (<code>switchMap</code>) un <code>POST /auth/refresh</code> con el refresh token vigente y reemplaza la sesión (<code>rotateSessionAfterPasswordChange</code>, <code>mustChangePasswordHint: false</code>). Si ese refresh falla, se invalida la sesión (<code>idle_timeout</code> / <code>invalid_token</code>).</li><li><b>Cambio v2.0 — 401 de negocio:</b> <code>authTokenInterceptor</code> ya no cierra la sesión ante un 401 con <code>INVALID_CREDENTIALS</code> (contraseña actual incorrecta); antes un error de tecleo sacaba al usuario.</li><li><code>ChangePassword</code> maneja 401 ("La contraseña actual es incorrecta."), 400 (nueva con menos de 8 caracteres), 0 (sin conexión) y un mensaje genérico para el resto.</li><li>Verificado en navegador: contraseña actual incorrecta → la sesión se mantiene; cambio correcto → el refresh token rota y aterriza en la pantalla de inicio.</li></ul>
+  </div>
+</div>
+
+<h2>2. Administración de usuarios</h2>
+<p>Todos estos endpoints exigen el permiso <code>manage_users</code>, salvo los que indican otro. El Gateway valida el token y el Auth Service vuelve a comprobar el permiso: si falta responde 403.</p>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/users</span><span class="desc">Listar y buscar usuarios</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>La tabla principal de "Administración de usuarios", con búsqueda, filtros y paginación.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Devuelve una página de usuarios. Los usuarios dados de baja no aparecen.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Construye la consulta con filtros opcionales: search (texto en el nombre completo o el correo, sin importar mayúsculas), role (código del rol) y status (active, inactive, blocked).</li><li>Pagina en la base de datos (page empieza en 0, size por defecto 20).</li><li>Resuelve las subsidiarias y ubicaciones de cada fila para mostrarlas con nombre.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>GET /users?search=laura&amp;role=CONTABILIDAD&amp;status=active&amp;page=0&amp;size=20</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "content": [ { "id": 12, "email": "...", "displayName": "Laura Gomez", "status": "ACTIVE",
+    "roles": ["CONTABILIDAD"], "permissions": ["view_dashboard"], ... } ],
+  "page": 0, "size": 20, "totalElements": 25, "totalPages": 2 }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>403 (sin código) si falta el permiso manage_users.</td></tr>
+    <tr><td class="k">Ojo</td><td>status=blocked incluye a los bloqueados por un administrador y a los bloqueados por intentos fallidos.</td></tr>
+  </table>
+  <div class="front chg">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado y ajustado</span> <span class="small"><code>AuthService.listUsers</code> · <code>listAllUsers</code> · <code>UserManagementService.syncFromBackend</code></span></div>
+    <ul><li><b>Cambio v2.0 — permiso, no rol:</b> el front ya no habla de roles ADMIN/ALTAS (se eliminó <code>forbiddenRoleMessage</code>). El 403 sin código lo avisa <code>httpErrorAlertInterceptor</code> con un texto de falta de permiso.</li><li><b>Cambio v2.0 — paginación:</b> <code>size</code> se mantiene en 100 (<code>USERS_PAGE_SIZE</code>) y <code>AuthService.listAllUsers()</code> recorre las páginas (0-based, <code>totalPages</code>) con <code>expand</code> + <code>reduce</code>. <code>syncFromBackend()</code> lo usa, así que con más de 100 cuentas no se pierden las siguientes.</li><li>Las cuentas del backend sin registro local se insertan pidiendo su detalle (<code>fetchAndInsertUser</code>); las del mock se reconcilian por <code>backendUserId</code>.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/users/{id}</span><span class="desc">Detalle de un usuario</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Precarga las pestañas Información personal, Organización y Seguridad y acceso del formulario de edición.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Devuelve todos los datos del usuario, incluidos los contadores de seguridad.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Lee al usuario y a su empleado (datos personales y organizacionales). El jefe directo llega con su nombre, no como id suelto.</li><li>activeSessions cuenta los refresh tokens sin revocar y sin vencer. failedLoginAttempts es el contador de intentos fallidos. lockedUntil es el fin del bloqueo temporal (null si no está bloqueado o si el bloqueo es manual).</li><li>temporaryPassword se recalcula con la misma regla del alta, solo mientras el usuario no haya cambiado su contraseña. Nunca se guarda en claro: por eso el administrador puede volver a consultarla.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>GET /users/12</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "id": 12, "email": "...", "firstName": "Laura", "lastName": "Gomez", "displayName": "Laura Gomez",
+  "status": "ACTIVE", "roles": [...], "permissions": [...], "subsidiarias": [...], "ubicaciones": [...],
+  "mustChangePassword": true, "temporaryPassword": "LAURAGOMEZ2026",
+  "lastLoginAt": null, "failedLoginAttempts": 0, "activeSessions": 2, "lockedUntil": null,
+  "emailVerified": false, "createdAt": "...", "birthDate": "1990-05-01", "gender": "Femenino",
+  "address": { "city": "...", "state": "...", "postalCode": "...", "street1": "...", ... },
+  "department": "Tecnología", "area": "Sistemas", "jobTitle": "Analista",
+  "manager": { "id": 3, "displayName": "Carlos Medina" },
+  "employeeCode": "EMP-1000", "hireDate": "2026-01-10", "contractEndDate": null }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>404 USER_NOT_FOUND (no existe o está dado de baja).</td></tr>
+  </table>
+  <div class="front chg">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado y ajustado</span> <span class="small"><code>AuthService.getUserDetail</code> · <code>UserDetail.mergeBackendDetail</code> · <code>buildUserFromDetail</code></span></div>
+    <ul><li><b>Cambio v2.0 — 3 campos nuevos mapeados</b> (<code>failedLoginAttempts</code>, <code>activeSessions</code>, <code>lockedUntil</code>) en: <code>UserDetailDto</code>, <code>AppUser</code> (<code>lockedUntil</code> es nuevo), <code>MOCK_USERS</code> (<code>lockedUntil: null</code>), <code>buildUserFromDetail</code>, <code>UserDetail.mergeBackendDetail</code>, <code>createUser</code>, <code>setStatus</code> (<code>active</code> los pone en 0/null; <code>blocked</code> limpia <code>lockedUntil</code>), <code>resetPassword</code> y el nuevo <code>unlockAccount()</code>.</li><li>La pestaña Seguridad y acceso muestra "Intentos fallidos de acceso", la nueva fila <b>"Bloqueada hasta"</b> (<code>dd/MM/yyyy HH:mm</code>, o "Sin bloqueo temporal") y "Sesiones activas".</li><li>Se leen con <code>?? 0</code> / <code>?? null</code> por si el backend desplegado es anterior a DEV y no los devuelve.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/users</span><span class="desc">Dar de alta un usuario</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>El botón "Nuevo usuario". El administrador no escribe contraseña: el sistema genera una temporal.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Crea al empleado, su cuenta de acceso, su pertenencia organizacional y, si se indica, sus roles.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Rechaza el correo si ya lo usa otro usuario activo (un correo de un usuario dado de baja sí se puede reutilizar).</li><li>Asignar roles al crear exige el permiso manage_roles; sin él responde 403.</li><li>Valida que cada rol, subsidiaria y ubicación existan; si alguno no, rechaza todo sin guardar nada.</li><li>Al asignar un rol copia los permisos por defecto de ese rol al usuario.</li><li>Genera la contraseña temporal: NOMBRE + PRIMER APELLIDO + AÑO, en mayúsculas y sin acentos (Laura Gómez, 2026 = LAURAGOMEZ2026), la guarda con bcrypt y marca mustChangePassword.</li><li>Registra la acción created en la bitácora.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>POST /users
+{ "firstName": "Laura", "lastName": "Gomez Perez", "email": "laura.gomez@cocteldelmar.com",
+  "phone": "3001234567", "supervisorId": 3, "subsidiariaIds": [1], "ubicacionIds": [7],
+  "roleIds": ["CONTABILIDAD"], "status": "active" }
+(obligatorios: firstName, lastName, email; status solo active o inactive)</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>201 { "id": 12, "email": "...", "displayName": "Laura Gomez Perez", "roles": ["CONTABILIDAD"],
+  "permissions": ["view_dashboard"], "subsidiarias": [...], "ubicaciones": [...],
+  "mustChangePassword": true, "temporaryPassword": "LAURAGOMEZ2026" }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>409 EMAIL_ALREADY_REGISTERED · 400 INVALID_ROLE / INVALID_LOCATION / INVALID_USER_STATUS · 403 ROLE_ASSIGNMENT_FORBIDDEN.</td></tr>
+    <tr><td class="k">Ojo</td><td>La contraseña temporal se muestra al crear; después se vuelve a ver en el detalle mientras siga pendiente.</td></tr>
+  </table>
+  <div class="front ok">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado</span> <span class="small"><code>AuthService.createUser</code> · <code>UserManagementService.createUser</code></span></div>
+    <ul><li>Multi-subsidiaria y multi-ubicación (selects llenados con los catálogos del login), supervisor (select simple) y multi-rol.</li><li>Los códigos <code>INVALID_LOCATION</code> y <code>ROLE_ASSIGNMENT_FORBIDDEN</code> están en el catálogo de errores (v2.0 agrega <code>INVALID_LOCATION</code>).</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m PATCH">PATCH</span><span class="path">/users/{id}</span><span class="desc">Editar datos personales y organización</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Guarda las pestañas Información personal y Organización en una sola llamada.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Actualiza solo los campos que llegan con valor; lo que no se manda no se toca.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Cambiar el correo lo deja sin verificar y comprueba que no lo use otro usuario.</li><li>subsidiariaIds (pertenencia) y ubicacionIds (acceso al portal): una lista reemplaza la actual, una lista vacía las quita todas y omitirla no toca nada. Lo que se quita no se borra: queda con enabled = false.</li><li>Si un id de subsidiaria o ubicación no existe, rechaza la actualización completa (no se guarda ni el resto).</li><li>Registra updated y, si cambió la organización, también organization_updated.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>PATCH /users/12
+{ "phone": "3009998888", "department": "Finanzas", "jobTitle": "Analista", "managerId": 3,
+  "address": { "city": "Bogotá", "postalCode": "110111" },
+  "subsidiariaIds": [1, 2], "ubicacionIds": [7] }</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>(resumen del usuario, igual al de cada fila de GET /users)</pre></td></tr>
+    <tr><td class="k">Errores</td><td>404 · 409 EMAIL_ALREADY_REGISTERED · 400 INVALID_LOCATION.</td></tr>
+    <tr><td class="k">Ojo</td><td>Un null explícito no borra un campo de texto: los nulos se ignoran.</td></tr>
+  </table>
+  <div class="front chg">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado y ajustado</span> <span class="small"><code>AuthService.updateUser</code> · <code>UserManagementService.updateUserProfile</code> · <code>UserDetail.onSaveProfile</code></span></div>
+    <ul><li><b>Cambio v2.0:</b> los multi-selects de Subsidiarias y Ubicaciones vuelven a ser editables en modo edición (Organización, formControls <code>subsidiariaIds</code> / <code>ubicacionIds</code>, opciones de <code>CatalogService</code>) y <code>updateUserProfile()</code> los envía en <code>UpdateUserRequest</code>.</li><li>El <code>AppUser</code> local toma las listas de la respuesta (<code>UserSummaryDto</code>), no de lo que se envió.</li><li><b>Pendiente conocido:</b> el front manda <code>null</code> al vaciar un campo de texto y el back lo ignora, así que ese campo no se limpia en el servidor.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m PATCH">PATCH</span><span class="path">/users/{id}/roles</span><span class="desc">Guardar roles y permisos</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>El botón "Guardar permisos" de la pestaña Seguridad y acceso.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Reemplaza los roles y/o los permisos de una persona. Los permisos son independientes del rol.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Los dos campos son opcionales: omitido = no tocar; una lista reemplaza la actual por completo.</li><li>La regla "al cambiar de rol se restablecen los permisos por defecto" la aplica el front (usa defaultPermissions de GET /roles) y envía el resultado final; el backend lo guarda tal cual.</li><li>Cambiar roles exige el permiso manage_roles (se revisa el del usuario que hace el cambio).</li><li>Valida roles y permisos antes de guardar; si alguno no existe, no se guarda nada.</li><li>En la bitácora solo queda lo que cambió de verdad: role_changed y/o permissions_changed.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>PATCH /users/12/roles
+{ "roleIds": ["TESORERIA"], "permissions": ["view_reconciliation", "export_reports"] }</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>(resumen del usuario con sus roles y permisos nuevos)</pre></td></tr>
+    <tr><td class="k">Errores</td><td>400 INVALID_ROLE · 400 INVALID_PERMISSION · 403 ROLE_ASSIGNMENT_FORBIDDEN · 404.</td></tr>
+    <tr><td class="k">Ojo</td><td>El usuario verá sus permisos nuevos en su próxima renovación de token (máximo 15 minutos).</td></tr>
+  </table>
+  <div class="front miss">
+    <div class="front-h"><b>En el front</b> <span class="b miss">Pendiente en el front</span> <span class="small">Hoy local: <code>UserManagementService.changeRoles</code> / <code>setPermissions</code></span></div>
+    <ul><li>No conectado. Para implementarlo: <code>AuthService.updateRoles()</code>, enviar el resultado final de la regla "cambio de rol → permisos por defecto" y, si el usuario editado es el propio, forzar un refresh.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m PATCH">PATCH</span><span class="path">/users/{id}/status</span><span class="desc">Activar, inactivar o bloquear</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>La lista desplegable "Estatus" de la pantalla de administración.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Cambia el estado del usuario manualmente.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Valores: active (también desbloquea y borra el vencimiento del bloqueo), inactive y blocked.</li><li>blocked es un bloqueo manual: no vence solo, hay que activarlo de nuevo. Se guarda como LOCKED.</li><li>Registra status_changed en la bitácora.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>PATCH /users/12/status
+{ "status": "blocked" }</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>(resumen del usuario; su "status" viene como ACTIVE, INACTIVE o LOCKED)</pre></td></tr>
+    <tr><td class="k">Errores</td><td>400 INVALID_USER_STATUS · 404.</td></tr>
+  </table>
+  <div class="front chg">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado y ajustado</span> <span class="small"><code>AuthService.changeStatus</code> · <code>UserManagementService.setStatus</code></span></div>
+    <ul><li><b>Cambio v2.0:</b> <code>setStatus</code> deja el registro local coherente con la regla del back: <code>active</code> → <code>failedLoginAttempts: 0</code> y <code>lockedUntil: null</code>; <code>blocked</code> → <code>lockedUntil: null</code> (el bloqueo manual no vence).</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/users/{id}/verify-email</span><span class="desc">Marcar el correo como verificado</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Botón para que un administrador confirme el correo a mano (no existe enlace ni token de verificación).</td></tr>
+    <tr><td class="k">Qué hace</td><td>Pone emailVerified en true. No lleva cuerpo.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Registra email_verified en la bitácora. Si luego se cambia el correo, vuelve a quedar sin verificar.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>POST /users/12/verify-email</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "id": 12, "emailVerified": true }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>404.</td></tr>
+  </table>
+  <div class="front ok">
+    <div class="front-h"><b>En el front</b> <span class="b ok">Implementado</span> <span class="small"><code>AuthService.verifyEmail</code> · <code>UserDetail.onVerifyEmailClick</code></span></div>
+    <ul><li>Sin cambios en v2.0.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/users/{id}/close-sessions</span><span class="desc">Cerrar todas las sesiones</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Botón "Cerrar sesiones": saca al usuario de todos sus dispositivos (por ejemplo si perdió un equipo).</td></tr>
+    <tr><td class="k">Qué hace</td><td>Revoca todos los refresh tokens vigentes del usuario. No lo bloquea ni lo da de baja: puede volver a entrar.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Marca como revocados sus tokens activos y registra sessions_closed con el número de sesiones cerradas.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>POST /users/12/close-sessions</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "id": 12, "activeSessions": 0 }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>404.</td></tr>
+    <tr><td class="k">Ojo</td><td>El accessToken ya emitido sigue valiendo hasta que venza (máx. 15 min); lo que se impide es renovarlo.</td></tr>
+  </table>
+  <div class="front miss">
+    <div class="front-h"><b>En el front</b> <span class="b miss">Pendiente en el front</span> <span class="small">Hoy contador local de sesiones</span></div>
+    <ul><li>No conectado. Con el mapeo de <code>activeSessions</code> del detalle (v2.0) ya hay dónde reflejar el resultado (<code>activeSessions: 0</code>).</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/users/{id}/reset-password</span><span class="desc">Reiniciar la contraseña</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Botón "Restablecer contraseña": cuando alguien olvidó la suya o hay que recuperar el acceso.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Devuelve al usuario a su contraseña temporal, lo obliga a cambiarla y cierra sus sesiones.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Recalcula la temporal con la misma regla (NOMBRE + PRIMER APELLIDO + año de alta), guarda su hash y marca mustChangePassword.</li><li>Revoca todas sus sesiones activas y registra password_reset en la bitácora.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>POST /users/12/reset-password</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "id": 12, "temporaryPassword": "LAURAGOMEZ2026" }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>404.</td></tr>
+    <tr><td class="k">Ojo</td><td>El administrador debe comunicarle la contraseña al usuario; el sistema no envía correos.</td></tr>
+  </table>
+  <div class="front miss">
+    <div class="front-h"><b>En el front</b> <span class="b miss">Pendiente en el front</span> <span class="small">Hoy genera la contraseña en local: <code>UserManagementService.resetPassword</code></span></div>
+    <ul><li>No conectado.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m DELETE">DELETE</span><span class="path">/users/{id}</span><span class="desc">Dar de baja a un usuario</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Elimina a un usuario de la operación conservando su historial.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Baja lógica: el usuario deja de poder entrar y desaparece de listados y detalle, pero su fila y su bitácora se conservan.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Marca enabled = false y revoca sus sesiones. Registra deleted en la bitácora.</li><li>Libera su correo: se puede dar de alta a otra persona con el mismo.</li><li>Un administrador no puede darse de baja a sí mismo.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>DELETE /users/12</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "success": true, "id": 12 }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>404 (no existe o ya estaba dado de baja) · 409 CANNOT_DELETE_SELF.</td></tr>
+  </table>
+  <div class="front miss">
+    <div class="front-h"><b>En el front</b> <span class="b miss">Pendiente en el front</span> <span class="small">La opción "Eliminar usuario" se retiró del front</span></div>
+    <ul><li>No conectado y sin UI. <code>CANNOT_DELETE_SELF</code> ya está en el catálogo de errores (v2.0) para cuando se reactive.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m PATCH">PATCH</span><span class="path">/users/{id}/unlock</span><span class="desc">Desbloquear cuenta</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Botón "Desbloquear cuenta" del detalle.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Existe en el código de DEV (<code>UserAdminController</code>) pero <b>no aparece en la guía</b>: allí el desbloqueo es <code>PATCH …/status {"status":"active"}</code>.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Requiere el permiso manage_users (no el rol ADMIN/ALTAS).</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>PATCH /users/12/unlock</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>(resumen del usuario)</pre></td></tr>
+    <tr><td class="k">Errores</td><td>403 (sin código) · 404 USER_NOT_FOUND.</td></tr>
+  </table>
+  <div class="front und">
+    <div class="front-h"><b>En el front</b> <span class="b und">Sin documentar en la guía</span> <span class="small"><code>AuthService.unlockUser</code> · <code>UserManagementService.unlockAccount</code> · <code>UserDetail.onUnlockBackendClick</code></span></div>
+    <ul><li><b>Cambio v2.0:</b> <code>unlockUser</code> devuelve el <code>UserSummaryDto</code> y <code>UserManagementService.unlockAccount()</code> actualiza el registro local (estado, <code>failedLoginAttempts: 0</code>, <code>lockedUntil: null</code>, bitácora local "Cuenta desbloqueada por un administrador."). El botón ya no mapea 403/404 a mano: lo avisa el interceptor.</li><li><b>Riesgo:</b> depende de un endpoint sin documentar. Alternativa soportada por la guía: <code>changeStatus(id, "active")</code>.</li></ul>
+  </div>
+</div>
+
+<h2>3. Bitácora</h2>
+<p>Estos endpoints exigen el permiso <code>view_audit_log</code> (no <code>manage_users</code>): una persona puede tener uno sin el otro.</p>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/audit-log</span><span class="desc">Historial global</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>El botón "Historial" de la pantalla de administración de usuarios.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Lista, de la más reciente a la más antigua, las acciones registradas sobre usuarios.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Filtros opcionales: userId, action y search (texto libre que busca en el detalle y en el nombre o correo de quien actuó o sobre quien se actuó, sin importar mayúsculas).</li><li>Cada entrada trae el actor y el objetivo con su nombre. El actor es null cuando lo hizo el sistema (bloqueo o desbloqueo automático).</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>GET /audit-log?action=role_changed&amp;search=laura&amp;page=0&amp;size=20</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>{ "content": [ { "id": 51, "actor": { "id": 1, "displayName": "Administrador Principal" },
+    "target": { "id": 12, "displayName": "Laura Gomez" },
+    "action": "sessions_closed", "detail": "Sesiones cerradas por administrador (2 activas)",
+    "createdAt": "2026-10-06T19:04:03Z" } ],
+  "page": 0, "size": 20, "totalElements": 1, "totalPages": 1 }</pre></td></tr>
+    <tr><td class="k">Errores</td><td>403 si falta view_audit_log.</td></tr>
+  </table>
+  <div class="front miss">
+    <div class="front-h"><b>En el front</b> <span class="b miss">Pendiente en el front</span> <span class="small">Hoy bitácora en memoria del front</span></div>
+    <ul><li>No conectado.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/users/{id}/audit-log</span><span class="desc">Historial de un usuario</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>La pestaña Historial dentro del detalle de un usuario.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Igual que el historial global pero de una sola persona. Funciona también si el usuario ya fue dado de baja.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Acepta action, search, page y size. Responde 404 solo si el usuario nunca existió.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>GET /users/12/audit-log</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>(misma página que /audit-log)</pre></td></tr>
+    <tr><td class="k">Errores</td><td>404 USER_NOT_FOUND · 403 si falta view_audit_log.</td></tr>
+  </table>
+  <div class="front miss">
+    <div class="front-h"><b>En el front</b> <span class="b miss">Pendiente en el front</span> <span class="small">Hoy bitácora en memoria del front</span></div>
+    <ul><li>No conectado.</li></ul>
+  </div>
+</div>
+
+<h3>Acciones que se registran</h3>
+<table class="data">
+  <tr><th style="width:24%">Acción</th><th>Cuándo se registra</th></tr>
+  <tr><td>created</td><td>Alta de usuario</td></tr>
+  <tr><td>updated</td><td>Edición de datos (PATCH /users/{id})</td></tr>
+  <tr><td>organization_updated</td><td>La edición cambió subsidiarias o ubicaciones</td></tr>
+  <tr><td>status_changed</td><td>Cambio manual de estado</td></tr>
+  <tr><td>locked</td><td>Bloqueo automático por intentos fallidos (sin actor)</td></tr>
+  <tr><td>unlocked</td><td>Desbloqueo manual (con actor) o automático al vencer las 2 horas (sin actor)</td></tr>
+  <tr><td>role_changed</td><td>Cambió el rol</td></tr>
+  <tr><td>permissions_changed</td><td>Cambiaron los permisos</td></tr>
+  <tr><td>password_reset</td><td>Reinicio de contraseña</td></tr>
+  <tr><td>email_verified</td><td>Verificación manual del correo</td></tr>
+  <tr><td>sessions_closed</td><td>Cierre de sesiones</td></tr>
+  <tr><td>deleted</td><td>Baja lógica</td></tr>
+</table>
+
+<h2>4. Catálogos de roles y permisos</h2>
+<p>Permiten al front no escribir listas a mano. Exigen <code>manage_users</code> o <code>manage_roles</code>. Los catálogos se cargan con migraciones de base de datos; no se editan desde la pantalla.</p>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/roles</span><span class="desc">Catálogo de roles</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>La lista desplegable de rol en el alta y la edición.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Devuelve los roles con los permisos que traen por defecto, para que el front recalcule los checkboxes al cambiar de rol.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>Lee los roles habilitados con sus permisos por defecto, ordenados.</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>GET /roles</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>[ { "code": "ADMIN", "name": "Administrador",
+    "defaultPermissions": ["capture_sales", "export_reports", "import_settlements", "manage_differences",
+      "manage_roles", "manage_users", "view_audit_log", "view_dashboard", "view_reconciliation"] },
+  { "code": "ALTAS", "name": "Encargado de altas de usuarios",
+    "defaultPermissions": ["manage_roles", "manage_users", "view_audit_log"] } ]</pre></td></tr>
+    <tr><td class="k">Errores</td><td>403 si falta manage_users o manage_roles.</td></tr>
+  </table>
+  <div class="front miss">
+    <div class="front-h"><b>En el front</b> <span class="b miss">Pendiente en el front</span> <span class="small">Hoy constante <code>ROLES</code></span></div>
+    <ul><li>No conectado.</li></ul>
+  </div>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/permissions</span><span class="desc">Catálogo de permisos</span></div>
+  <table>
+    <tr><td class="k">Para qué sirve</td><td>Los checkboxes de la pestaña Seguridad y acceso.</td></tr>
+    <tr><td class="k">Qué hace</td><td>Devuelve todos los permisos con su descripción y el módulo bajo el cual se agrupan en pantalla.</td></tr>
+    <tr><td class="k">Cómo lo hace</td><td><ul><li>El campo module es el título del grupo (por ejemplo "Conciliacion bancaria").</li></ul></td></tr>
+    <tr><td class="k">Petición</td><td><pre>GET /permissions</pre></td></tr>
+    <tr><td class="k">Respuesta</td><td><pre>[ { "code": "view_dashboard", "description": "Ver resumen de venta", "module": "Resumen de venta" },
+  { "code": "manage_users", "description": "Administrar usuarios", "module": "Administracion de usuarios" } ]</pre></td></tr>
+    <tr><td class="k">Errores</td><td>403 si falta manage_users o manage_roles.</td></tr>
+  </table>
+  <div class="front miss">
+    <div class="front-h"><b>En el front</b> <span class="b miss">Pendiente en el front</span> <span class="small">Hoy constante <code>PERMISSIONS</code></span></div>
+    <ul><li>No conectado. Ojo: DEV define 9 permisos y <code>capture_sales</code> es nuevo; el front además usa <code>view_catalogs</code>, que DEV no trae.</li></ul>
+  </div>
+</div>
+
+<h3>Los 9 permisos y qué habilitan</h3>
+<table class="data">
+  <tr><th style="width:22%">Permiso</th><th style="width:28%">Módulo</th><th>Qué habilita</th></tr>
+  <tr><td><code>view_dashboard</code></td><td>Resumen de venta</td><td>Consultar ventas (resumen y bitácora de capturas)</td></tr>
+  <tr><td><code>capture_sales</code></td><td>Resumen de venta</td><td>Lanzar la captura manual de ventas</td></tr>
+  <tr><td><code>view_reconciliation</code></td><td>Conciliación bancaria</td><td>Ver la conciliación</td></tr>
+  <tr><td><code>manage_differences</code></td><td>Conciliación bancaria</td><td>Gestionar diferencias</td></tr>
+  <tr><td><code>import_settlements</code></td><td>Conciliación bancaria</td><td>Importar liquidaciones (CSV)</td></tr>
+  <tr><td><code>export_reports</code></td><td>Conciliación bancaria</td><td>Exportar reportes</td></tr>
+  <tr><td><code>manage_users</code></td><td>Administración de usuarios</td><td>Todo /users y los catálogos</td></tr>
+  <tr><td><code>manage_roles</code></td><td>Administración de usuarios</td><td>Asignar roles; ver catálogos</td></tr>
+  <tr><td><code>view_audit_log</code></td><td>Administración de usuarios</td><td>Ver la bitácora</td></tr>
+</table>
+
+<h3>Roles y sus permisos por defecto</h3>
+<table class="data">
+  <tr><th style="width:18%">Rol</th><th style="width:30%">Nombre</th><th>Permisos por defecto</th></tr>
+  <tr><td>ADMIN</td><td>Administrador</td><td>Los 9</td></tr>
+  <tr><td>ALTAS</td><td>Encargado de altas de usuarios</td><td>manage_users, manage_roles, view_audit_log</td></tr>
+  <tr><td>CONTABILIDAD</td><td>Contabilidad</td><td>view_dashboard</td></tr>
+  <tr><td>TESORERIA</td><td>Tesorería</td><td>view_reconciliation, manage_differences, import_settlements, export_reports</td></tr>
+  <tr><td>COSTOS</td><td>Costos</td><td>ninguno</td></tr>
+</table>
+
+<div class="pb"></div>
+<h2 style="margin-top:0;">5. Códigos de error y su gestión en el front</h2>
+<p>La lista completa (16 códigos de la guía) vive en <code>ERROR_CODE_MESSAGES</code> (<code>features/auth/data/auth-errors.ts</code>) y la gestiona <code>httpErrorAlertInterceptor</code> (<code>core/interceptors/</code>). Un código que el backend agregue y el catálogo todavía no liste cae a un toast genérico con el código (<code>Ocurrió un error inesperado (CODIGO).</code>) en vez de desaparecer.</p>
+<table class="data">
+  <tr><th style="width:5%">HTTP</th><th style="width:22%">Código</th><th style="width:24%">Cuándo</th><th>Gestión en el front</th><th style="width:9%">v2.0</th></tr>
+  <tr><td>400</td><td><code>INVALID_ROLE / INVALID_PERMISSION</code></td><td>Un rol o permiso indicado no existe</td><td>Toast con el mensaje del catálogo.</td><td><span class="b ok">Cubierto</span></td></tr>
+  <tr><td>400</td><td><code>INVALID_LOCATION</code></td><td>Subsidiaria o ubicación inexistente o dada de baja</td><td>Toast del catálogo. <b>Nuevo en v2.0.</b></td><td><span class="b und">Nuevo</span></td></tr>
+  <tr><td>400</td><td><code>INVALID_USER_STATUS</code></td><td>Estado fuera de active / inactive / blocked</td><td>Toast del catálogo.</td><td><span class="b ok">Cubierto</span></td></tr>
+  <tr><td>401</td><td><code>INVALID_CREDENTIALS</code></td><td>Correo o contraseña incorrectos</td><td>Sin toast: UI propia (login y cambio de contraseña). <b>v2.0:</b> en una llamada autenticada ya no cierra la sesión.</td><td><span class="b chg">Ajustado</span></td></tr>
+  <tr><td>401</td><td><code>INVALID_REFRESH_TOKEN / REFRESH_TOKEN_EXPIRED</code></td><td>Refresh token desconocido o vencido (8 h)</td><td>Cierra la sesión (<code>refreshAccessToken</code>) + toast del catálogo.</td><td><span class="b ok">Cubierto</span></td></tr>
+  <tr><td>401</td><td><code>REFRESH_TOKEN_REUSED</code></td><td>Se reusó un refresh token: se cierran todas las sesiones</td><td>Cierra la sesión + toast del catálogo.</td><td><span class="b ok">Cubierto</span></td></tr>
+  <tr><td>401</td><td><code>SESSION_IDLE_TIMEOUT</code></td><td>Más de 30 minutos sin renovar</td><td>Sin toast: aviso inline en el login. <b>v2.0:</b> <code>authTokenInterceptor</code> la cierra con motivo <code>idle_timeout</code> también fuera del refresh.</td><td><span class="b chg">Ajustado</span></td></tr>
+  <tr><td>401</td><td><code>USER_LOCKED_OR_INACTIVE</code></td><td>Al renovar, el usuario ya está bloqueado o inactivo</td><td>Cierra la sesión + toast del catálogo.</td><td><span class="b ok">Cubierto</span></td></tr>
+  <tr><td>403</td><td><code>PASSWORD_CHANGE_REQUIRED</code></td><td>Debe cambiar la contraseña temporal</td><td><b>v2.0:</b> aviso (warning) + <code>markPasswordChangeRequired()</code> + redirección a <code>/cambiar-password</code>.</td><td><span class="b chg">Ajustado</span></td></tr>
+  <tr><td>403</td><td><code>ROLE_ASSIGNMENT_FORBIDDEN</code></td><td>Asignar roles sin el permiso manage_roles</td><td>Toast del catálogo.</td><td><span class="b ok">Cubierto</span></td></tr>
+  <tr><td>403</td><td><code>(sin código)</code></td><td>Falta el permiso que exige el endpoint</td><td><b>v2.0:</b> toast genérico "Tu cuenta no tiene el permiso necesario…" (<code>FORBIDDEN_WITHOUT_CODE_MESSAGE</code>). Antes hablaba de roles.</td><td><span class="b chg">Ajustado</span></td></tr>
+  <tr><td>404</td><td><code>USER_NOT_FOUND</code></td><td>El usuario no existe o está dado de baja</td><td>Toast del catálogo.</td><td><span class="b ok">Cubierto</span></td></tr>
+  <tr><td>409</td><td><code>EMAIL_ALREADY_REGISTERED</code></td><td>El correo ya lo usa otro usuario activo</td><td>Toast del catálogo.</td><td><span class="b ok">Cubierto</span></td></tr>
+  <tr><td>409</td><td><code>CANNOT_DELETE_SELF</code></td><td>Un administrador intenta darse de baja a sí mismo</td><td>Toast del catálogo. <b>Nuevo en v2.0.</b></td><td><span class="b und">Nuevo</span></td></tr>
+  <tr><td>423</td><td><code>ACCOUNT_LOCKED</code></td><td>Cuenta bloqueada (intentos fallidos o bloqueo manual)</td><td>Sin toast: se muestra en el login el <code>error</code> del back (minutos restantes). <b>v2.0.</b></td><td><span class="b chg">Ajustado</span></td></tr>
+</table>
+
+<h3>Reglas del interceptor de errores</h3>
+<div class="callout">
+  <ul>
+    <li><b>Código con UI propia</b> (<code>INVALID_CREDENTIALS</code>, <code>ACCOUNT_LOCKED</code>, <code>SESSION_IDLE_TIMEOUT</code>): el interceptor no muestra toast, para no duplicar el aviso del formulario de login / cambio de contraseña.</li>
+    <li><b><code>PASSWORD_CHANGE_REQUIRED</code>:</b> marca la sesión como "debe cambiar contraseña", muestra un aviso y redirige a <code>/cambiar-password</code> (si ya está ahí, no repite el aviso).</li>
+    <li><b>Cualquier otro código:</b> toast con el mensaje del catálogo (o el genérico con el código).</li>
+    <li><b>403 sin código</b> (rechazo de Spring Security por falta de permiso, antes de llegar al manejador de errores del back): toast de "sin permiso".</li>
+    <li><b>5xx sin código:</b> toast de error del servidor.</li>
+    <li><b>400 sin código</b> (validación de campos): no se avisa en el interceptor; cada formulario decide el texto (p. ej. contraseña corta).</li>
+    <li>El interceptor <b>siempre re-lanza</b> el error: el <code>subscribe({ error })</code> de quien llamó sigue corriendo (reactivar botones, cerrar modales).</li>
+    <li><code>authTokenInterceptor</code>: un 401 en una llamada autenticada cierra la sesión (<code>invalid_token</code>, o <code>idle_timeout</code> si trae <code>SESSION_IDLE_TIMEOUT</code>), salvo <code>INVALID_CREDENTIALS</code>, que es un error de negocio (contraseña actual incorrecta).</li>
+  </ul>
+</div>
+
+<h2>6. Bloqueo por intentos fallidos</h2>
+<ul>
+  <li>Al quinto intento fallido de login la cuenta se bloquea 2 horas. Mientras dure, el login responde 423 aunque la contraseña sea correcta, y el mensaje dice cuántos minutos faltan. <b>El front muestra ese mensaje tal cual (v2.0).</b></li>
+  <li>Pasadas las 2 horas el usuario se desbloquea solo: al intentar entrar, o por un barrido automático cada minuto, lo que ocurra primero. Su contador de intentos vuelve a cero y queda constancia en la bitácora.</li>
+  <li>Un administrador puede desbloquearlo antes poniendo su estado en <code>active</code> (o con <code>PATCH …/unlock</code>, no documentado). <b>El detalle del usuario muestra intentos fallidos y "Bloqueada hasta" (v2.0).</b></li>
+  <li>Un bloqueo manual (<code>blocked</code>) no vence solo: solo se levanta activando al usuario (<code>lockedUntil</code> llega <code>null</code>).</li>
+  <li>La duración (2 horas) es provisional y se cambia en la configuración del Auth Service.</li>
+</ul>
+
+<h2>7. Alcance de la verificación de v2.0</h2>
+<div class="callout warn">
+  <ul>
+    <li><b>Verificado en navegador</b> contra el backend local: mensaje de login con cuenta bloqueada (texto del back), contraseña actual incorrecta sin cierre de sesión, cambio de contraseña con rotación del refresh token, detalle con "Bloqueada hasta", multi-selects en modo edición y "Desbloquear cuenta".</li>
+    <li><b>No verificable con la pila local actual:</b> el contenedor del backend se construyó desde <code>feature/login</code>, que no devuelve <code>failedLoginAttempts</code> / <code>activeSessions</code> / <code>lockedUntil</code> en el detalle, no incluye los minutos restantes en el 423 y no persiste <code>subsidiariaIds</code> / <code>ubicacionIds</code> en <code>PATCH /users/{id}</code>. El front los lee con valores por defecto (<code>?? 0</code> / <code>?? null</code>) y el código sigue la guía y el <code>UpdateUserRequest</code> de DEV. Hay que reconstruir la pila desde DEV para una prueba completa.</li>
+    <li>La paginación de <code>GET /users</code> (más de 100 cuentas) está implementada con el contrato <code>totalPages</code> de la guía; la base local tiene 30 cuentas, por lo que solo se ejercita la primera página.</li>
+  </ul>
+</div>
+
+<div class="footer">Guía de endpoints: usuarios, roles y permisos · versión 2.0 (front) · Contenido base © guía del backend v1.0 · Generado desde <code>docs/fuentes/Guia_Endpoints_Usuarios_Roles_Permisos.html</code></div>
+
+</body>
+</html>

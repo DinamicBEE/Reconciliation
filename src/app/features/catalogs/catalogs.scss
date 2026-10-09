@@ -1,0 +1,60 @@
+@use '../../shared/styles/toolbar';
+@use '../../shared/styles/data-table';
+@use '../../shared/styles/row-actions';
+@use '../../shared/styles/info-fields';
+
+.catalogs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+
+
+.catalogs__subtitle {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  margin: 0;
+}
+
+.catalogs__count {
+  font-size: 13px;
+}
+
+// Nombre + descripción apilados en la misma celda — la descripción se corta
+// con la misma regla de `.col-truncate` (texto completo en `title`).
+.catalogs__name {
+  display: block;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.catalogs__description {
+  display: block;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.catalog-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.catalog-drawer__section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.catalog-drawer__description {
+  font-size: 14px;
+  color: var(--color-muted-foreground);
+  margin: 0;
+}
+
+.catalog-drawer__search {
+  width: 100%;
+  max-width: 320px;
+}

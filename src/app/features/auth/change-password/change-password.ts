@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, ValidatorFn, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -83,28 +84,39 @@ export class ChangePassword {
 
     const { currentPassword, newPassword } = this.form.getRawValue();
 
-    // Simula latencia de red — mismo criterio que login.ts.
-    setTimeout(() => {
-      this.submitting.set(false);
+    this.auth.changePassword(currentPassword, newPassword).subscribe({
+      next: () => {
+        this.submitting.set(false);
 
-      const ok = this.auth.changePassword(currentPassword, newPassword);
-      if (!ok) {
-        this.formError.set('La contraseña actual es incorrecta.');
-        return;
-      }
+        // AuthService ya actualizó `mustChangePasswordHint` en la sesión
+        // (ver ese método); acá se apaga la bandera EQUIVALENTE del
+        // `AppUser` vinculado en `user-management`, cuando hay uno (ver
+        // comentario en AuthService.changePassword sobre por qué son dos
+        // servicios distintos, no uno).
+        const appUserId = this.auth.currentUser()?.appUserId;
+        if (appUserId) {
+          this.userMgmt.clearMustChangePassword(appUserId);
+        }
 
-      // AuthService actualizó la CONTRASEÑA (mock de credenciales); acá se
-      // apaga la bandera que la sesión sigue viendo en AppUser (ver
-      // comentario en AuthService.changePassword sobre por qué son dos
-      // servicios distintos, no uno).
-      const appUserId = this.auth.currentUser()?.appUserId;
-      if (appUserId) {
-        this.userMgmt.clearMustChangePassword(appUserId);
-      }
-
-      this.message.success('Tu contraseña se actualizó correctamente.');
-      this.router.navigateByUrl(this.access.homeRoute());
-    }, 400);
+        this.message.success('Tu contraseña se actualizó correctamente.');
+        this.router.navigateByUrl(this.access.homeRoute());
+      },
+      error: (err: HttpErrorResponse) => {
+        this.submitting.set(false);
+        // 401 INVALID_CREDENTIALS = contraseña actual incorrecta; 400 = el
+        // backend rechazó la nueva (mínimo 8 caracteres). El resto de
+        // códigos de negocio los avisa `notifyBackendError`.
+        if (err.status === 401) {
+          this.formError.set('La contraseña actual es incorrecta.');
+        } else if (err.status === 400) {
+          this.formError.set('La contraseña nueva no cumple los requisitos (mínimo 8 caracteres).');
+        } else if (err.status === 0) {
+          this.formError.set('No se pudo conectar con el servidor. Intenta de nuevo.');
+        } else {
+          this.formError.set('No se pudo actualizar la contraseña. Intenta de nuevo.');
+        }
+      },
+    });
   }
 }
 

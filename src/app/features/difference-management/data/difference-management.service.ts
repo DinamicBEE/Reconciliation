@@ -82,7 +82,7 @@ export class DifferenceManagementService {
     const selectedIds = this.selection();
     let sum = 0;
     for (const candidate of this.candidates()) {
-      if (selectedIds.has(candidate.settlement.id)) sum += candidate.settlement.amount;
+      if (selectedIds.has(candidate.settlement.id)) sum += candidate.settlement.grossAmount;
     }
     return round2(sum);
   });

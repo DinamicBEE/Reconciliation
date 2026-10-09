@@ -3,6 +3,13 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Front: ng serve Colombia",
+      "type": "npm",
+      "script": "start:co",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
       "type": "npm",
       "script": "start",
       "isBackground": true,

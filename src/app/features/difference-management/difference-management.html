@@ -5,15 +5,22 @@
   </p>
 } @else {
   <div class="difference-management">
-    <div class="difference-management__header">
-      <a routerLink="/conciliacion" class="back-link">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-        </svg>
-        Volver a conciliación
-      </a>
-      <h1 class="difference-management__title">Gestión de diferencias — Orden {{ orderId() }}</h1>
-    </div>
+    <nz-page-header
+      class="page-header"
+      [nzTitle]="'Gestión de diferencias — Orden ' + orderId()"
+      [nzBackIcon]="backIcon"
+      (nzBack)="onBack()"
+    >
+      <nz-breadcrumb nz-page-header-breadcrumb>
+        <nz-breadcrumb-item><a routerLink="/conciliacion">Conciliación bancaria</a></nz-breadcrumb-item>
+        <nz-breadcrumb-item>Gestión de diferencias — Orden {{ orderId() }}</nz-breadcrumb-item>
+      </nz-breadcrumb>
+    </nz-page-header>
+    <ng-template #backIcon>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+      </svg>
+    </ng-template>
 
     <!-- Info general de la orden — patrón "resumen global" de MASTER.md,
          pero de identidad de un registro puntual, no sumas de un conjunto. -->
@@ -38,14 +45,14 @@
         <div class="summary-strip__item">
           <span class="summary-strip__label">Monto vendido</span>
           <span class="summary-strip__value">
-            {{ service.order()?.sale?.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            {{ service.order()?.sale?.amount | money }}
           </span>
         </div>
         <div class="summary-strip__item">
           <span class="summary-strip__label">Monto liquidado</span>
           <span class="summary-strip__value">
             @if (service.selectedCount() > 0) {
-              {{ service.selectedSettledAmount() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              {{ service.selectedSettledAmount() | money }}
             } @else {
               <span class="text-muted">—</span>
             }
@@ -54,7 +61,7 @@
         <div class="summary-strip__item">
           <span class="summary-strip__label">Diferencia</span>
           <span class="summary-strip__value" [class.text-destructive]="service.selectedDifference() !== 0">
-            {{ service.selectedDifference() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            {{ service.selectedDifference() | money }}
           </span>
         </div>
       </div>
@@ -118,19 +125,12 @@
                       </div>
 
                       <div class="candidate-card__field candidate-card__field--desc">
-                        <span class="candidate-card__label">Descripción</span>
-                        <span class="candidate-card__value" [attr.title]="c.settlement.description">
-                          {{ c.settlement.description }}
+                        <span class="candidate-card__label">Concepto</span>
+                        <span class="candidate-card__value" [attr.title]="c.settlement.concept">
+                          {{ c.settlement.concept }}
                         </span>
                         <span class="candidate-card__meta">
                           {{ c.settlement.date | date: 'dd/MM/yyyy' }} · Lote {{ c.settlement.batchId }}
-                        </span>
-                      </div>
-
-                      <div class="candidate-card__field candidate-card__field--amount">
-                        <span class="candidate-card__label">Monto</span>
-                        <span class="candidate-card__value font-mono">
-                          {{ c.settlement.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
                         </span>
                       </div>
 
@@ -142,6 +142,32 @@
                           </nz-tag>
                         </div>
                       }
+
+                      <!-- Movimiento normalizado (DED, CU5 paso 3): bruto, comisiones,
+                           retenciones y neto abonado. El bruto es el que se cruza
+                           contra la venta (ver "Monto liquidado" arriba). -->
+                      <div class="candidate-card__amounts">
+                        <div class="candidate-card__field candidate-card__field--amount">
+                          <span class="candidate-card__label">Bruto</span>
+                          <span class="candidate-card__value font-mono">{{ c.settlement.grossAmount | money }}</span>
+                        </div>
+                        <div class="candidate-card__field candidate-card__field--amount">
+                          <span class="candidate-card__label">Comisiones</span>
+                          <span class="candidate-card__value candidate-card__value--deduction font-mono">
+                            {{ c.settlement.commission > 0 ? '−' : '' }}{{ c.settlement.commission | money }}
+                          </span>
+                        </div>
+                        <div class="candidate-card__field candidate-card__field--amount">
+                          <span class="candidate-card__label">Retenciones</span>
+                          <span class="candidate-card__value candidate-card__value--deduction font-mono">
+                            {{ c.settlement.withholdings > 0 ? '−' : '' }}{{ c.settlement.withholdings | money }}
+                          </span>
+                        </div>
+                        <div class="candidate-card__field candidate-card__field--amount">
+                          <span class="candidate-card__label">Neto</span>
+                          <span class="candidate-card__value font-mono">{{ c.settlement.netAmount | money }}</span>
+                        </div>
+                      </div>
                     </div>
                   </nz-card>
                 }
@@ -204,7 +230,14 @@
           </span>
         </div>
 
-        <button nz-button nzType="primary" class="save-match-button" type="button" [disabled]="!service.canSave()" (click)="onSave()">
+        <button
+          nz-button
+          nzType="primary"
+          class="save-match-button"
+          type="button"
+          [disabled]="!service.canSave() || !access.hasPermission('manage_differences')"
+          (click)="onSave()"
+        >
           Guardar match
         </button>
       </div>

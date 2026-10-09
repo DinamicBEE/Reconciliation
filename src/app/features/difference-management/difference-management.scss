@@ -1,5 +1,4 @@
 @use '../../shared/styles/summary-strip';
-@use '../../shared/styles/back-link';
 @use '../../shared/styles/import-dropzone';
 
 // Solo 2 utilidades de shared/styles/_data-table.scss hacen falta aquí — se
@@ -22,19 +21,7 @@
   gap: var(--grid-gap);
 }
 
-.difference-management__header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
 
-.difference-management__title {
-  font-family: var(--font-heading);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  margin: 0;
-}
 
 // Info de identidad de la orden (no sumas) — mismo grid que .summary-strip,
 // pero 4 columnas (7 campos = 4+3) en vez de las 5 del resumen del día.
@@ -180,8 +167,7 @@
   min-width: 0;
 }
 
-.candidate-card__field--ref,
-.candidate-card__field--amount {
+.candidate-card__field--ref {
   flex: 0 0 140px;
 }
 
@@ -190,9 +176,32 @@
   min-width: 160px;
 }
 
+// Fila de importes del movimiento normalizado (bruto, comisiones,
+// retenciones, neto) — ocupa el ancho completo del card, debajo de
+// referencia/concepto, alineada con ellos (sangría = checkbox + gap). Grid
+// de 4 columnas iguales; en la columna angosta de 3/5 cae a 2×2.
+.candidate-card__amounts {
+  flex: 1 0 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 16px;
+  padding: 8px 0 0 32px;
+  border-top: 1px dashed var(--color-border);
+
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .candidate-card__field--amount {
   align-items: flex-end;
   text-align: right;
+}
+
+// Comisiones y retenciones se RESTAN del bruto — color atenuado para que el
+// bruto y el neto (los dos importes que se comparan) destaquen.
+.candidate-card__value--deduction {
+  color: var(--color-muted-foreground);
 }
 
 .candidate-card__label {

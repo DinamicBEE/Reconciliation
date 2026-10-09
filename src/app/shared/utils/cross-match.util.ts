@@ -33,7 +33,7 @@ export function crossMatchTransactions(
 
   for (const sale of sales) {
     const orderSettlements = settlementsByOrder.get(sale.orderId) ?? [];
-    const settledAmount = orderSettlements.reduce((sum, s) => sum + s.amount, 0);
+    const settledAmount = orderSettlements.reduce((sum, s) => sum + s.grossAmount, 0);
     matchedOrderIds.add(sale.orderId);
 
     results.push({
@@ -57,7 +57,7 @@ export function crossMatchTransactions(
       sale: null,
       settlement,
       status: 'settlement_only',
-      difference: -settlement.amount,
+      difference: -settlement.grossAmount,
     });
   }
 

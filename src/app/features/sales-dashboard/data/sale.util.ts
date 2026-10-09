@@ -1,9 +1,14 @@
+import { ACTIVE_COUNTRY } from '../../../core/country/active-country';
+import { SalesTaxDef } from '../../../core/country/country.model';
 import { ReconciliationStatus } from '../../../shared/models/reconciliation-item.model';
-import { ElectronicInvoice, Sale } from '../../../shared/models/sale.model';
+import { Sale } from '../../../shared/models/sale.model';
 
-// IVA estándar México — hasta que exista una tasa por producto/categoría,
-// una sola tasa global es suficiente para la demo.
-export const SALE_TAX_RATE = 0.16;
+// Impuestos trasladados del país activo (`environment.country`): IVA 16 %
+// en México, IVA 19 % en Colombia — hasta que exista una tasa por
+// producto/categoría, se aplican sobre la base gravable de toda la venta.
+export interface SaleTaxLine extends SalesTaxDef {
+  amount: number;
+}
 
 export function saleSubtotal(sale: Sale): number {
   return sale.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
@@ -14,8 +19,13 @@ export function saleTaxableBase(sale: Sale): number {
   return saleSubtotal(sale) - sale.discountAmount;
 }
 
-export function saleTaxAmount(sale: Sale): number {
-  return saleTaxableBase(sale) * SALE_TAX_RATE;
+export function saleTaxLines(sale: Sale, taxes: readonly SalesTaxDef[] = ACTIVE_COUNTRY.salesTaxes): SaleTaxLine[] {
+  const base = saleTaxableBase(sale);
+  return taxes.map((tax) => ({ ...tax, amount: base * tax.rate }));
+}
+
+export function saleTaxAmount(sale: Sale, taxes: readonly SalesTaxDef[] = ACTIVE_COUNTRY.salesTaxes): number {
+  return saleTaxLines(sale, taxes).reduce((sum, line) => sum + line.amount, 0);
 }
 
 // Total real cobrado al cliente: subtotal - descuento + impuestos + propina.
@@ -43,14 +53,4 @@ export function saleReconciliationStatus(sale: Sale): ReconciliationStatus {
     default:
       return 'desconciliado';
   }
-}
-
-// Catálogo público de documentos electrónicos de la DIAN — el mismo enlace
-// de consulta que trae codificado el QR de una factura electrónica
-// colombiana real. `sales-dashboard` lo usa en "Documento electrónico" del
-// Drawer ("Consultar en la DIAN"), armado a partir del CUFE del documento.
-const DIAN_CATALOG_URL = 'https://catalogo-vpfe.dian.gov.co/document/searchqr';
-
-export function dianQueryUrl(invoice: ElectronicInvoice): string {
-  return `${DIAN_CATALOG_URL}?documentkey=${invoice.cufe}`;
 }

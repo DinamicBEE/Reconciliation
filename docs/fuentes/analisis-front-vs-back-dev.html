@@ -1,0 +1,278 @@
+<!doctype html>
+<!--
+  FUENTE del PDF "Análisis front vs. back DEV" (docs/analisis-front-vs-back-dev_v3.pdf).
+  Respaldos (regla de docs/ en CLAUDE.md): docs/implementaciones/analisis-front-vs-back-dev_v1.0.pdf y _v2.0.pdf.
+  Regenerar: powershell -ExecutionPolicy Bypass -File docs/fuentes/generar-pdf.ps1 -Name analisis-front-vs-back-dev -Output docs/analisis-front-vs-back-dev_v3.pdf
+  Al actualizar: subir <meta name="doc-version">, la portada y el "Historial de versiones".
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="doc-version" content="3.0">
+<title>Análisis comparativo front vs. back DEV — v3.0</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 9.2pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 20pt; margin: 0 0 6px; color: #fff; }
+  h2 { font-size: 13.5pt; margin: 22px 0 8px; color: #0f172a; border-bottom: 2px solid #142850; padding-bottom: 4px; }
+  h3 { font-size: 10.4pt; margin: 14px 0 6px; color: #142850; }
+  code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 8pt; font-family: Consolas, "Courier New", monospace; }
+  .cover { background: #0f1b3d; color: #fff; padding: 20px 22px; border-radius: 6px; margin-bottom: 16px; }
+  .eyebrow { font-size: 8pt; letter-spacing: 1.5px; color: #93c5fd; font-weight: bold; text-transform: uppercase; }
+  .subtitle { font-size: 11pt; color: #cbd5e1; margin-bottom: 12px; }
+  .meta { width: 100%; border-collapse: collapse; font-size: 8.6pt; }
+  .meta td { padding: 3px 0; vertical-align: top; }
+  .meta td.l { color: #93c5fd; width: 140px; font-weight: bold; }
+  .meta td.v { color: #e2e8f0; }
+  .meta code { background: #1e2f5c; color: #e2e8f0; }
+  .cards { display: flex; gap: 9px; margin: 10px 0 8px; }
+  .card { flex: 1; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 4px; padding: 8px 11px; }
+  .card .n { font-size: 20pt; font-weight: bold; line-height: 1; }
+  .card .t { font-size: 7.8pt; color: #475569; margin-top: 3px; }
+  .card.g { border-left-color: #16a34a; } .card.g .n { color: #16a34a; }
+  .card.o { border-left-color: #d97706; } .card.o .n { color: #d97706; }
+  .card.r { border-left-color: #dc2626; } .card.r .n { color: #dc2626; }
+  .card.p { border-left-color: #7c3aed; } .card.p .n { color: #7c3aed; }
+  table.data { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 8.4pt; }
+  table.data th { background: #142850; color: #fff; text-align: left; padding: 5px 7px; font-size: 8pt; }
+  table.data td { padding: 4px 7px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  table.data tr:nth-child(even) td { background: #f8fafc; }
+  .m { display: inline-block; min-width: 42px; text-align: center; padding: 1px 6px; border-radius: 4px; font-size: 7.4pt; font-weight: bold; color: #fff; font-family: Consolas, monospace; }
+  .m.GET { background: #2563eb; } .m.POST { background: #16a34a; } .m.PATCH { background: #d97706; } .m.DELETE { background: #dc2626; }
+  .b { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 7.4pt; font-weight: bold; white-space: nowrap; }
+  .b.ok { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  .b.chg { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }
+  .b.miss { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+  .b.und { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+  .b.hi { background: #fee2e2; color: #b91c1c; } .b.md { background: #fef3c7; color: #b45309; } .b.lo { background: #f1f5f9; color: #475569; }
+  .callout { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 5px; padding: 9px 13px; margin: 8px 0; font-size: 8.7pt; }
+  .callout.warn { background: #fffbeb; border-color: #fde68a; }
+  .callout.crit { background: #fef2f2; border-color: #fecaca; }
+  .callout ul { margin: 4px 0 0; padding-left: 17px; } .callout li { margin-bottom: 3px; }
+  .ep { border: 1px solid #e2e8f0; border-radius: 5px; margin-bottom: 9px; page-break-inside: avoid; }
+  .ep-head { background: #f8fafc; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; border-radius: 5px 5px 0 0; }
+  .ep-head .path { font-family: Consolas, monospace; font-weight: bold; font-size: 9pt; }
+  .ep-head .desc { margin-left: auto; color: #475569; font-size: 8pt; }
+  .ep table { width: 100%; border-collapse: collapse; font-size: 8.2pt; }
+  .ep td { padding: 3px 10px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+  .ep tr:last-child td { border-bottom: 0; }
+  .ep td.k { width: 92px; color: #64748b; font-weight: bold; font-size: 7.8pt; }
+  .small { font-size: 8pt; color: #475569; }
+  .pb { page-break-before: always; }
+  .footer { margin-top: 18px; padding-top: 7px; border-top: 1px solid #e2e8f0; font-size: 7.4pt; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="eyebrow">Análisis de integración · Actualizado tras conectar los 19 endpoints de la guía (v3.0)</div>
+  <h1>Front vs. Back <code style="background:#1e2f5c;color:#fff;font-size:17pt">DEV</code> y guía de endpoints</h1>
+  <div class="subtitle">Usuarios, roles y permisos — qué quedó implementado en el front, qué hallazgos dejó y qué sigue abierto</div>
+  <table class="meta">
+    <tr><td class="l">Front</td><td class="v"><code>feature/login-coctel-del-mar-integration</code> (commit base <code>ab89ce2</code> + los cambios de las v2.0 y v3.0, aún sin commit) — proyecto <code>reconciliation</code></td></tr>
+    <tr><td class="l">Back</td><td class="v">rama <code>DEV</code> (commit <code>de23127</code>) — proyecto <code>coctel_midd</code>: auth-service, gateway, <b>sales-service (nuevo)</b>, db-migration (nuevo)</td></tr>
+    <tr><td class="l">Guía del back</td><td class="v"><code>Guia_Endpoints_Usuarios_Roles_Permisos</code> (14 pp.), respaldada sin cambios en <code>docs/implementaciones/Guia_Endpoints_Usuarios_Roles_Permisos_v1.0.pdf</code>.</td></tr>
+    <tr><td class="l">Método</td><td class="v">La guía se contrastó contra el <b>código real de DEV</b> (controladores, DTO, <code>SecurityConfig</code>, migraciones, gateway), no solo contra lo que dice el PDF. No se modificó nada del back ni de la guía.</td></tr>
+    <tr><td class="l">Versión</td><td class="v">3.0 — 08-Oct-2026 · Responsable portal: Irving Canul. Respaldos de las versiones anteriores en <code>docs/implementaciones/</code> (v1.0 y v2.0), sin cambios. Esta versión refleja que los 19 endpoints de la guía ya están conectados y deja los hallazgos nuevos.</td></tr>
+  </table>
+</div>
+
+<h2 style="margin-top:0;">1. Resumen</h2>
+<div class="cards">
+  <div class="card g"><div class="n">19</div><div class="t">de los 19 endpoints de la guía ya están conectados al backend</div></div>
+  <div class="card o"><div class="n">8</div><div class="t">se conectaron desde la v2.0 (sección 4): roles, permisos, PATCH roles, close-sessions, reset-password, DELETE y las 2 bitácoras</div></div>
+  <div class="card r"><div class="n">5</div><div class="t">hallazgos abiertos para el equipo de back (sección 8)</div></div>
+  <div class="card p"><div class="n">3</div><div class="t">endpoints de ventas (Sales Service, fuera de la guía) aún sin conectar</div></div>
+</div>
+<div class="callout">
+  <b>Resuelto desde la v2.0</b> (verificado: 136 pruebas de contrato contra el Gateway de DEV y recorridos en navegador)
+  <ul>
+    <li><b>Catálogos reales de roles y permisos</b> (<code>GET /roles</code>, <code>GET /permissions</code>): desaparecieron <code>ROLES</code>, <code>ROLE_LABEL</code>, <code>ROLE_OPTIONS</code> y <code>PERMISSIONS</code>; el nuevo <code>AccessCatalogService</code> alimenta todos los selectores, el filtro de rol, el grid de permisos y las etiquetas.</li>
+    <li><b><code>PATCH /users/{id}/roles</code></b> y <b><code>POST /users/{id}/close-sessions</code></b> conectados; la sesión propia se renueva sola al cambiar los propios permisos.</li>
+    <li><b><code>POST /users/{id}/reset-password</code></b> y <b><code>DELETE /users/{id}</code></b> conectados; se reactivaron los botones "Eliminar" (lista y detalle).</li>
+    <li><b>Bitácora real</b> (<code>GET /audit-log</code>, <code>GET /users/{id}/audit-log</code>): filtros y paginación del lado del servidor; se eliminó la bitácora local y su mock.</li>
+    <li><b>Entorno (§5.3):</b> proxy a las 6 rutas del Gateway (<code>proxy.conf.js</code>, puerto 8080), pila DEV reproducible con siembra de las 26 cuentas (<code>dev-env/</code>) y URL del Gateway configurable para Vercel (<code>API_URL</code>).</li>
+  </ul>
+</div>
+<div class="callout crit">
+  <b>Hallazgos que siguen abiertos</b>
+  <ul>
+    <li><b>Catálogo y matriz de permisos distintos a los del front.</b> DEV no define <code>view_catalogs</code> y su matriz por defecto es menor que la 7.16 del DED (§5.1–5.2); hoy se cumple solo con la siembra local. <code>capture_sales</code> existe pero el front no lo evalúa (Reprocesar usa una regla por rol).</li>
+    <li><b><code>GET /users</code> pagina sin <code>ORDER BY</code>:</b> recorrer varias páginas puede repetir y omitir cuentas (probado: páginas de 10 sobre 27 cuentas → 21 distintas). El front lo compensa, pero conviene un <code>Sort</code> estable en el back.</li>
+    <li><b><code>PATCH /users/{id}/roles</code> exige <code>manage_roles</code> en todo el endpoint</b> (también para cambiar solo permisos); la guía solo lo dice de los roles.</li>
+    <li><b><code>GET /roles</code> / <code>/permissions</code> exigen <code>manage_users</code> o <code>manage_roles</code>:</b> Contabilidad, Tesorería y Costos no pueden leer el nombre de su propio rol (el encabezado muestra el código legible).</li>
+    <li><b><code>PATCH /users/{id}/unlock</code> existe en DEV pero no aparece en la guía</b> (allí el desbloqueo es <code>PATCH …/status {"status":"active"}</code>): el front depende de un endpoint sin documentar.</li>
+  </ul>
+</div>
+
+<h2>2. Matriz comparativa de endpoints</h2>
+<table class="data">
+  <tr><th style="width:3%">#</th><th style="width:7%">Método</th><th style="width:25%">Endpoint</th><th style="width:15%">Permiso en DEV</th><th style="width:14%">Estado en el front</th><th>Nota</th></tr>
+  <tr><td>1</td><td><span class="m POST">POST</span></td><td><code>/auth/login</code></td><td>Público</td><td><span class="b ok">Ajustado en v2.0</span></td><td>Muestra el mensaje del back (minutos de bloqueo restantes).</td></tr>
+  <tr><td>2</td><td><span class="m POST">POST</span></td><td><code>/auth/refresh</code></td><td>Público</td><td><span class="b ok">Implementado</span></td><td>Sin cambios de contrato.</td></tr>
+  <tr><td>3</td><td><span class="m POST">POST</span></td><td><code>/auth/logout</code></td><td>Público</td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>4</td><td><span class="m GET">GET</span></td><td><code>/auth/me</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>5</td><td><span class="m POST">POST</span></td><td><code>/auth/change-password</code></td><td>Sesión</td><td><span class="b ok">Ajustado en v2.0</span></td><td>Refresh posterior implementado; el 401 de negocio ya no cierra la sesión.</td></tr>
+  <tr><td>6</td><td><span class="m GET">GET</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v2.0</span></td><td>Autoriza por permiso; <code>size=100</code> con paginación completa (<code>listAllUsers</code>).</td></tr>
+  <tr><td>7</td><td><span class="m GET">GET</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v2.0</span></td><td><code>failedLoginAttempts</code>, <code>activeSessions</code>, <code>lockedUntil</code> mapeados.</td></tr>
+  <tr><td>8</td><td><span class="m POST">POST</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v2.0</span></td><td>Código <code>INVALID_LOCATION</code> en el catálogo de errores.</td></tr>
+  <tr><td>9</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v2.0</span></td><td>Envía <code>subsidiariaIds</code>/<code>ubicacionIds</code>; multi-selects reactivados.</td></tr>
+  <tr><td>10</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/roles</code></td><td><code>manage_users</code> + <code>manage_roles</code></td><td><span class="b ok">Implementado en v3.0</span></td><td>Envía solo lo que cambió; permisos por defecto desde <code>GET /roles</code>; renueva la sesión propia. Exige <code>manage_roles</code> completo.</td></tr>
+  <tr><td>11</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/status</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v2.0</span></td><td>El estado local sigue la regla del back (<code>active</code> limpia el bloqueo).</td></tr>
+  <tr><td>12</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/verify-email</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>13</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/close-sessions</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado en v3.0</span></td><td>Botón "Cerrar sesiones"; refleja <code>activeSessions</code>.</td></tr>
+  <tr><td>14</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/reset-password</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado en v3.0</span></td><td>Temporal del back; cierra sesiones y marca cambio de contraseña. Se eliminó el generador local.</td></tr>
+  <tr><td>15</td><td><span class="m DELETE">DELETE</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado en v3.0</span></td><td>Baja lógica con confirmación (lista y detalle); no sobre la propia cuenta. La lista poda las cuentas que el back ya no devuelve.</td></tr>
+  <tr><td>16</td><td><span class="m GET">GET</span></td><td><code>/users/{id}/audit-log</code></td><td><code>view_audit_log</code></td><td><span class="b ok">Implementado en v3.0</span></td><td>Pestaña Historial paginada en el servidor; deshabilitada sin <code>view_audit_log</code>.</td></tr>
+  <tr><td>17</td><td><span class="m GET">GET</span></td><td><code>/audit-log</code></td><td><code>view_audit_log</code></td><td><span class="b ok">Implementado en v3.0</span></td><td>Búsqueda, filtro de acción y paginación en el servidor; actor nulo = "Sistema".</td></tr>
+  <tr><td>18</td><td><span class="m GET">GET</span></td><td><code>/roles</code></td><td><code>manage_users</code> o <code>manage_roles</code></td><td><span class="b ok">Implementado en v3.0</span></td><td><code>AccessCatalogService</code>: selectores, filtro y etiquetas. Se eliminó <code>ROLES</code>.</td></tr>
+  <tr><td>19</td><td><span class="m GET">GET</span></td><td><code>/permissions</code></td><td><code>manage_users</code> o <code>manage_roles</code></td><td><span class="b ok">Implementado en v3.0</span></td><td>Grid de permisos agrupado por <code>module</code>. Se eliminó <code>PERMISSIONS</code>.</td></tr>
+  <tr><td>—</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/unlock</code></td><td><code>manage_users</code></td><td><span class="b und">Sin documentar</span></td><td>Existe en <code>UserAdminController</code> (l.143) pero no en la guía; el front lo usa vía <code>unlockAccount()</code>.</td></tr>
+</table>
+<p class="small">Conteo: 5 de <code>/auth/*</code> + 14 de usuarios/catálogos/bitácora = 19 en la guía; <b>los 19 están conectados</b> (11 hasta la v2.0 y 8 en la v3.0), más <code>unlock</code>, no documentado.</p>
+
+<div class="pb"></div>
+<h2 style="margin-top:0;">3. Cambios en los endpoints implementados hasta la v2.0 — estado en la v3.0</h2>
+<table class="data">
+  <tr><th style="width:17%">Endpoint</th><th style="width:25%">Qué cambió en DEV</th><th>Qué se hizo en el front</th><th style="width:11%">Estado</th></tr>
+  <tr><td><code>POST /auth/change-password</code></td><td>La guía advierte que el token vigente sigue marcado <code>mustChangePassword</code>; hay que llamar a <code>/auth/refresh</code> inmediatamente después.</td><td><code>AuthService.changePassword()</code> encadena el refresh (<code>rotateSessionAfterPasswordChange</code> → <code>requestTokenPair</code>, compartido con el refresh programado) y reemplaza la sesión. Si el refresh falla se invalida la sesión. <code>authTokenInterceptor</code> no cierra sesión ante 401 <code>INVALID_CREDENTIALS</code>. <code>ChangePassword</code> maneja también el 400 (nueva &lt; 8). Verificado: el refresh token rota y se aterriza en el inicio.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>POST /auth/login</code></td><td>Bloqueo temporal de <b>2 h</b> tras 5 intentos; desbloqueo automático. El 423 trae el mensaje con los minutos restantes.</td><td><code>Login.onSubmit</code> muestra el <code>error</code> del back (<code>serverErrorText()</code>); <code>BLOCKED_MESSAGE</code> queda de respaldo. Verificado con cuenta bloqueada (el back local no manda minutos).</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>GET /users</code></td><td>Autorización por <b>permiso</b> <code>manage_users</code>. <code>size</code> por defecto 20. Filtro <code>status</code> acepta <code>active|inactive|blocked</code>.</td><td>Se eliminó <code>forbiddenRoleMessage</code> (rol ADMIN/ALTAS); el 403 lo avisa el interceptor con texto de permiso. <code>size</code> se mantiene en 100 (<code>USERS_PAGE_SIZE</code>) y <code>AuthService.listAllUsers()</code> recorre las páginas (<code>expand</code> + <code>reduce</code>) para <code>syncFromBackend()</code>.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>GET /users/{id}</code></td><td><code>UserDetailDto</code> gana <code>failedLoginAttempts</code>, <code>activeSessions</code> y <code>lockedUntil</code>.</td><td>Mapeados en <code>UserDetailDto</code>, <code>AppUser</code> (<code>lockedUntil</code> nuevo), mock, <code>buildUserFromDetail</code>, <code>mergeBackendDetail</code>, <code>createUser</code>, <code>setStatus</code>, <code>resetPassword</code> y el nuevo <code>unlockAccount()</code>. Seguridad y acceso muestra "Bloqueada hasta". Se leen con <code>?? 0</code>/<code>?? null</code> por si el back es anterior.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>POST /users</code></td><td>Nuevo código 400 <code>INVALID_LOCATION</code>. El correo de un usuario dado de baja se puede reutilizar.</td><td>Código agregado a <code>ERROR_CODE_MESSAGES</code> (<code>auth-errors.ts</code>).</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>PATCH /users/{id}</code></td><td><code>UpdateUserRequest</code> acepta <code>subsidiariaIds</code> y <code>ubicacionIds</code> (reemplazo; vacía las quita; omitirla no toca). Un <code>null</code> explícito <b>no borra</b> un campo de texto.</td><td>Multi-selects de Organización reactivados en modo edición y enviados desde <code>updateUserProfile()</code>. El <code>AppUser</code> local toma las listas de la respuesta. <b>Abierto:</b> el front manda <code>null</code> al vaciar un campo de texto y eso no lo limpia en el back (aviso de UX). Con el back local no persiste (imagen de <code>feature/login</code>); DEV sí lo acepta.</td><td><span class="b chg">Hecho · UX abierto</span></td></tr>
+  <tr><td><code>PATCH /users/{id}/status</code></td><td><code>active</code> también desbloquea y borra el vencimiento; <code>blocked</code> es manual y no vence solo (<code>LOCKED</code>).</td><td><code>setStatus</code> deja el registro local coherente: <code>active</code> → 0 intentos y <code>lockedUntil: null</code>; <code>blocked</code> → <code>lockedUntil: null</code>.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>PATCH /users/{id}/unlock</code></td><td><b>No documentado</b> en la guía, pero sigue en el código de DEV.</td><td><code>unlockUser</code> devuelve el resumen y <code>unlockAccount()</code> actualiza el registro local (estado y contadores); el botón ya no mapea 403/404 a mano. La acción queda en la bitácora del back (<code>unlocked</code>). <b>Abierto:</b> migrar a <code>changeStatus(id,'active')</code> o confirmar con back que <code>unlock</code> se mantiene.</td><td><span class="b chg">Parcial</span></td></tr>
+  <tr><td>Todos los de <code>/users/**</code></td><td>Seguridad por <code>hasAuthority</code>: el JWT lleva roles <b>y</b> permisos. Los cambios de permisos se ven en el siguiente refresh (máx. 15 min).</td><td>Textos de 403 por permiso, no por rol (interceptor). <b>v3.0:</b> al cambiar los roles/permisos de la propia cuenta, <code>AuthService.renewSession()</code> hace <code>POST /auth/refresh</code> + <code>GET /auth/me</code> y los refleja al instante.</td><td><span class="b ok">Hecho en v3.0</span></td></tr>
+  <tr><td>Códigos de error</td><td>Nuevos: <code>INVALID_PERMISSION</code>, <code>INVALID_LOCATION</code>, <code>CANNOT_DELETE_SELF</code> (409).</td><td>Los 16 códigos de la guía en <code>ERROR_CODE_MESSAGES</code> con gestión en <code>httpErrorAlertInterceptor</code>: <code>PASSWORD_CHANGE_REQUIRED</code> → aviso + <code>markPasswordChangeRequired()</code> + <code>/cambiar-password</code>; 403 sin código → "sin permiso"; 5xx → error del servidor; códigos con UI propia sin toast duplicado. <code>SESSION_IDLE_TIMEOUT</code> cierra la sesión con motivo <code>idle_timeout</code> también fuera del refresh.</td><td><span class="b ok">Hecho</span></td></tr>
+</table>
+<p class="small">Detalle técnico y verificación en los addendums de <code>design-system/conciliation/MASTER.md</code>.</p>
+
+<h2>4. Endpoints conectados en la v3.0</h2>
+<p class="small">Cada uno con lo que se hizo y lo que se encontró al probarlo contra el Gateway de DEV (<code>dev-env/pruebas-endpoints.mjs</code>).</p>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/roles</span> &nbsp;·&nbsp; <span class="m GET">GET</span><span class="path">/permissions</span><span class="desc">Catálogos · <span class="b ok">Implementado</span></span></div>
+  <table>
+    <tr><td class="k">Hecho</td><td>Nuevo <code>AccessCatalogService</code> (<code>user-management/data</code>): un <code>effect</code> pide ambos catálogos al iniciar sesión y los limpia al cerrarla; expone <code>roleOptions</code>, <code>permissionGroups</code> (por <code>module</code>), <code>roleLabel()</code>, <code>permissionLabel()</code> y <code>defaultPermissionsForRoles()</code>. Se eliminaron <code>ROLES</code>, <code>ROLE_LABEL</code>, <code>ROLE_OPTIONS</code>, <code>PERMISSIONS</code> y <code>defaultPermissionsForRoles</code> del modelo; <code>RoleDef</code> pierde <code>description</code> (el back no la manda) y <code>PermissionKey</code> suma <code>capture_sales</code>. Consumidores: selector y filtro de rol de la lista, selector de rol del alta y de "Seguridad y acceso", grid de permisos, encabezado, perfil.</td></tr>
+    <tr><td class="k">Hallazgo</td><td>Exigen <code>manage_users</code> o <code>manage_roles</code> (403 sin código si faltan). Para Contabilidad, Tesorería y Costos no se piden y el rol se muestra con una versión legible del código ("Tesoreria", "Contabilidad"). <code>AccessControlService</code> ya no recalcula permisos desde el rol: <code>AuthUser.permissions</code> es la única fuente.</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m PATCH">PATCH</span><span class="path">/users/{id}/roles</span><span class="desc">Guardar roles y permisos · <span class="b ok">Implementado</span></span></div>
+  <table>
+    <tr><td class="k">Hecho</td><td><code>changeRoles()</code> pasó de local a <code>Observable</code>: manda solo <code>roleIds</code> y/o <code>permissions</code> que cambiaron (omitido = no tocar), reconcilia con el <code>UserSummaryDto</code> de la respuesta y, si la persona editada es la de la sesión, renueva la sesión (<code>renewSession</code>). La regla "cambio de rol → permisos por defecto" la aplica el front con <code>GET /roles</code> y envía el resultado final. Un rechazo restaura el selector.</td></tr>
+    <tr><td class="k">Hallazgo</td><td>El endpoint <b>entero</b> exige <code>manage_roles</code> (403 <code>ROLE_ASSIGNMENT_FORBIDDEN</code>), también para un cambio solo de permisos. Por eso, sin ese permiso, la sección "Roles y permisos" del detalle y el selector de rol de la lista quedan de solo lectura. En el alta, la UI no bloquea el selector: el back responde 403 si falta.</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/users/{id}/close-sessions</span> &nbsp;·&nbsp; <span class="m POST">POST</span><span class="path">/users/{id}/reset-password</span><span class="desc">Sesiones y contraseña · <span class="b ok">Implementado</span></span></div>
+  <table>
+    <tr><td class="k">Hecho</td><td><code>closeSessions()</code> y <code>resetPassword()</code> son <code>Observable</code> y usan la respuesta (<code>activeSessions</code>; <code>temporaryPassword</code>). El reset marca <code>mustChangePassword</code>, deja las sesiones en 0 y muestra la temporal en un toast y en Organización; se quitó el "desbloqueo" local que hacía el reset (la guía no lo dice). Se eliminó <code>password.util.ts</code> (generador local) y el login simulado local (<code>recordFailedLogin</code>/<code>clearFailedLogins</code>).</td></tr>
+    <tr><td class="k">Probado</td><td>La temporal sigue la regla NOMBRE + PRIMER APELLIDO + año (mayúsculas, sin acentos); la contraseña anterior deja de servir; los refresh tokens de las sesiones cerradas responden 401; la persona puede volver a entrar.</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m DELETE">DELETE</span><span class="path">/users/{id}</span><span class="desc">Baja lógica · <span class="b ok">Implementado</span></span></div>
+  <table>
+    <tr><td class="k">Hecho</td><td>Se reactivaron "Eliminar" (fila de la lista) y "Eliminar usuario" (encabezado del detalle) con confirmación; ambos se deshabilitan en la propia cuenta (el back responde 409 <code>CANNOT_DELETE_SELF</code>). <code>syncFromBackend()</code> ahora <b>saca de la lista local</b> las cuentas con <code>backendUserId</code> que <code>GET /users</code> ya no devuelve (baja hecha en otra sesión o DB re-sembrada).</td></tr>
+    <tr><td class="k">Probado</td><td>La cuenta desaparece del listado y del detalle (404), no puede iniciar sesión, su historial se conserva (acción <code>deleted</code>) y su correo se puede volver a dar de alta.</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/audit-log</span> &nbsp;·&nbsp; <span class="m GET">GET</span><span class="path">/users/{id}/audit-log</span><span class="desc">Bitácora · <span class="b ok">Implementado</span></span></div>
+  <table>
+    <tr><td class="k">Hecho</td><td><code>AuditLogService</code> mapea la bitácora real; "Historial y auditoría de usuarios" busca (detalle, actor, persona), filtra por acción y pagina <b>en el servidor</b> (15 por página); la pestaña Historial del detalle pagina de 10 en 10, se recarga tras cada acción y se deshabilita sin <code>view_audit_log</code>. Se eliminaron <code>MOCK_AUDIT_LOG</code>, la bitácora local y todas las llamadas a <code>appendAudit()</code> (el back ya registra cada acción). <code>AuditAction</code> usa el vocabulario del back (<code>created, updated, organization_updated, status_changed, locked, unlocked, role_changed, permissions_changed, password_reset, email_verified, sessions_closed, deleted</code>); un código nuevo se muestra tal cual.</td></tr>
+    <tr><td class="k">Probado</td><td>Orden de la más reciente a la más antigua; <code>actor: null</code> en el bloqueo automático (se muestra "Sistema"); filtros <code>userId</code>, <code>action</code> y <code>search</code>; paginación sin repetir filas; 404 si la persona nunca existió; 403 sin <code>view_audit_log</code> (permiso independiente de <code>manage_users</code>).</td></tr>
+  </table>
+</div>
+
+<h3>4.1 Verificación</h3>
+<p class="small"><code>dev-env/pruebas-endpoints.mjs</code> (<code>node dev-env/pruebas-endpoints.mjs</code>) ejecuta <b>136 verificaciones de contrato</b> contra el Gateway de DEV: login, refresh y reuso, cambio de contraseña con refresh, <code>GET /users</code> y su paginación, detalle con los 3 campos nuevos, alta, <code>PATCH</code>, estado, desbloqueo, verificación de correo, roles y permisos con y sin <code>manage_roles</code>, cierre de sesiones, reset, bitácora (filtros, orden, paginación) y baja lógica, más los 400/401/403/404/409/423 de cada uno. Las cuentas de prueba se dan de baja al terminar. Además se recorrieron en navegador los flujos de cada pantalla.</p>
+
+<div class="pb"></div>
+<h2 style="margin-top:0;">5. Cambios transversales que condicionan la implementación</h2>
+
+<h3>5.1 Catálogo de permisos: DEV vs. front</h3>
+<table class="data">
+  <tr><th style="width:24%">Permiso</th><th style="width:15%">DEV (guía + migraciones)</th><th style="width:19%">Front hoy</th><th>Consecuencia</th></tr>
+  <tr><td><code>capture_sales</code></td><td>Sí (migración V2, solo ADMIN)</td><td>En el tipo <code>PermissionKey</code> y en el grid (viene de <code>GET /permissions</code>); <b>no se evalúa</b></td><td>Gatearía <code>POST /sales/capture</code> (§7). "Reprocesar" sigue usando una regla por rol (ADMIN, CONTABILIDAD) y es una simulación.</td></tr>
+  <tr><td><code>view_catalogs</code></td><td><b>No existe</b></td><td>Sí (pantalla <code>/catalogos</code>, menú, guard)</td><td>Contra un DEV limpio, <code>/catalogos</code> queda inaccesible para todos. El back local lo siembra (<code>dev-env/seed-demo-users.sql</code>); falta que el equipo de back lo siembre o que la pantalla cambie de permiso.</td></tr>
+  <tr><td>Los otros 8</td><td colspan="2">Coinciden (<code>view_dashboard, view_reconciliation, manage_differences, import_settlements, export_reports, manage_users, manage_roles, view_audit_log</code>)</td><td>—</td></tr>
+</table>
+
+<h3>5.2 Permisos por defecto de cada rol</h3>
+<table class="data">
+  <tr><th style="width:16%">Rol</th><th style="width:31%">DEV puro (migración V1)</th><th style="width:31%">Backend local sembrado (<code>GET /roles</code> hoy)</th><th>Diferencia</th></tr>
+  <tr><td>ADMIN</td><td>Los 9 (incluye <code>capture_sales</code>)</td><td>Los 10 (suma <code>view_catalogs</code>)</td><td>+1 (<code>view_catalogs</code>).</td></tr>
+  <tr><td>ALTAS</td><td><code>manage_users, manage_roles, view_audit_log</code></td><td>Igual</td><td>—</td></tr>
+  <tr><td>CONTABILIDAD</td><td><code>view_dashboard</code></td><td><code>view_dashboard, export_reports, view_catalogs</code></td><td>+2 (matriz 7.16).</td></tr>
+  <tr><td>TESORERIA</td><td><code>view_reconciliation, manage_differences, import_settlements, export_reports</code></td><td>Anteriores + <code>view_dashboard, view_catalogs</code></td><td>+2: contra DEV puro Tesorería no ve ventas.</td></tr>
+  <tr><td>COSTOS</td><td>ninguno</td><td><code>view_dashboard, export_reports, view_catalogs</code></td><td>Contra DEV puro, Costos no entra a ninguna pantalla.</td></tr>
+</table>
+<div class="callout warn">El front ya no lleva su propia matriz (se eliminó <code>ROLES</code>): lo que ve cada rol sale de <code>GET /roles</code> y de <code>AuthUser.permissions</code>. La "matriz 7.16 completa" del DED <b>solo se cumple con la siembra local</b>; con un DEV limpio habrá que (a) pedir al back que ajuste los defaults, o (b) aceptar la matriz de DEV y reflejarlo en la comparativa. La matriz funcional completa (cada funcionalidad del front × cada rol) está en <code>docs/Matriz_Roles_Permisos_Frontend.xlsx</code>.</div>
+
+<h3>5.3 Entorno y configuración del front — resuelto en la v3.0</h3>
+<table class="data">
+  <tr><th style="width:20%">Tema</th><th>Estado y cómo quedó</th></tr>
+  <tr><td>Gateway y proxy</td><td><b>Hecho.</b> <code>proxy.conf.json</code> → <code>proxy.conf.js</code>: reenvía <code>/auth</code>, <code>/users</code>, <code>/roles</code>, <code>/permissions</code>, <code>/audit-log</code> y <code>/sales</code> a <code>http://localhost:8080</code> (<code>GATEWAY_URL</code> lo cambia si el puerto está ocupado). Ninguna ruta choca con las del portal.</td></tr>
+  <tr><td>Base de datos</td><td><b>Hecho.</b> <code>dev-env/levantar-backend.ps1</code> levanta la pila de DEV (db-migration → auth, sales, gateway) con el <code>docker-compose.yml</code> del back sin modificarlo (proyecto <code>coctel_dev</code>, volumen nuevo) y siembra con <code>dev-env/seed-demo-users.sql</code> las 26 cuentas demo (ids 2–27, mismos hashes/estados/roles/permisos) y el catálogo de organización. La pila anterior se renombró <code>*-legacy</code> con su volumen intacto.</td></tr>
+  <tr><td>CORS y Vercel</td><td><b>Hecho en el front.</b> <code>environment.apiUrl</code> sale de <code>src/environments/api-url.ts</code> (<code>''</code> en desarrollo); en Vercel, <code>API_URL=https://&lt;gateway&gt;</code> y Build Command <code>node scripts/set-api-url.mjs &amp;&amp; pnpm build</code>. <b>Pendiente del lado del back:</b> el dominio del portal debe estar en <code>CORS_ALLOWED_ORIGINS</code> del Gateway.</td></tr>
+  <tr><td>Renovación de tokens</td><td><b>Hecho.</b> Un solo timer; <code>changePassword()</code> y <code>renewSession()</code> lo cancelan antes de pedir el par nuevo (dos <code>/auth/refresh</code> con el mismo token se interpretan como robo). Ambos usan <code>requestTokenPair</code>.</td></tr>
+  <tr><td>Paginación</td><td><b>Hecho, con una salvedad.</b> <code>listAllUsers()</code> recorre todas las páginas con <code>size=100</code>, pero <code>GET /users</code> pagina sin <code>ORDER BY</code> (+ <code>DISTINCT</code>): entre páginas puede repetir y omitir cuentas. El front junta por <code>id</code> y, si faltan respecto de <code>totalElements</code>, pide una sola página de ese tamaño. Con ≤ 100 cuentas no se nota. La bitácora sí pagina en el servidor (tiene <code>ORDER BY createdAt DESC</code>).</td></tr>
+  <tr><td>Gateway y contraseña pendiente</td><td><b>Hecho.</b> El Gateway rechaza con un 403 sin código (formato Spring) el token con <code>mustChangePassword</code>: nunca llega <code>PASSWORD_CHANGE_REQUIRED</code> por ahí. El interceptor lo trata como tal cuando la sesión está marcada como pendiente; si no, muestra "sin permiso".</td></tr>
+</table>
+
+<h2>6. Estado del orden de implementación</h2>
+<table class="data">
+  <tr><th style="width:4%">#</th><th style="width:44%">Entregable</th><th style="width:20%">Estado</th><th>Pendiente</th></tr>
+  <tr><td>1</td><td>Alinear entorno: pila DEV, siembra, proxy/puertos</td><td><span class="b ok">Hecho (v3.0)</span></td><td>—</td></tr>
+  <tr><td>2</td><td>Decisión de permisos: <code>view_catalogs</code>, <code>capture_sales</code> y matriz por defecto (§5.1–5.2)</td><td><span class="b miss">Abierto</span></td><td>Equipo back / DED</td></tr>
+  <tr><td>3</td><td>Ajustes a lo ya implementado (§3)</td><td><span class="b ok">Hecho (v2.0–v3.0)</span></td><td>unlock→status (depende de la pregunta al back) y no mandar <code>null</code> al vaciar campos de texto.</td></tr>
+  <tr><td>4</td><td><code>GET /roles</code> + <code>GET /permissions</code> y retiro de las constantes</td><td><span class="b ok">Hecho (v3.0)</span></td><td>—</td></tr>
+  <tr><td>5</td><td><code>PATCH /users/{id}/roles</code></td><td><span class="b ok">Hecho (v3.0)</span></td><td>—</td></tr>
+  <tr><td>6</td><td><code>reset-password</code> y <code>close-sessions</code></td><td><span class="b ok">Hecho (v3.0)</span></td><td>—</td></tr>
+  <tr><td>7</td><td>Bitácora (<code>/audit-log</code>, <code>/users/{id}/audit-log</code>)</td><td><span class="b ok">Hecho (v3.0)</span></td><td>—</td></tr>
+  <tr><td>8</td><td><code>DELETE /users/{id}</code></td><td><span class="b ok">Hecho (v3.0)</span></td><td>—</td></tr>
+  <tr><td>9</td><td>Sales Service (§7)</td><td><span class="b miss">Abierto</span></td><td>Alto esfuerzo; depende de 2 y de las respuestas del back.</td></tr>
+</table>
+
+<h2>7. Sales Service (nuevo en DEV, fuera de la guía)</h2>
+<p class="small">DEV agrega <code>sales-service</code> detrás del gateway (<code>/sales/**</code>). Hoy "Resumen de venta", "Conciliación", "Gestión de diferencias" y "Catálogos" usan datos de ejemplo en memoria. Se documenta porque es lo siguiente a conectar y comparte el modelo de permisos.</p>
+<table class="data">
+  <tr><th style="width:7%">Método</th><th style="width:20%">Endpoint</th><th style="width:14%">Permiso</th><th>Qué hace / respuesta</th></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/sales/capture</code></td><td><code>capture_sales</code></td><td>Captura manual (síncrona, idempotente) de <code>{ ubicacionId, date }</code> desde Facturiza. 200 OK · 207 incompleta · 502 Facturiza no respondió · 409 ya se está capturando · 404 ubicación inexistente. Respuesta con conteos (declarados, capturados, insertados, omitidos, fallidos), monto y páginas.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/sales/captures</code></td><td><code>view_dashboard</code></td><td>Historial de corridas de <code>ubicacionId</code> + <code>date</code> (manuales y automáticas), la más reciente primero.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/sales/summary</code></td><td><code>view_dashboard</code></td><td>Resumen del día por ubicación: documentos (conteo, subtotal, impuestos, cargos, total), pagos por medio, impuestos por tributo y extras (descuentos/propinas).</td></tr>
+</table>
+<div class="callout">
+  <b>Alcance real para el portal.</b> No hay un listado ni detalle de ventas individuales: <code>/sales/summary</code> es un <b>agregado por día y ubicación</b>. La tabla de "Resumen de venta", el drawer de detalle fiscal y la exportación CSV <b>no se pueden alimentar</b> con estos endpoints (siguen siendo "Faltante" en la comparativa DED, 7.4). Sí encajan: el botón <b>Reprocesar</b> (→ <code>POST /sales/capture</code>, con rango/ubicación reales; ya tiene el permiso <code>capture_sales</code>), un resumen diario y el historial de capturas. <code>ubicacionId</code> es el id numérico de <code>AuthUser.ubicaciones</code>, lo que elimina el puente por nombre (<code>LABEL_TO_STORE</code>).
+</div>
+
+<h2>8. Preguntas abiertas para el equipo de back</h2>
+<ul class="small" style="margin:4px 0 0;padding-left:18px;">
+  <li>¿<code>PATCH /users/{id}/unlock</code> se conserva o desaparece a favor de <code>status: active</code>? (la guía no lo menciona).</li>
+  <li>¿Se sembrará <code>view_catalogs</code>, o la pantalla de catálogos cambia de permiso?</li>
+  <li>¿Se ajustan los defaults de Contabilidad/Tesorería/Costos (§5.2) a lo que decidió el DED 7.16?</li>
+  <li>¿Se puede agregar un <code>Sort</code> estable (p. ej. por <code>id</code>) a <code>GET /users</code>? Hoy la paginación entre páginas no es confiable (§5.3).</li>
+  <li>¿<code>GET /roles</code> y <code>GET /permissions</code> pueden abrirse a cualquier sesión (o <code>GET /auth/me</code> traer el nombre de los roles)? Hoy Contabilidad, Tesorería y Costos no pueden mostrar el nombre de su rol.</li>
+  <li>¿<code>PATCH /users/{id}/roles</code> debe exigir <code>manage_roles</code> también para cambios solo de permisos? Es lo que hace hoy; la guía solo lo menciona para roles.</li>
+  <li>¿Habrá endpoint para listar/detallar ventas individuales (7.4) o solo el agregado diario?</li>
+  <li>Para Vercel: ¿cuál será el origen del Gateway y se agregará el dominio del portal a <code>CORS_ALLOWED_ORIGINS</code>?</li>
+</ul>
+
+<h2>9. Historial de versiones</h2>
+<table class="data">
+  <tr><th style="width:9%">Versión</th><th style="width:14%">Fecha</th><th>Cambios</th></tr>
+  <tr><td>1.0</td><td>06-Oct-2026</td><td>Primer análisis: front <code>ab89ce2</code> vs. back <code>DEV</code> <code>de23127</code> y guía <code>Guia_Endpoints_Usuarios_Roles_Permisos</code>. Respaldado en <code>docs/implementaciones/analisis-front-vs-back-dev_v1.0.pdf</code>.</td></tr>
+  <tr><td>2.0</td><td>06-Oct-2026</td><td>Se marca lo resuelto en el front: ajustes a login, change-password, <code>GET /users</code>, <code>GET /users/{id}</code>, <code>PATCH /users/{id}</code> y catálogo completo de errores (§1–§3); se actualizan §4–§6 y §8 con lo que sigue abierto. Respaldada en <code>docs/implementaciones/analisis-front-vs-back-dev_v2.0.pdf</code>.</td></tr>
+  <tr><td>3.0</td><td>08-Oct-2026</td><td>Los 19 endpoints de la guía quedan conectados: <code>GET /roles</code>, <code>GET /permissions</code>, <code>PATCH /users/{id}/roles</code>, <code>POST …/close-sessions</code>, <code>POST …/reset-password</code>, <code>DELETE /users/{id}</code> y las dos bitácoras (§4); entorno y configuración del front resueltos (§5.3); hallazgos nuevos (paginación sin orden, <code>manage_roles</code> en todo el PATCH, catálogos de roles solo con <code>manage_users</code>/<code>manage_roles</code>) y preguntas al back actualizadas (§1, §8). Se retiran las constantes de roles/permisos y la bitácora local.</td></tr>
+</table>
+<div class="footer">Análisis front vs. back DEV · Cóctel del Mar · v3.0 · 08-Oct-2026 · Fuente: docs/fuentes/analisis-front-vs-back-dev.html</div>
+</body>
+</html>

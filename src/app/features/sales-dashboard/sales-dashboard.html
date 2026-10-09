@@ -1,7 +1,5 @@
 <div class="sales-dashboard">
-  <div class="sales-dashboard__header">
-    <h1 class="sales-dashboard__title">Resumen de venta</h1>
-  </div>
+  <nz-page-header class="page-header" nzTitle="Resumen de venta" />
 
   <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
        tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
@@ -14,12 +12,24 @@
         nzFormat="dd/MM/yyyy"
       />
 
+      <!-- "Empresa" (subsidiaria) — arreglo real que llega en el login
+           (AuthUser.subsidiarias vía CatalogService), igual que Ubicación. -->
+      <nz-select
+        class="toolbar__filter"
+        [ngModel]="service.subsidiariaFilter()"
+        (ngModelChange)="onSubsidiariaFilterChange($event)"
+      >
+        @for (opt of subsidiariaOptions(); track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
+
       <nz-select
         class="toolbar__filter"
         [ngModel]="service.storeFilter()"
         (ngModelChange)="onStoreFilterChange($event)"
       >
-        @for (opt of storeOptions; track opt.value) {
+        @for (opt of storeOptions(); track opt.value) {
           <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
         }
       </nz-select>
@@ -55,43 +65,53 @@
 
       <span class="toolbar__spacer"></span>
 
-      <!-- Solo se habilita con un día específico + una tienda específica
-           seleccionados (`service.reprocessTarget()`, ver
-           sales-dashboard.service.ts) — el <span> lleva el tooltip en vez del
-           <button> porque un botón `disabled` no dispara eventos de hover en
-           Ant Design; así el usuario ve por qué está deshabilitado. -->
-      <span
-        nz-tooltip
-        [nzTooltipTitle]="
-          service.reprocessTarget()
-            ? 'Reprocesar el día completo de la tienda seleccionada'
-            : 'Selecciona una fecha específica (un solo día) y una tienda para habilitar el reproceso'
-        "
-      >
-        <button nz-button type="button" [disabled]="!service.reprocessTarget()" (click)="onReprocessClick()">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M20 20v-5h-5" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4.6 15a8 8 0 0 0 14.4 3.4M19.4 9A8 8 0 0 0 5 5.6" />
-          </svg>
-          Reprocesar
-        </button>
-      </span>
+      <!-- "Reproceso de ventas" (matriz 7.16 del DED): Admin/Contabilidad
+           únicamente, sin permiso propio — ver
+           AccessControlService.canReprocessSales. Además solo se habilita
+           con un día específico + una tienda específica seleccionados
+           (`service.reprocessTarget()`, ver sales-dashboard.service.ts) — el
+           <span> lleva el tooltip en vez del <button> porque un botón
+           `disabled` no dispara eventos de hover en Ant Design; así el
+           usuario ve por qué está deshabilitado. -->
+      @if (access.canReprocessSales()) {
+        <span
+          nz-tooltip
+          [nzTooltipTitle]="
+            service.reprocessTarget()
+              ? 'Reprocesar el día completo de la tienda seleccionada'
+              : 'Selecciona una fecha específica (un solo día) y una tienda para habilitar el reproceso'
+          "
+        >
+          <button nz-button type="button" [disabled]="!service.reprocessTarget()" (click)="onReprocessClick()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 20v-5h-5" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.6 15a8 8 0 0 0 14.4 3.4M19.4 9A8 8 0 0 0 5 5.6" />
+            </svg>
+            Reprocesar
+          </button>
+        </span>
+      }
 
-      <button
-        nz-button
-        type="button"
-        (click)="exportCsv()"
-        nz-tooltip
-        nzTooltipTitle="Descarga la información de la tabla (según los filtros actuales) en un archivo .csv"
-        class="toolbar__export-button"
-      >
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0-4-4m4 4 4-4" />
-          <path stroke-linecap="round" d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-        </svg>
-        Exportar
-      </button>
+      <!-- "Exportación del listado de ventas" (matriz 7.16 del DED):
+           permiso propio `export_reports` — decoupled de `view_dashboard`
+           (quien ve la pantalla no necesariamente puede exportar). -->
+      @if (access.hasPermission('export_reports')) {
+        <button
+          nz-button
+          type="button"
+          (click)="exportCsv()"
+          nz-tooltip
+          nzTooltipTitle="Descarga la información de la tabla (según los filtros actuales) en un archivo .csv"
+          class="toolbar__export-button"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0-4-4m4 4 4-4" />
+            <path stroke-linecap="round" d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+          </svg>
+          Exportar
+        </button>
+      }
     </section>
 
     <!-- Bleed: se sale del padding de la card (margin negativo, ver
@@ -102,7 +122,7 @@
         <thead>
           <tr>
             <th>Fecha</th>
-            <th>Tienda</th>
+            <th>{{ country.vocabulary.location }}</th>
             <th class="col-truncate" style="--col-max-width: 180px">Cliente</th>
             <th>Medio de pago</th>
             <th>Estado</th>
@@ -123,13 +143,13 @@
               <td>{{ tenderMediaLabel[sale.tenderMedia] }}</td>
               <td><app-reconciliation-status-tag [status]="saleStatus(sale)" /></td>
               <td class="text-right font-mono">
-                {{ saleSubtotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                {{ saleSubtotal(sale) | money }}
               </td>
               <td class="text-right font-mono">
-                {{ saleTaxAmount(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                {{ saleTaxAmount(sale) | money }}
               </td>
               <td class="text-right font-mono">
-                {{ saleTotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                {{ saleTotal(sale) | money }}
               </td>
               <td class="text-center" (click)="$event.stopPropagation()">
                 <div class="row-actions">
@@ -173,7 +193,7 @@
              pero solo para el form de creación de usuario, ver MASTER.md).
              "Cliente" y "Documento electrónico" son sub-secciones propias
              (mismo criterio que "Dirección" en user-detail): identificación
-             fiscal básica del cliente ante la DIAN (tipo de persona +
+             fiscal básica del cliente ante el SAT o la DIAN (tipo de persona +
              régimen) y los datos de la factura electrónica de la venta. -->
         <section class="sale-drawer__section">
           <h3 class="sale-drawer__heading">Resumen de la venta</h3>
@@ -247,6 +267,35 @@
                 <app-match-status-tag [status]="sale.reconciliationStatus" />
               </div>
             </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 2v4M16 2v4M3 10h18" />
+                </svg>
+                <span class="info-field__label">Conciliación relacionada</span>
+              </span>
+              @if (sale.reconciliation; as rec) {
+                <span class="info-field__value font-mono">{{ rec.id }} · {{ rec.date | date: 'dd/MM/yyyy' }}</span>
+              } @else {
+                <span class="info-field__value text-muted">Sin conciliar</span>
+              }
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h10M4 17h7" />
+                </svg>
+                <span class="info-field__label">Transacción NetSuite</span>
+              </span>
+              @if (sale.netsuite; as ns) {
+                <span class="info-field__value font-mono">{{ ns.entryId }} · {{ ns.postedAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+              } @else {
+                <span class="info-field__value text-muted">Sin contabilizar</span>
+              }
+            </div>
           </div>
 
           <h4 class="info-fields__subsection-title">Cliente</h4>
@@ -294,6 +343,22 @@
             <div class="info-field">
               <span class="info-field__head">
                 <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="5" width="20" height="14" rx="2" />
+                  <path stroke-linecap="round" d="M6 10h5M6 14h8M16 10h2" />
+                </svg>
+                <span class="info-field__label">{{ country.taxId.label }}</span>
+              </span>
+              <span class="info-field__value font-mono">
+                {{ sale.customer.taxId }}
+                @if (sale.customer.taxId === country.taxId.genericId) {
+                  <span class="text-muted">· {{ country.taxId.genericName }}</span>
+                }
+              </span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="4" y="3" width="16" height="18" rx="2" />
                   <circle cx="12" cy="9" r="2.5" />
                   <path stroke-linecap="round" d="M8 17c0-1.8 1.8-3 4-3s4 1.2 4 3" />
@@ -301,7 +366,7 @@
                 <span class="info-field__label">Tipo de persona</span>
               </span>
               @if (sale.customer.personType) {
-                <span class="info-field__value">{{ personTypeLabel[sale.customer.personType] }}</span>
+                <span class="info-field__value">{{ country.personType[sale.customer.personType] }}</span>
               } @else {
                 <span class="info-field__value text-muted">Sin tipo de persona registrado</span>
               }
@@ -314,17 +379,19 @@
                   <circle cx="17" cy="17" r="2" />
                   <path stroke-linecap="round" d="M18 6 6 18" />
                 </svg>
-                <span class="info-field__label">Régimen tributario</span>
+                <span class="info-field__label">{{ country.taxRegime.label }}</span>
               </span>
               @if (sale.customer.taxRegime) {
-                <span class="info-field__value">{{ taxRegimeLabel[sale.customer.taxRegime] }}</span>
+                <span class="info-field__value" [attr.title]="country.taxRegime.options[sale.customer.taxRegime]">
+                  {{ country.taxRegime.options[sale.customer.taxRegime] }}
+                </span>
               } @else {
                 <span class="info-field__value text-muted">Sin régimen registrado</span>
               }
             </div>
           </div>
 
-          <h4 class="info-fields__subsection-title">Documento electrónico</h4>
+          <h4 class="info-fields__subsection-title">{{ country.invoice.sectionTitle }}</h4>
           <div class="info-fields">
             <div class="info-field">
               <span class="info-field__head">
@@ -332,9 +399,9 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 2 3 11v2l9 9 9-9V4a2 2 0 0 0-2-2h-7Z" />
                   <circle cx="15.5" cy="7.5" r="1.5" />
                 </svg>
-                <span class="info-field__label">Prefijo</span>
+                <span class="info-field__label">{{ country.invoice.seriesLabel }}</span>
               </span>
-              <span class="info-field__value font-mono">{{ sale.invoice.prefix }}</span>
+              <span class="info-field__value font-mono">{{ sale.invoice.series }}</span>
             </div>
 
             <div class="info-field">
@@ -343,7 +410,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6 2h12v20l-3-2-3 2-3-2-3 2Z" />
                   <path stroke-linecap="round" d="M9 7h6M9 11h6M9 15h4" />
                 </svg>
-                <span class="info-field__label">Folio de factura</span>
+                <span class="info-field__label">{{ country.invoice.numberLabel }}</span>
               </span>
               <span class="info-field__value font-mono">{{ sale.invoice.number }}</span>
             </div>
@@ -354,9 +421,9 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M4 9V7a3 3 0 0 1 3-3h2M4 15v2a3 3 0 0 0 3 3h2M20 9V7a3 3 0 0 0-3-3h-2M20 15v2a3 3 0 0 1-3 3h-2" />
                   <path stroke-linecap="round" d="M9 9v6M12 9v6M15 9v6" />
                 </svg>
-                <span class="info-field__label">CUFE</span>
+                <span class="info-field__label">{{ country.invoice.fiscalIdLabel }}</span>
               </span>
-              <span class="info-field__value font-mono" [attr.title]="sale.invoice.cufe">{{ sale.invoice.cufe }}</span>
+              <span class="info-field__value font-mono" [attr.title]="sale.invoice.fiscalId">{{ sale.invoice.fiscalId }}</span>
             </div>
 
             <div class="info-field">
@@ -365,14 +432,40 @@
                   <rect x="3" y="4" width="18" height="17" rx="2" />
                   <path stroke-linecap="round" d="M16 2v4M8 2v4M3 9h18" />
                 </svg>
-                <span class="info-field__label">Fecha de facturación</span>
+                <span class="info-field__label">{{ country.invoice.issuedAtLabel }}</span>
               </span>
-              <!-- Timezone fijo -0500 (Colombia, sin horario de verano): sin
-                   esto, el pipe la muestra en la zona horaria del navegador
-                   y puede desalinearse de la hora plana de "Fecha" arriba
-                   (mismo `sale.time`, sin conversión) según dónde se abra. -->
-              <span class="info-field__value font-mono">{{ sale.invoice.issuedAt | date: 'dd/MM/yyyy HH:mm' : '-0500' }}</span>
+              <!-- Timezone fiscal fijo del país (-0600 MX / -0500 CO, sin
+                   horario de verano): sin esto, el pipe la muestra en la
+                   zona horaria del navegador y puede desalinearse de la hora
+                   plana de "Fecha" arriba (mismo `sale.time`, sin
+                   conversión) según dónde se abra. -->
+              <span class="info-field__value font-mono">{{ sale.invoice.issuedAt | date: 'dd/MM/yyyy HH:mm' : country.fiscalTimezone }}</span>
             </div>
+
+            <!-- Campos propios del CFDI mexicano; Colombia no los tiene. -->
+            @if (country.invoice.hasCfdiFields) {
+              <div class="info-field">
+                <span class="info-field__head">
+                  <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 11l3 3 8-8" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />
+                  </svg>
+                  <span class="info-field__label">Uso del CFDI</span>
+                </span>
+                <span class="info-field__value" [attr.title]="sale.invoice.cfdiUse">{{ sale.invoice.cfdiUse }}</span>
+              </div>
+
+              <div class="info-field">
+                <span class="info-field__head">
+                  <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="5" width="20" height="14" rx="2" />
+                    <path d="M2 10h20" />
+                  </svg>
+                  <span class="info-field__label">Método de pago</span>
+                </span>
+                <span class="info-field__value" [attr.title]="sale.invoice.paymentMethod">{{ sale.invoice.paymentMethod }}</span>
+              </div>
+            }
 
             <div class="info-field">
               <span class="info-field__head">
@@ -380,11 +473,11 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 3h6v6M10 14 21 3" />
                 </svg>
-                <span class="info-field__label">Consulta DIAN</span>
+                <span class="info-field__label">{{ country.invoice.queryLabel }}</span>
               </span>
               <div class="info-field__value-row">
-                <a class="info-field__value--link" [href]="dianQueryUrl(sale)" target="_blank" rel="noopener">
-                  Ver documento en la DIAN
+                <a class="info-field__value--link" [href]="fiscalQueryUrl(sale)" target="_blank" rel="noopener">
+                  {{ country.invoice.queryLinkText }}
                 </a>
               </div>
             </div>
@@ -418,10 +511,10 @@
                     </td>
                     <td class="text-right font-mono">{{ item.quantity }}</td>
                     <td class="text-right font-mono">
-                      {{ item.unitPrice | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                      {{ item.unitPrice | money }}
                     </td>
                     <td class="text-right font-mono">
-                      {{ itemSubtotal(item.quantity, item.unitPrice) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                      {{ itemSubtotal(item.quantity, item.unitPrice) | money }}
                     </td>
                   </tr>
                 }
@@ -430,7 +523,7 @@
                 <tr>
                   <td colspan="3" class="text-right">TOTAL</td>
                   <td class="text-right font-mono">
-                    {{ selectedSaleBreakdown()!.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                    {{ selectedSaleBreakdown()!.subtotal | money }}
                   </td>
                 </tr>
               </tfoot>
@@ -462,7 +555,7 @@
                       {{ payment.reference }}{{ payment.authCode ? ' · ' + payment.authCode : '' }}
                     </td>
                     <td class="text-right font-mono">
-                      {{ payment.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                      {{ payment.amount | money }}
                     </td>
                   </tr>
                 }
@@ -472,7 +565,7 @@
                   <tr>
                     <td colspan="2" class="text-right">TOTAL PAGADO</td>
                     <td class="text-right font-mono">
-                      {{ paymentsTotal(sale) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                      {{ paymentsTotal(sale) | money }}
                     </td>
                   </tr>
                 </tfoot>
@@ -490,7 +583,7 @@
               @if (sale.discountAmount > 0) {
                 <dt>Descuento{{ sale.discountReason ? ' — ' + sale.discountReason : '' }}</dt>
                 <dd class="font-mono text-destructive">
-                  -{{ sale.discountAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                  -{{ sale.discountAmount | money }}
                 </dd>
               } @else {
                 <dt>Descuento</dt>
@@ -499,7 +592,7 @@
               <dt>Propina</dt>
               <dd class="font-mono">
                 @if (sale.tipAmount > 0) {
-                  {{ sale.tipAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                  {{ sale.tipAmount | money }}
                 } @else {
                   <span class="text-muted">Sin propina</span>
                 }
@@ -512,12 +605,14 @@
             <dl class="sale-drawer__facts">
               <dt>Base gravable</dt>
               <dd class="font-mono">
-                {{ selectedSaleBreakdown()!.taxableBase | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                {{ selectedSaleBreakdown()!.taxableBase | money }}
               </dd>
-              <dt>IVA (16%)</dt>
-              <dd class="font-mono">
-                {{ selectedSaleBreakdown()!.taxAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-              </dd>
+              @for (tax of selectedSaleBreakdown()!.taxLines; track tax.code) {
+                <dt>{{ tax.name }} ({{ tax.rate | percent }})</dt>
+                <dd class="font-mono">
+                  {{ tax.amount | money }}
+                </dd>
+              }
             </dl>
           </section>
         </div>
@@ -528,27 +623,29 @@
           <dl class="sale-drawer__facts">
             <dt>Subtotal</dt>
             <dd class="font-mono">
-              {{ selectedSaleBreakdown()!.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              {{ selectedSaleBreakdown()!.subtotal | money }}
             </dd>
             @if (sale.discountAmount > 0) {
               <dt>Descuento</dt>
               <dd class="font-mono text-destructive">
-                -{{ sale.discountAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                -{{ sale.discountAmount | money }}
               </dd>
             }
-            <dt>IVA</dt>
-            <dd class="font-mono">
-              +{{ selectedSaleBreakdown()!.taxAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-            </dd>
+            @for (tax of selectedSaleBreakdown()!.taxLines; track tax.code) {
+              <dt>{{ tax.name }}</dt>
+              <dd class="font-mono">
+                +{{ tax.amount | money }}
+              </dd>
+            }
             @if (sale.tipAmount > 0) {
               <dt>Propina</dt>
               <dd class="font-mono">
-                +{{ sale.tipAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                +{{ sale.tipAmount | money }}
               </dd>
             }
             <dt class="sale-drawer__total-label">Total</dt>
             <dd class="font-mono sale-drawer__total-value">
-              {{ selectedSaleBreakdown()!.total | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+              {{ selectedSaleBreakdown()!.total | money }}
             </dd>
           </dl>
         </section>

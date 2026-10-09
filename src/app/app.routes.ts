@@ -50,10 +50,33 @@ export const routes: Routes = [
           import('./features/difference-management/difference-management').then((m) => m.DifferenceManagement),
       },
       {
+        // Solo lectura para todos los roles que la ven (CU14 / matriz 7.16
+        // del DED) — no hay acciones de modificación en la pantalla.
+        path: 'catalogos',
+        canActivate: [permissionGuard],
+        data: { permission: 'view_catalogs' },
+        loadComponent: () => import('./features/catalogs/catalogs').then((m) => m.Catalogs),
+      },
+      {
         // Sin `data.permission` — el propio perfil es visible para
         // cualquier usuario autenticado, sin importar su rol.
         path: 'perfil',
         loadComponent: () => import('./features/profile/profile').then((m) => m.Profile),
+      },
+      {
+        // "Roles y permisos": exclusiva del rol ADMIN (`data.role`) — además de
+        // `manage_roles`, que es lo que piden `GET /roles`/`GET /permissions`
+        // (ALTAS también lo tiene, por eso no basta el permiso solo).
+        path: 'gestion-de-roles',
+        canActivate: [permissionGuard],
+        data: { permission: 'manage_roles', role: 'ADMIN' },
+        loadComponent: () => import('./features/roles-permissions/roles-permissions').then((m) => m.RolesPermissions),
+      },
+      {
+        path: 'gestion-de-roles/nuevo',
+        canActivate: [permissionGuard],
+        data: { permission: 'manage_roles', role: 'ADMIN' },
+        loadComponent: () => import('./features/roles-permissions/role-create/role-create').then((m) => m.RoleCreate),
       },
       {
         path: 'usuarios',
@@ -66,7 +89,12 @@ export const routes: Routes = [
       {
         path: 'usuarios/auditoria',
         canActivate: [permissionGuard],
-        data: { permission: 'manage_users' },
+        // Permiso propio (matriz 7.16 del DED) — antes colapsaba en
+        // 'manage_users' igual que el resto de /usuarios/*; ADMIN y ALTAS
+        // (los únicos con 'manage_users') también tienen 'view_audit_log'
+        // por defecto, así que la población accesible no cambia, pero ahora
+        // el permiso definido para esta pantalla sí se evalúa.
+        data: { permission: 'view_audit_log' },
         loadComponent: () => import('./features/user-management/user-audit/user-audit').then((m) => m.UserAudit),
       },
       {

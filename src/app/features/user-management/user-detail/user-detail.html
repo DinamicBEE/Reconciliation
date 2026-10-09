@@ -5,42 +5,56 @@
   </p>
 } @else {
   <div class="user-detail">
-    <div class="user-detail__header">
-      <a routerLink="/usuarios" class="back-link">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-        </svg>
-        Volver a usuarios
-      </a>
-      <div class="user-detail__title-row">
-        <h1 class="user-detail__title">
-          {{ isCreate() ? 'Nuevo usuario' : fullName(user()!) }}
-        </h1>
-        @if (!isCreate()) {
-          <div class="user-detail__title-actions">
-            <button nz-button type="button" (click)="isEditing() ? onCancelEditClick() : onEditClick()">
-              @if (isEditing()) {
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M18 6 6 18M6 6l12 12" />
-                </svg>
-                Cancelar edición
-              } @else {
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                </svg>
-                Editar
-              }
-            </button>
-            <button nz-button nzDanger type="button" (click)="onDeleteClick()">
+    <nz-page-header
+      class="page-header"
+      [nzTitle]="isCreate() ? 'Nuevo usuario' : fullName(user()!)"
+      [nzBackIcon]="backIcon"
+      (nzBack)="onBack()"
+    >
+      <nz-breadcrumb nz-page-header-breadcrumb>
+        <nz-breadcrumb-item><a routerLink="/usuarios">Administración de usuarios</a></nz-breadcrumb-item>
+        <nz-breadcrumb-item>{{ isCreate() ? 'Nuevo usuario' : fullName(user()!) }}</nz-breadcrumb-item>
+      </nz-breadcrumb>
+      @if (!isCreate()) {
+        <nz-page-header-extra>
+        <div class="user-detail__title-actions">
+          <button nz-button type="button" (click)="isEditing() ? onCancelEditClick() : onEditClick()">
+            @if (isEditing()) {
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m3 0-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7h14Z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M18 6 6 18M6 6l12 12" />
               </svg>
-              Eliminar usuario
-            </button>
-          </div>
-        }
-      </div>
-    </div>
+              Cancelar edición
+            } @else {
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              Editar
+            }
+          </button>
+          <button
+            nz-button
+            nzDanger
+            type="button"
+            [disabled]="isSelf()"
+            (click)="onDeleteClick()"
+            nz-tooltip
+            [nzTooltipTitle]="isSelf() ? 'No puedes eliminar tu propia cuenta' : null"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m3 0-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7h14Z" />
+            </svg>
+            Eliminar usuario
+          </button>
+        </div>
+        
+        </nz-page-header-extra>
+      }
+    </nz-page-header>
+    <ng-template #backIcon>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+      </svg>
+    </ng-template>
 
     @if (isCreate()) {
       <nz-card class="card-centered" [nzBodyStyle]="{ padding: '20px' }">
@@ -104,7 +118,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 2 .7 3a2 2 0 0 1-.4 2.1L8 10.2a16 16 0 0 0 6 6l1.4-1.4a2 2 0 0 1 2-.4c1 .3 2 .5 3 .7a2 2 0 0 1 1.6 2Z" />
             </svg>
             <span class="summary-field__label">Teléfono:</span>
-            <input nz-input class="summary-field__control" formControlName="phone" placeholder="+52 55 1234 5678" />
+            <input nz-input class="summary-field__control" formControlName="phone" [placeholder]="country.vocabulary.phonePlaceholder" />
             @if (infoForm.controls.phone.invalid && infoForm.controls.phone.touched) {
               <span class="summary-field__error">
                 @if (infoForm.controls.phone.hasError('required')) {
@@ -129,8 +143,71 @@
               [ngModelOptions]="{ standalone: true }"
               (ngModelChange)="createRoleIds.set($event)"
               placeholder="Selecciona uno o más roles"
+              [nzLoading]="catalogLoading()"
             >
-              @for (opt of roleOptions; track opt.value) {
+              @for (opt of roleOptions(); track opt.value) {
+                <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="summary-field">
+            <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 21V7l9-4 9 4v14" />
+              <path stroke-linecap="round" d="M9 21v-6h6v6" />
+            </svg>
+            <span class="summary-field__label">Subsidiarias:</span>
+            <nz-select
+              class="summary-field__control"
+              nzMode="multiple"
+              [ngModel]="createSubsidiariaIds()"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="createSubsidiariaIds.set($event)"
+              placeholder="Selecciona una o más subsidiarias"
+            >
+              @for (opt of catalog.subsidiarias(); track opt.id) {
+                <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="summary-field">
+            <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="9" width="18" height="12" rx="1" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 9 12 3l9 6" />
+            </svg>
+            <span class="summary-field__label">Ubicaciones:</span>
+            <nz-select
+              class="summary-field__control"
+              nzMode="multiple"
+              [ngModel]="createUbicacionIds()"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="createUbicacionIds.set($event)"
+              placeholder="Selecciona una o más ubicaciones"
+            >
+              @for (opt of catalog.ubicaciones(); track opt.id) {
+                <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="summary-field">
+            <svg class="summary-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="7" r="4" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 21v-2a6 6 0 0 1 6-6h0" />
+              <circle cx="17" cy="14" r="3" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12.5 21v-1a4 4 0 0 1 4-4h1a4 4 0 0 1 4 4v1" />
+            </svg>
+            <span class="summary-field__label">Supervisor:</span>
+            <nz-select
+              class="summary-field__control"
+              [ngModel]="createManagerId()"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="createManagerId.set($event)"
+              nzAllowClear
+              placeholder="Selecciona un responsable (opcional)"
+            >
+              @for (opt of managerOptions(); track opt.value) {
                 <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
               }
             </nz-select>
@@ -153,10 +230,17 @@
           </div>
 
           <p class="text-muted user-form__hint">
-            Departamento, área, puesto y responsable se completan después, desde la pestaña "Organización".
+            Departamento, área y puesto se completan después, desde la pestaña "Organización".
           </p>
 
-          <button nz-button nzType="primary" type="submit" class="user-form__submit">
+          <button
+            nz-button
+            nzType="primary"
+            type="submit"
+            class="user-form__submit"
+            [nzLoading]="submittingCreate()"
+            [disabled]="submittingCreate()"
+          >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" d="M12 5v14M5 12h14" />
             </svg>
@@ -265,7 +349,7 @@
                         <span class="info-field__label">Teléfono</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" [formControl]="infoForm.controls.phone" placeholder="+52 55 1234 5678" />
+                        <input nz-input class="info-field__input" [formControl]="infoForm.controls.phone" [placeholder]="country.vocabulary.phonePlaceholder" />
                         @if (infoForm.controls.phone.invalid && infoForm.controls.phone.touched) {
                           <span class="info-field__error">
                             @if (infoForm.controls.phone.hasError('required')) {
@@ -306,10 +390,10 @@
                           <circle cx="8" cy="10" r="1.5" />
                           <path stroke-linecap="round" d="M6 15h4M13 9h5M13 12h5M13 15h5" />
                         </svg>
-                        <span class="info-field__label">SSN</span>
+                        <span class="info-field__label">{{ country.vocabulary.personalIdLabel }}</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" [formControl]="infoForm.controls.ssn" placeholder="000-00-0000" />
+                        <input nz-input class="info-field__input" [formControl]="infoForm.controls.ssn" [placeholder]="country.vocabulary.personalIdPlaceholder" />
                       } @else {
                         @if (u.ssn) {
                           <span class="info-field__value font-mono">{{ u.ssn }}</span>
@@ -353,10 +437,10 @@
                           <path stroke-linecap="round" stroke-linejoin="round" d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11Z" />
                           <circle cx="12" cy="10" r="2.5" />
                         </svg>
-                        <span class="info-field__label">Ciudad</span>
+                        <span class="info-field__label">{{ country.vocabulary.cityLabel }}</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" formControlName="city" placeholder="Ciudad" />
+                        <input nz-input class="info-field__input" formControlName="city" [placeholder]="country.vocabulary.cityLabel" />
                       } @else {
                         @if (u.address.city) {
                           <span class="info-field__value">{{ u.address.city }}</span>
@@ -371,10 +455,10 @@
                         <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v18M5 4h11l-2 3 2 3H5" />
                         </svg>
-                        <span class="info-field__label">Estado</span>
+                        <span class="info-field__label">{{ country.vocabulary.stateLabel }}</span>
                       </span>
                       @if (isEditing()) {
-                        <input nz-input class="info-field__input" formControlName="state" placeholder="Estado" />
+                        <input nz-input class="info-field__input" formControlName="state" [placeholder]="country.vocabulary.stateLabel" />
                       } @else {
                         @if (u.address.state) {
                           <span class="info-field__value">{{ u.address.state }}</span>
@@ -537,6 +621,56 @@
                     <div class="info-field">
                       <span class="info-field__head">
                         <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 21V7l9-4 9 4v14" />
+                          <path stroke-linecap="round" d="M9 21v-6h6v6" />
+                        </svg>
+                        <span class="info-field__label">Subsidiarias</span>
+                      </span>
+                      @if (isEditing()) {
+                        <nz-select class="info-field__input" nzMode="multiple" formControlName="subsidiariaIds" placeholder="Selecciona una o más subsidiarias">
+                          @for (opt of catalog.subsidiarias(); track opt.id) {
+                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+                          }
+                        </nz-select>
+                      } @else {
+                        @if (subsidiariaNames(u.subsidiariaIds); as names) {
+                          @if (names.length) {
+                            <span class="info-field__value">{{ names.join(', ') }}</span>
+                          } @else {
+                            <span class="info-field__value text-muted">Sin asignar</span>
+                          }
+                        }
+                      }
+                    </div>
+
+                    <div class="info-field">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="9" width="18" height="12" rx="1" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 9 12 3l9 6" />
+                        </svg>
+                        <span class="info-field__label">Ubicaciones</span>
+                      </span>
+                      @if (isEditing()) {
+                        <nz-select class="info-field__input" nzMode="multiple" formControlName="ubicacionIds" placeholder="Selecciona una o más ubicaciones">
+                          @for (opt of catalog.ubicaciones(); track opt.id) {
+                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+                          }
+                        </nz-select>
+                      } @else {
+                        @if (ubicacionNames(u.ubicacionIds); as names) {
+                          @if (names.length) {
+                            <span class="info-field__value">{{ names.join(', ') }}</span>
+                          } @else {
+                            <span class="info-field__value text-muted">Sin asignar</span>
+                          }
+                        }
+                      }
+                    </div>
+
+                    <div class="info-field">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                           <rect x="2" y="7" width="20" height="14" rx="2" />
                           <path stroke-linecap="round" stroke-linejoin="round" d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
                         </svg>
@@ -641,6 +775,43 @@
                         }
                       }
                     </div>
+
+                    <!-- Contraseña inicial generada por el BACKEND (key
+                         `temporaryPassword` de GET /users/{id}) — solo se
+                         muestra si llega y no está vacía. Siempre de solo
+                         lectura, también en modo edición: el frontend nunca
+                         la define. -->
+                    @if (temporaryPassword(); as temporaryPassword) {
+                      <div class="info-field">
+                        <span class="info-field__head">
+                          <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="8" cy="15" r="4" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m10.8 12.2 9.2-9.2M17 6l3 3M15 8l2 2" />
+                          </svg>
+                          <span class="info-field__label">Contraseña temporal</span>
+                        </span>
+                        <div class="info-field__value-row">
+                          <span class="info-field__value font-mono">{{ temporaryPassword }}</span>
+                          <button
+                            nz-button
+                            nzType="text"
+                            nzSize="small"
+                            type="button"
+                            class="temp-password__copy"
+                            (click)="onCopyTemporaryPassword(temporaryPassword)"
+                            nz-tooltip
+                            nzTooltipTitle="Copiar contraseña"
+                            aria-label="Copiar contraseña temporal"
+                          >
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                              <rect x="9" y="9" width="12" height="12" rx="2" />
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+                            </svg>
+                          </button>
+                        </div>
+                        <span class="temp-password__hint text-muted">Vigente hasta que el usuario defina su propia contraseña.</span>
+                      </div>
+                    }
                   </div>
                 </form>
               </div>
@@ -660,6 +831,21 @@
                     </span>
                     <app-status-chip [status]="u.status" (statusChange)="onStatusChangeRequest($event)" />
                   </div>
+
+                  @if (u.backendUserId) {
+                    <div class="info-field">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="5" y="11" width="14" height="9" rx="2" />
+                          <path stroke-linecap="round" d="M8 11V7a4 4 0 0 1 8 0v4" />
+                        </svg>
+                        <span class="info-field__label">Bloqueo de la cuenta</span>
+                      </span>
+                      <button nz-button nzSize="small" type="button" (click)="onUnlockBackendClick()">
+                        Desbloquear cuenta
+                      </button>
+                    </div>
+                  }
 
                   <div class="info-field">
                     <span class="info-field__head">
@@ -700,7 +886,14 @@
                  participa. -->
             @if (isEditing()) {
               <div class="tab-card__save-bar">
-                <button nz-button nzType="primary" type="button" (click)="onSaveProfile()">
+                <button
+                  nz-button
+                  nzType="primary"
+                  type="button"
+                  (click)="onSaveProfile()"
+                  [nzLoading]="savingProfile()"
+                  [disabled]="savingProfile()"
+                >
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-8H7v8M7 3v5h8" />
@@ -724,20 +917,25 @@
                     class="role-field__select"
                     nzMode="multiple"
                     [ngModel]="draftRoleIds()"
+                    [nzDisabled]="!canEditAccess()"
+                    [nzLoading]="catalogLoading()"
                     (ngModelChange)="onRolesSelectChange($event)"
                   >
-                    @for (opt of roleOptions; track opt.value) {
+                    @for (opt of roleOptions(); track opt.value) {
                       <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
                     }
                   </nz-select>
                   <p class="text-muted role-field__hint">
                     Cambiar los roles restablece los permisos a los valores por defecto de esos roles — puedes ajustarlos abajo.
+                    @if (!canEditAccess()) {
+                      Para cambiar roles y permisos necesitas el permiso «{{ accessCatalog.permissionLabel('manage_roles') }}».
+                    }
                   </p>
                 </div>
 
                 <div class="permission-groups">
                   <span class="permission-groups__label">Permisos</span>
-                  @for (grp of permissionGroups; track grp.group) {
+                  @for (grp of permissionGroups(); track grp.group) {
                     <div class="permission-group">
                       <h3 class="permission-group__title">{{ grp.group }}</h3>
                       @for (perm of grp.items; track perm.key) {
@@ -745,6 +943,7 @@
                           nz-checkbox
                           class="permission-item"
                           [ngModel]="isPermissionChecked(perm.key)"
+                          [nzDisabled]="!canEditAccess()"
                           (ngModelChange)="onPermissionToggle(perm.key, $event)"
                         >
                           {{ perm.label }}
@@ -755,7 +954,7 @@
                 </div>
 
                 <div class="user-form__actions">
-                  <button nz-button nzType="primary" type="button" (click)="onSaveRolesAndPermissions()">
+                  <button nz-button nzType="primary" type="button" [nzLoading]="savingAccess()" [disabled]="!canEditAccess()" (click)="onSaveRolesAndPermissions()">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
                       <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-8H7v8M7 3v5h8" />
@@ -861,6 +1060,21 @@
                   <div class="info-field">
                     <span class="info-field__head">
                       <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span class="info-field__label">Bloqueada hasta</span>
+                    </span>
+                    @if (u.lockedUntil) {
+                      <span class="info-field__value font-mono text-destructive">{{ u.lockedUntil | date: 'dd/MM/yyyy HH:mm' }}</span>
+                    } @else {
+                      <span class="info-field__value text-muted">Sin bloqueo temporal</span>
+                    }
+                  </div>
+
+                  <div class="info-field">
+                    <span class="info-field__head">
+                      <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
                       </svg>
                       <span class="info-field__label">Autenticación de dos factores (2FA)</span>
@@ -881,7 +1095,7 @@
                     <div class="info-field__value-row">
                       <span class="info-field__value font-mono">{{ u.activeSessions }}</span>
                       @if (u.activeSessions > 0) {
-                        <button nz-button nzType="link" nzSize="small" type="button" (click)="onCloseSessionsClick()">
+                        <button nz-button nzType="link" nzSize="small" type="button" [nzLoading]="closingSessions()" (click)="onCloseSessionsClick()">
                           Cerrar sesiones
                         </button>
                       }
@@ -893,10 +1107,14 @@
           </nz-card>
         </nz-tab>
 
-        <nz-tab nzTitle="Historial">
+        <nz-tab nzTitle="Historial" [nzDisabled]="!canViewAudit()">
           <nz-card class="tab-card" [nzBodyStyle]="{ padding: '24px' }">
-            @if (userAudit().length === 0) {
-              <p class="text-muted user-detail__empty-audit">Sin actividad registrada todavía.</p>
+            @if (auditFailed()) {
+              <p class="text-muted user-detail__empty-audit">No se pudo cargar el historial.</p>
+            } @else if (auditEntries().length === 0) {
+              <p class="text-muted user-detail__empty-audit">
+                {{ auditLoading() ? 'Cargando historial…' : 'Sin actividad registrada todavía.' }}
+              </p>
             } @else {
               <table class="audit-table">
                 <thead>
@@ -908,10 +1126,10 @@
                   </tr>
                 </thead>
                 <tbody>
-                  @for (entry of userAudit(); track entry.id) {
+                  @for (entry of auditEntries(); track entry.id) {
                     <tr>
                       <td class="font-mono">{{ entry.timestamp | date: 'dd/MM/yyyy HH:mm' }}</td>
-                      <td>{{ auditActionLabel[entry.action] }}</td>
+                      <td>{{ auditActionLabel(entry.action) }}</td>
                       <td class="col-truncate" style="--col-max-width: 320px" [attr.title]="entry.detail">
                         {{ entry.detail }}
                       </td>
@@ -920,6 +1138,16 @@
                   }
                 </tbody>
               </table>
+              @if (auditTotal() > auditPageSize) {
+                <nz-pagination
+                  class="audit-pagination"
+                  [nzTotal]="auditTotal()"
+                  [nzPageIndex]="auditPage()"
+                  [nzPageSize]="auditPageSize"
+                  nzSize="small"
+                  (nzPageIndexChange)="onAuditPageChange($event)"
+                />
+              }
             }
           </nz-card>
         </nz-tab>

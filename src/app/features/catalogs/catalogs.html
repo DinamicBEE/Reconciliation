@@ -1,0 +1,190 @@
+<div class="catalogs">
+  <nz-page-header class="page-header" nzTitle="Catálogos cargados">
+    <nz-page-header-content>
+      <p class="catalogs__subtitle">
+        Consulta de solo lectura. Las correcciones a un catálogo o una homologación se solicitan por el canal de soporte.
+      </p>
+    </nz-page-header-content>
+  </nz-page-header>
+
+  <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
+       tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
+    <section class="toolbar">
+      <input
+        nz-input
+        type="text"
+        class="toolbar__filter toolbar__filter--search"
+        placeholder="Buscar catálogo"
+        [ngModel]="service.search()"
+        (ngModelChange)="service.search.set($event)"
+      />
+
+      <nz-select class="toolbar__filter" [ngModel]="service.kindFilter()" (ngModelChange)="service.kindFilter.set($event)">
+        @for (opt of kindOptions; track opt.value) {
+          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+        }
+      </nz-select>
+
+      <span class="toolbar__spacer"></span>
+      <span class="catalogs__count text-muted">
+        {{ service.filteredCatalogs().length }} de {{ service.totalCatalogs() }} catálogos
+      </span>
+    </section>
+
+    <div class="table-bleed">
+      <!-- `nzNoResult` en vez de una fila `@empty`: con datos vacíos nz-table
+           pinta su propio "No hay datos" y el mensaje saldría duplicado. -->
+      <nz-table
+        #tbl
+        [nzData]="service.filteredCatalogs()"
+        [nzPageSize]="10"
+        nzSize="middle"
+        nzNoResult="Ningún catálogo coincide con los filtros aplicados."
+      >
+        <thead>
+          <tr>
+            <th class="col-truncate" style="--col-max-width: 340px">Catálogo</th>
+            <th>Tipo</th>
+            <th>Origen</th>
+            <th class="text-right">Registros</th>
+            <th>Última actualización</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (catalog of tbl.data; track catalog.id) {
+            <tr class="clickable-row" (click)="onRowClick(catalog)">
+              <td class="col-truncate" style="--col-max-width: 340px" [attr.title]="catalog.description">
+                <span class="catalogs__name">{{ catalog.name }}</span>
+                <span class="catalogs__description text-muted">{{ catalog.description }}</span>
+              </td>
+              <td>{{ kindLabel[catalog.kind] }}</td>
+              <td>{{ catalog.source }}</td>
+              <td class="text-right font-mono">{{ catalog.rows.length | number }}</td>
+              <td class="font-mono">{{ catalog.updatedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+              <td class="text-center" (click)="$event.stopPropagation()">
+                <div class="row-actions">
+                  <button
+                    nz-button
+                    nzType="text"
+                    type="button"
+                    (click)="onRowClick(catalog)"
+                    nz-tooltip
+                    nzTooltipTitle="Ver registros"
+                    aria-label="Ver registros"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2 12c1.3-3.6 5-7 10-7s8.7 3.4 10 7c-1.3 3.6-5 7-10 7s-8.7-3.4-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </nz-table>
+    </div>
+  </nz-card>
+</div>
+
+<nz-drawer
+  [nzVisible]="service.selectedCatalog() !== null"
+  [nzTitle]="service.selectedCatalog()?.name ?? ''"
+  nzWidth="50%"
+  (nzOnClose)="service.closeCatalog()"
+>
+  <ng-container *nzDrawerContent>
+    @if (service.selectedCatalog(); as catalog) {
+      <div class="catalog-drawer">
+        <section class="catalog-drawer__section">
+          <p class="catalog-drawer__description">{{ catalog.description }}</p>
+
+          <div class="info-fields">
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10" />
+                </svg>
+                <span class="info-field__label">Tipo</span>
+              </span>
+              <span class="info-field__value">{{ kindLabel[catalog.kind] }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <ellipse cx="12" cy="5" rx="8" ry="3" />
+                  <path stroke-linecap="round" d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+                  <path stroke-linecap="round" d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+                </svg>
+                <span class="info-field__label">Origen</span>
+              </span>
+              <span class="info-field__value" [attr.title]="catalog.source">{{ catalog.source }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" d="M5 9h14M5 15h14M10 3 8 21M16 3l-2 18" />
+                </svg>
+                <span class="info-field__label">Registros</span>
+              </span>
+              <span class="info-field__value font-mono">{{ catalog.rows.length | number }}</span>
+            </div>
+
+            <div class="info-field">
+              <span class="info-field__head">
+                <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="17" rx="2" />
+                  <path stroke-linecap="round" d="M16 2v4M8 2v4M3 9h18" />
+                </svg>
+                <span class="info-field__label">Última actualización</span>
+              </span>
+              <span class="info-field__value font-mono">{{ catalog.updatedAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="catalog-drawer__section">
+          <input
+            nz-input
+            type="text"
+            class="catalog-drawer__search"
+            placeholder="Buscar un valor en esta lista"
+            [ngModel]="service.rowSearch()"
+            (ngModelChange)="service.rowSearch.set($event)"
+          />
+
+          <div class="table-bleed">
+            <nz-table
+              #rowsTbl
+              [nzData]="service.filteredRows()"
+              [nzPageSize]="10"
+              nzSize="small"
+              nzNoResult="Ningún registro coincide con la búsqueda."
+            >
+              <thead>
+                <tr>
+                  @for (col of catalog.columns; track col.key) {
+                    <th>{{ col.label }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rowsTbl.data; track $index) {
+                  <tr>
+                    @for (col of catalog.columns; track col.key) {
+                      <td [class.font-mono]="col.mono">{{ row[col.key] }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </nz-table>
+          </div>
+        </section>
+      </div>
+    }
+  </ng-container>
+</nz-drawer>

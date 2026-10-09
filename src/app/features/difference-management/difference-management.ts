@@ -5,6 +5,8 @@ import { Router, RouterLink } from '@angular/router';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
+import { NzBreadCrumbModule } from 'ng-zorro-antd/breadcrumb';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
@@ -14,13 +16,19 @@ import { MatchCandidate } from './data/difference-management.model';
 import { DifferenceManagementService } from './data/difference-management.service';
 import { parseSettlementsCsv } from './data/csv-import.util';
 import { TENDER_MEDIA_LABEL, TenderMedia } from '../../shared/models/reconciliation-item.model';
+import { MoneyPipe } from '../../core/country/money.pipe';
+import { COUNTRY_PROFILE } from '../../core/country/active-country';
+import { AccessControlService } from '../auth/data/access-control.service';
 
 const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
 
 @Component({
   selector: 'app-difference-management',
   imports: [
+    NzPageHeaderModule,
+    NzBreadCrumbModule,
     CommonModule,
+    MoneyPipe,
     FormsModule,
     RouterLink,
     NzAlertModule,
@@ -46,6 +54,13 @@ export class DifferenceManagement {
   private readonly message = inject(NzMessageService);
   private readonly modal = inject(NzModalService);
   private readonly router = inject(Router);
+
+  // Flecha del nz-page-header: de vuelta a la pantalla padre (Conciliación).
+  protected onBack(): void {
+    void this.router.navigateByUrl('/conciliacion');
+  }
+  private readonly country = inject(COUNTRY_PROFILE);
+  protected readonly access = inject(AccessControlService);
 
   protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
   protected readonly noteTouched = signal(false);
@@ -137,6 +152,12 @@ export class DifferenceManagement {
   // en user-list.ts.
   protected onSave(): void {
     this.noteTouched.set(true);
+    // Matriz 7.16 del DED: confirmar un match requiere `manage_differences`
+    // propio — hoy coincide con quien llega aquí (`view_reconciliation`,
+    // solo Admin/Tesorería tienen ambos), pero ahora se evalúa de verdad. El
+    // botón en el template ya lo deshabilita; este guard es defensa en
+    // profundidad.
+    if (!this.access.hasPermission('manage_differences')) return;
     if (!this.service.canSave()) return;
 
     const order = this.service.order();
@@ -158,6 +179,6 @@ export class DifferenceManagement {
   }
 
   private formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+    return new Intl.NumberFormat(this.country.locale, { style: 'currency', currency: this.country.currency }).format(amount);
   }
 }
