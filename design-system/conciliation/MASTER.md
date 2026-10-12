@@ -3024,6 +3024,33 @@ backend). Detalle por endpoint:
 5. **VS Code.** `.vscode/tasks.json` suma "Backend: levantar pila DEV (Docker)", "Backend: probar endpoints" y
    "Front: ng serve Colombia"; F5 usa la configuración `ng serve` existente (puerto 4200).
 
+### Actualización: catálogos organizacionales del Core Service (`GET /catalogs/...`)
+
+Backend `coctel_midd` DEV (rama `feature/catalogs`, Guia_Integracion_Frontend §5.2, §5.4 y §7.1):
+
+1. **`OrganizationCatalogService`** (`core/services/`) pide `GET /catalogs/subsidiarias`, `/ubicaciones`,
+   `/cargos`, `/puestos`, `/departamentos` y `/areas` (Core Service; basta una sesión válida). Carga
+   perezosa (`ensureLoaded()`, la llama `UserDetail`), una vez por sesión, cada catálogo por separado (la
+   falla de uno no vacía los demás); se limpian al cerrar sesión. `ubicaciones` trae `subsidiariaId`:
+   `ubicacionesFor()` filtra por las subsidiarias elegidas y `pruneUbicaciones()` quita las ubicaciones de
+   una subsidiaria que se deselecciona (solo por acción del usuario, nunca al precargar).
+2. **Alta y "Organización" usan el catálogo GLOBAL**, ya no `CatalogService` (que sigue siendo lo que la
+   sesión puede ver, para filtros de pantallas operativas): antes un admin solo podía asignar las
+   subsidiarias/ubicaciones a las que él mismo tenía acceso.
+3. **`department`/`area`/`jobTitle` (texto libre) se retiraron** — el backend ya no los devuelve y los
+   ignora en silencio si llegan. `AppUser` guarda `cargoIds`/`puestoIds`/`departamentoIds`/`areaIds`;
+   `GET /users/{id}` trae `cargos`/`puestos`/`departamentos`/`areas` como `{ id, nombre }`
+   (`organizationIdsFromDetail`) y `PATCH /users/{id}` manda siempre el conjunto completo de las seis
+   listas. "Cargo o puesto" se separa en **Cargos** y **Puestos**; los cuatro son multi-select. Se eliminó
+   `user-management/data/organization-catalog.ts` (listas fijas del front).
+4. **Nombres en modo lectura:** del catálogo y, si un id no está ahí (dado de baja: el catálogo solo trae
+   habilitados), del `{ id, nombre }` que trajo el detalle; los multi-select también agregan esas opciones
+   para no mostrar ids sueltos.
+5. Error nuevo `INVALID_CATALOG_ITEM` (400) en `ERROR_CODE_MESSAGES`; `/catalogs` agregado a
+   `proxy.conf.js` (no choca con la ruta `/catalogos` del portal). En una base nueva cargos, puestos,
+   departamentos y áreas llegan vacíos hasta que el cliente entregue las listas: el select muestra "Sin
+   opciones en el catálogo".
+
 ## Patrón: encabezado de página (`nz-page-header`) — regla general
 
 **Toda pantalla del shell pone su título con `nz-page-header`** (`NzPageHeaderModule`,

@@ -25,6 +25,20 @@ export function backendStatusToLocal(status: string): UserStatus {
   return BACKEND_STATUS_TO_LOCAL[status] ?? 'active';
 }
 
+// Cargo/puesto/departamento/área asignados en `GET /users/{id}` (listas
+// `{ id, nombre }`) → los ids que guarda `AppUser`. `?? []` por si el backend
+// desplegado aún es anterior a los catálogos organizacionales.
+export function organizationIdsFromDetail(
+  detail: UserDetailDto,
+): Pick<AppUser, 'cargoIds' | 'puestoIds' | 'departamentoIds' | 'areaIds'> {
+  return {
+    cargoIds: (detail.cargos ?? []).map((c) => c.id),
+    puestoIds: (detail.puestos ?? []).map((p) => p.id),
+    departamentoIds: (detail.departamentos ?? []).map((d) => d.id),
+    areaIds: (detail.areas ?? []).map((a) => a.id),
+  };
+}
+
 export type StatusFilter = 'all' | UserStatus;
 export type RoleFilter = 'all' | RoleId;
 
@@ -82,9 +96,10 @@ export interface UpdateUserProfileInput {
   ssn: string;
   gender: string;
   address: AppUserAddress;
-  department: string;
-  area: string;
-  jobTitle: string;
+  cargoIds: number[];
+  puestoIds: number[];
+  departamentoIds: number[];
+  areaIds: number[];
   managerId: string | null;
   employeeId: string;
   hireDate: string;
@@ -315,9 +330,10 @@ export class UserManagementService {
           ssn: '',
           gender: '',
           address: { city: '', state: '', zipCode: '', street1: '', street2: null, exteriorNumber: '', interiorNumber: null },
-          department: '',
-          area: '',
-          jobTitle: '',
+          cargoIds: [],
+          puestoIds: [],
+          departamentoIds: [],
+          areaIds: [],
           managerId: input.managerId,
           employeeId: '',
           hireDate: '',
@@ -452,9 +468,7 @@ export class UserManagementService {
       activeSessions: detail.activeSessions ?? 0,
       mustChangePassword: detail.mustChangePassword,
       temporaryPassword: detail.temporaryPassword,
-      department: detail.department ?? '',
-      area: detail.area ?? '',
-      jobTitle: detail.jobTitle ?? '',
+      ...organizationIdsFromDetail(detail),
       managerId,
       employeeId: detail.employeeCode ?? '',
       hireDate: detail.hireDate ?? '',
@@ -508,9 +522,10 @@ export class UserManagementService {
   // mandar, así que el `AppUser` resultante combina el `input` (lo que el
   // backend acaba de guardar) con lo que SÍ trae la respuesta (roles,
   // permisos, estado, mustChangePassword, emailVerified — autoritativo).
-  // `subsidiariaIds`/`ubicacionIds` SÍ viajan (DEV, Guía_Endpoints: una lista
-  // reemplaza la actual, vacía las quita, omitirla no toca nada): este form
-  // siempre manda las dos listas. Un id inexistente rechaza TODO el PATCH con
+  // `subsidiariaIds`/`ubicacionIds` y `cargoIds`/`puestoIds`/`departamentoIds`/
+  // `areaIds` SÍ viajan (una lista reemplaza la actual, vacía las quita,
+  // omitirla no toca nada): este form siempre manda las seis listas. Un cargo/
+  // puesto/departamento/área inexistente → 400 `INVALID_CATALOG_ITEM`. Un id inexistente rechaza TODO el PATCH con
   // 400 `INVALID_LOCATION` (lo avisa `httpErrorAlertInterceptor`). Tras
   // guardar, el `AppUser` toma las listas de la RESPUESTA (autoritativas).
   updateUserProfile(userId: string, input: UpdateUserProfileInput): Observable<AppUser> {
@@ -545,15 +560,17 @@ export class UserManagementService {
         interiorNumber: input.address.interiorNumber?.trim() || null,
         exteriorNumber: input.address.exteriorNumber.trim() || null,
       },
-      department: input.department.trim() || null,
-      area: input.area.trim() || null,
-      jobTitle: input.jobTitle.trim() || null,
       managerId: managerBackendId,
       employeeCode: input.employeeId.trim() || null,
       hireDate: input.hireDate || null,
       contractEndDate: input.contractEndDate,
       subsidiariaIds: input.subsidiariaIds,
       ubicacionIds: input.ubicacionIds,
+      // Siempre el conjunto COMPLETO de cada lista (la del backend se reemplaza).
+      cargoIds: input.cargoIds,
+      puestoIds: input.puestoIds,
+      departamentoIds: input.departamentoIds,
+      areaIds: input.areaIds,
     };
 
     return this.auth.updateUser(backendUserId, request).pipe(
@@ -568,9 +585,12 @@ export class UserManagementService {
           ssn: input.ssn.trim(),
           gender: input.gender,
           address: { ...input.address },
-          department: input.department.trim(),
-          area: input.area.trim(),
-          jobTitle: input.jobTitle.trim(),
+          // `UserSummaryDto` no repite cargos/puestos/departamentos/áreas: se
+          // toma lo enviado (el backend lo guardó tal cual o habría respondido 400).
+          cargoIds: [...input.cargoIds],
+          puestoIds: [...input.puestoIds],
+          departamentoIds: [...input.departamentoIds],
+          areaIds: [...input.areaIds],
           managerId: input.managerId,
           employeeId: input.employeeId.trim(),
           hireDate: input.hireDate,

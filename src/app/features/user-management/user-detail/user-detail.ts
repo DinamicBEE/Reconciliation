@@ -31,13 +31,13 @@ import {
   fullName,
 } from '../data/user-management.model';
 import { AuditLogService } from '../data/audit-log.service';
-import { UserManagementService, backendStatusToLocal } from '../data/user-management.service';
+import { UserManagementService, backendStatusToLocal, organizationIdsFromDetail } from '../data/user-management.service';
 import { AccessCatalogService } from '../data/access-catalog.service';
 import { AccessControlService } from '../../auth/data/access-control.service';
-import { AREAS, DEPARTMENTS, JOB_TITLES } from '../data/organization-catalog';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
-import { CatalogService } from '../../../core/services/catalog.service';
+import { OrganizationCatalogKind, OrganizationCatalogService } from '../../../core/services/organization-catalog.service';
+import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
 import { COUNTRY_PROFILE } from '../../../core/country/active-country';
 import { AuthService, UserDetailDto } from '../../auth/data/auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -92,7 +92,10 @@ export class UserDetail {
   readonly userId = input<string>();
 
   protected readonly service = inject(UserManagementService);
-  protected readonly catalog = inject(CatalogService);
+  // Catálogos organizacionales COMPLETOS del Core Service (`GET /catalogs/...`):
+  // opciones de subsidiarias, ubicaciones, cargos, puestos, departamentos y áreas
+  // al crear y al editar "Organización".
+  protected readonly catalog = inject(OrganizationCatalogService);
   private readonly auth = inject(AuthService);
   // Vocabulario del país activo: identificación personal, dirección, teléfono.
   protected readonly country = inject(COUNTRY_PROFILE);
@@ -123,21 +126,52 @@ export class UserDetail {
   protected readonly closingSessions = signal(false);
   protected readonly auditActionLabel = auditActionLabel;
   private readonly auditLogService = inject(AuditLogService);
-  protected readonly departments = DEPARTMENTS;
-  protected readonly areas = AREAS;
-  protected readonly jobTitles = JOB_TITLES;
   protected readonly genderOptions = GENDER_OPTIONS;
 
-  protected subsidiariaNames(ids: number[]): string[] {
+  // Nombres de lo asignado (modo lectura). Primero el catálogo; si un id no está
+  // ahí (catálogo aún cargando, o el elemento ya está dado de baja y el catálogo
+  // solo trae habilitados) se toma el nombre que trajo `GET /users/{id}`.
+  protected orgNames(kind: OrganizationCatalogKind, ids: readonly number[]): string[] {
     return ids
-      .map((id) => this.catalog.findSubsidiaria(id)?.nombre)
+      .map((id) => this.catalog.find(kind, id)?.nombre ?? this.assignedEntry(kind, id)?.nombre)
       .filter((name): name is string => !!name);
   }
 
-  protected ubicacionNames(ids: number[]): string[] {
-    return ids
-      .map((id) => this.catalog.findUbicacion(id)?.nombre)
-      .filter((name): name is string => !!name);
+  // Opciones de un multi-select de "Organización": el catálogo más lo que la
+  // persona ya tiene asignado y el catálogo no trae (dado de baja), para que el
+  // select muestre su nombre en vez del id suelto.
+  protected orgOptions(kind: OrganizationCatalogKind, base: readonly CatalogEntry[] = this.catalog.options(kind)): CatalogEntry[] {
+    // "Faltante" respecto del catálogo COMPLETO, no de `base` (que puede venir
+    // filtrada, p. ej. ubicaciones de las subsidiarias elegidas).
+    const all = this.catalog.options(kind);
+    const assigned = this.backendDetail()?.[kind] ?? [];
+    const missing = assigned.filter((entry) => !all.some((option) => option.id === entry.id));
+    return [...base, ...missing];
+  }
+
+  private assignedEntry(kind: OrganizationCatalogKind, id: number): CatalogEntry | null {
+    return this.backendDetail()?.[kind]?.find((entry) => entry.id === id) ?? null;
+  }
+
+  // Ubicaciones a ofrecer: solo las de las subsidiarias elegidas (todas si no hay
+  // ninguna elegida) — `GET /catalogs/ubicaciones` trae `subsidiariaId`.
+  protected readonly createUbicacionOptions = computed(() => this.catalog.ubicacionesFor(this.createSubsidiariaIds()));
+  protected readonly editSubsidiariaIds = signal<number[]>([]);
+  protected readonly editUbicacionOptions = computed(() =>
+    this.orgOptions('ubicaciones', this.catalog.ubicacionesFor(this.editSubsidiariaIds())),
+  );
+
+  // Al quitar una subsidiaria se quitan también sus ubicaciones elegidas (solo
+  // por acción del usuario, nunca al precargar el detalle).
+  protected onCreateSubsidiariasChange(ids: number[]): void {
+    this.createSubsidiariaIds.set(ids);
+    this.createUbicacionIds.set(this.catalog.pruneUbicaciones(this.createUbicacionIds(), ids));
+  }
+
+  protected onEditSubsidiariasChange(ids: number[]): void {
+    this.editSubsidiariaIds.set(ids);
+    const ubicaciones = this.orgForm.controls.ubicacionIds;
+    ubicaciones.setValue(this.catalog.pruneUbicaciones(ubicaciones.value, ids));
   }
 
   protected readonly isCreate = computed(() => !this.userId());
@@ -206,9 +240,7 @@ export class UserDetail {
         exteriorNumber: detail.address.exteriorNumber ?? '',
         interiorNumber: detail.address.interiorNumber,
       },
-      department: detail.department ?? '',
-      area: detail.area ?? '',
-      jobTitle: detail.jobTitle ?? '',
+      ...organizationIdsFromDetail(detail),
       managerId,
       employeeId: detail.employeeCode ?? '',
       hireDate: detail.hireDate ?? '',
@@ -321,9 +353,10 @@ export class UserDetail {
   // "Organización" no se pide al crear — solo aplica editando un usuario
   // existente (ver CreateUserInput / UserManagementService.createUser).
   protected readonly orgForm = this.fb.group({
-    department: this.fb.control(''),
-    area: this.fb.control(''),
-    jobTitle: this.fb.control(''),
+    cargoIds: this.fb.control<number[]>([]),
+    puestoIds: this.fb.control<number[]>([]),
+    departamentoIds: this.fb.control<number[]>([]),
+    areaIds: this.fb.control<number[]>([]),
     managerId: this.fb.control<string | null>(null),
     employeeId: this.fb.control(''),
     hireDate: this.fb.control<Date | null>(null),
@@ -366,6 +399,9 @@ export class UserDetail {
   protected readonly savingProfile = signal(false);
 
   constructor() {
+    // Combos de "Organización" (alta y edición) — se piden una vez por sesión.
+    this.catalog.ensureLoaded();
+
     // Consulta el detalle REAL del backend (`GET /users/{id}`) solo cuando
     // cambia la cuenta mostrada Y tiene `backendUserId` — keyed en el
     // registro BASE del mock (`untracked`, no en `user()`) para no
@@ -418,9 +454,10 @@ export class UserDetail {
           address: { ...found.address },
         });
         this.orgForm.reset({
-          department: found.department,
-          area: found.area,
-          jobTitle: found.jobTitle,
+          cargoIds: [...found.cargoIds],
+          puestoIds: [...found.puestoIds],
+          departamentoIds: [...found.departamentoIds],
+          areaIds: [...found.areaIds],
           managerId: found.managerId,
           employeeId: found.employeeId,
           hireDate: parseIsoDate(found.hireDate),
@@ -428,6 +465,7 @@ export class UserDetail {
           subsidiariaIds: [...found.subsidiariaIds],
           ubicacionIds: [...found.ubicacionIds],
         });
+        this.editSubsidiariaIds.set([...found.subsidiariaIds]);
         this.draftRoleIds.set([...found.roleIds]);
         this.draftPermissions.set(new Set(found.permissions));
       } else {
@@ -442,9 +480,10 @@ export class UserDetail {
           address: { city: '', state: '', zipCode: '', street1: '', street2: null, exteriorNumber: '', interiorNumber: null },
         });
         this.orgForm.reset({
-          department: '',
-          area: '',
-          jobTitle: '',
+          cargoIds: [],
+          puestoIds: [],
+          departamentoIds: [],
+          areaIds: [],
           managerId: null,
           employeeId: '',
           hireDate: null,
@@ -489,9 +528,10 @@ export class UserDetail {
         address: { ...user.address },
       });
       this.orgForm.reset({
-        department: user.department,
-        area: user.area,
-        jobTitle: user.jobTitle,
+        cargoIds: [...user.cargoIds],
+        puestoIds: [...user.puestoIds],
+        departamentoIds: [...user.departamentoIds],
+        areaIds: [...user.areaIds],
         managerId: user.managerId,
         employeeId: user.employeeId,
         hireDate: parseIsoDate(user.hireDate),
@@ -499,6 +539,7 @@ export class UserDetail {
         subsidiariaIds: [...user.subsidiariaIds],
         ubicacionIds: [...user.ubicacionIds],
       });
+      this.editSubsidiariaIds.set([...user.subsidiariaIds]);
     }
     this.isEditing.set(false);
   }

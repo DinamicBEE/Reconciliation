@@ -24,6 +24,10 @@ type MockUserSeed = Omit<
   | 'ubicacionIds'
   | 'backendUserId'
   | 'lockedUntil'
+  | 'cargoIds'
+  | 'puestoIds'
+  | 'departamentoIds'
+  | 'areaIds'
 >;
 
 // Incluye a 'u0001', 'u0006', 'u0011' y 'u0018' — los mismos 4 usuarios demo
@@ -34,11 +38,9 @@ type MockUserSeed = Omit<
 // solo se resuelven permisos/nombre/foto para cuentas cuyo email coincide
 // con lo sembrado en coctel-del-mar. El resto son personas ficticias para dar variedad realista
 // de roles/estado/último acceso (incluyendo "nunca ha iniciado sesión") y de
-// los nuevos campos de seguridad/organización. `jobTitle`/`department`/
-// `area` NO se reescribieron al redefinir los roles (los roles
-// reales viven en el backend, `GET /roles`) — son datos organizacionales independientes del
-// rol de acceso al sistema; un "Auditor de Procesos" puede perfectamente
-// tener hoy el rol `admin`.
+// los nuevos campos de seguridad. Cargo/puesto/departamento/área ya no se
+// siembran aquí: son ids de los catálogos del Core Service (`GET /catalogs/...`)
+// y llegan con el detalle real (`GET /users/{id}`), ver el `.map()` de abajo.
 const MOCK_USERS_SEED: MockUserSeed[] = [
   {
     id: 'u0001',
@@ -57,9 +59,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 2,
-    department: 'Tecnología',
-    area: 'Sistemas',
-    jobTitle: 'Administrador de Plataforma',
     managerId: null,
   },
   {
@@ -79,9 +78,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 1,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -101,9 +97,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 1,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Supervisor de Conciliación',
     managerId: 'u0001',
   },
   {
@@ -123,9 +116,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 1,
     twoFactorEnabled: false,
     activeSessions: 1,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -147,9 +137,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 3,
     twoFactorEnabled: false,
     activeSessions: 0,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -169,9 +156,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 1,
-    department: 'Auditoría Interna',
-    area: 'Cumplimiento',
-    jobTitle: 'Auditor de Procesos',
     managerId: 'u0001',
   },
   {
@@ -191,9 +175,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 0,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -213,9 +194,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 0,
-    department: 'Finanzas',
-    area: 'Tesorería',
-    jobTitle: 'Supervisor de Tesorería',
     managerId: 'u0001',
   },
   // --- u0010 en adelante: relleno para validar paginación (nzPageSize=10 en
@@ -239,9 +217,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 1,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -261,9 +236,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 1,
-    department: 'Operaciones',
-    area: 'Tesorería',
-    jobTitle: 'Supervisor de Tesorería',
     managerId: 'u0001',
   },
   {
@@ -283,9 +255,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 1,
-    department: 'Auditoría Interna',
-    area: 'Cumplimiento',
-    jobTitle: 'Auditor de Procesos',
     managerId: 'u0001',
   },
   {
@@ -305,9 +274,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 0,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -327,9 +293,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 0,
-    department: 'Finanzas',
-    area: 'Contabilidad',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -349,9 +312,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 1,
-    department: 'Tecnología',
-    area: 'Sistemas',
-    jobTitle: 'Supervisor de Conciliación',
     managerId: 'u0001',
   },
   {
@@ -371,9 +331,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 5,
     twoFactorEnabled: false,
     activeSessions: 0,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -393,9 +350,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 1,
-    department: 'Auditoría Interna',
-    area: 'Cumplimiento',
-    jobTitle: 'Auditor de Procesos',
     managerId: 'u0001',
   },
   {
@@ -415,9 +369,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 1,
-    department: 'Recursos Humanos',
-    area: 'Contabilidad',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -437,9 +388,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 0,
-    department: 'Tecnología',
-    area: 'Sistemas',
-    jobTitle: 'Supervisor de Conciliación',
     managerId: 'u0001',
   },
   {
@@ -459,9 +407,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 1,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -481,9 +426,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 1,
-    department: 'Auditoría Interna',
-    area: 'Cumplimiento',
-    jobTitle: 'Auditor de Procesos',
     managerId: 'u0001',
   },
   {
@@ -503,9 +445,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 0,
-    department: 'Recursos Humanos',
-    area: 'Contabilidad',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -525,9 +464,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 4,
     twoFactorEnabled: false,
     activeSessions: 0,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -547,9 +483,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 1,
-    department: 'Operaciones',
-    area: 'Tesorería',
-    jobTitle: 'Supervisor de Tesorería',
     managerId: 'u0001',
   },
   {
@@ -569,9 +502,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 0,
-    department: 'Finanzas',
-    area: 'Conciliación Bancaria',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0003',
   },
   {
@@ -591,9 +521,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: true,
     activeSessions: 1,
-    department: 'Auditoría Interna',
-    area: 'Cumplimiento',
-    jobTitle: 'Auditor de Procesos',
     managerId: 'u0001',
   },
   // Cuenta demo de COSTOS (login "Costos", ver login.html) — el único
@@ -618,9 +545,6 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     failedLoginAttempts: 0,
     twoFactorEnabled: false,
     activeSessions: 0,
-    department: 'Finanzas',
-    area: 'Contabilidad',
-    jobTitle: 'Analista de Conciliación',
     managerId: 'u0001',
   },
 ];
@@ -738,6 +662,12 @@ export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   // real (ver el script de siembra, MASTER.md). Arreglo de UN elemento
   // porque así se sembraron; nada impide que `POST /users`
   // (`UserManagementService.createUser`) le asigne varias a alguien nuevo.
+  // Cargo/puesto/departamento/área: los asigna el backend (ids de `GET
+  // /catalogs/...`); el detalle real (`GET /users/{id}`) los sobreescribe.
+  cargoIds: [],
+  puestoIds: [],
+  departamentoIds: [],
+  areaIds: [],
   subsidiariaIds: [1],
   ubicacionIds: [(index % 4) + 1],
   backendUserId: BACKEND_USER_ID[seed.id] ?? null,

@@ -183,9 +183,9 @@ async function main() {
   check('PATCH con listas → 200 y el resumen refleja 3 ubicaciones', r.status === 200 && r.body?.ubicaciones?.length === 3, `${r.status} ${j(r.body?.ubicaciones)}`);
   r = await call('GET', `/users/${userId}`, { token: T });
   check('detalle persiste ubicaciones [1,2,3], subsidiaria [1] y phone', r.body?.ubicaciones?.length === 3 && r.body?.subsidiarias?.length === 1 && r.body?.phone === '3009998888');
-  r = await call('PATCH', `/users/${userId}`, { token: T, body: { department: 'Finanzas' } });
+  r = await call('PATCH', `/users/${userId}`, { token: T, body: { employeeCode: `EMP-${stamp}` } });
   r = await call('GET', `/users/${userId}`, { token: T });
-  check('omitir las listas no las toca (siguen 3 ubicaciones)', r.body?.ubicaciones?.length === 3 && r.body?.department === 'Finanzas');
+  check('omitir las listas no las toca (siguen 3 ubicaciones)', r.body?.ubicaciones?.length === 3 && r.body?.employeeCode === `EMP-${stamp}`);
   r = await call('PATCH', `/users/${userId}`, { token: T, body: { ubicacionIds: [2] } });
   check('lista de 1 reemplaza la actual', r.status === 200 && r.body?.ubicaciones?.length === 1 && r.body.ubicaciones[0].id === 2);
   r = await call('PATCH', `/users/${userId}`, { token: T, body: { ubicacionIds: [9999] } });
@@ -194,6 +194,35 @@ async function main() {
   check('correo ya usado → 409 EMAIL_ALREADY_REGISTERED', r.status === 409 && code(r) === 'EMAIL_ALREADY_REGISTERED', `${r.status} ${j(r.body)}`);
   r = await call('PATCH', '/users/999999', { token: T, body: { phone: '1' } });
   check('usuario inexistente → 404 USER_NOT_FOUND', r.status === 404 && code(r) === 'USER_NOT_FOUND');
+
+  // ---------- GET /catalogs/* (Core) + PATCH con cargo/puesto/departamento/área ----------
+  section('GET /catalogs/* (Core) + PATCH /users/{id} con cargoIds/puestoIds/departamentoIds/areaIds');
+  const catalogs = {};
+  for (const kind of ['subsidiarias', 'ubicaciones', 'cargos', 'puestos', 'departamentos', 'areas']) {
+    r = await call('GET', `/catalogs/${kind}`, { token: T });
+    const ok = r.status === 200 && Array.isArray(r.body) && r.body.every((o) => typeof o.id === 'number' && typeof o.nombre === 'string');
+    check(`GET /catalogs/${kind} → 200 con [{ id, nombre }] (${Array.isArray(r.body) ? r.body.length : '?'} opciones)`, ok, `${r.status} ${j(r.body)}`);
+    catalogs[kind] = Array.isArray(r.body) ? r.body : [];
+  }
+  check('ubicaciones traen subsidiariaId', catalogs.ubicaciones.every((u) => typeof u.subsidiariaId === 'number'));
+  r = await call('GET', '/catalogs/cargos');
+  check('GET /catalogs/cargos sin token → 401', r.status === 401, `${r.status}`);
+  r = await call('GET', '/catalogs/cargos', { token: session.accessToken });
+  check('basta una sesión (sin manage_users) → 200', r.status === 200, `${r.status}`);
+  const orgKinds = [['cargos', 'cargoIds'], ['puestos', 'puestoIds'], ['departamentos', 'departamentoIds'], ['areas', 'areaIds']];
+  const orgBody = Object.fromEntries(orgKinds.map(([kind, field]) => [field, catalogs[kind].slice(0, 2).map((o) => o.id)]));
+  r = await call('PATCH', `/users/${userId}`, { token: T, body: orgBody });
+  check('PATCH con las 4 listas → 200', r.status === 200, `${r.status} ${j(r.body)}`);
+  r = await call('GET', `/users/${userId}`, { token: T });
+  check('detalle trae cargos/puestos/departamentos/areas como { id, nombre } con lo enviado',
+    orgKinds.every(([kind, field]) => Array.isArray(r.body?.[kind]) && r.body[kind].map((o) => o.id).sort().join() === [...orgBody[field]].sort().join()),
+    j(Object.fromEntries(orgKinds.map(([kind]) => [kind, r.body?.[kind]]))));
+  check('el detalle ya no trae department/area/jobTitle', !('department' in (r.body ?? {})) && !('jobTitle' in (r.body ?? {})));
+  r = await call('PATCH', `/users/${userId}`, { token: T, body: { cargoIds: [999999] } });
+  check('cargo inexistente → 400 INVALID_CATALOG_ITEM', r.status === 400 && code(r) === 'INVALID_CATALOG_ITEM', `${r.status} ${j(r.body)}`);
+  r = await call('PATCH', `/users/${userId}`, { token: T, body: { cargoIds: [], puestoIds: [], departamentoIds: [], areaIds: [] } });
+  r = await call('GET', `/users/${userId}`, { token: T });
+  check('listas vacías quitan la organización', orgKinds.every(([kind]) => r.body?.[kind]?.length === 0));
 
   // ---------- PATCH /users/{id}/status ----------
   section('PATCH /users/{id}/status');

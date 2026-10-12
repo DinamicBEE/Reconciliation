@@ -134,9 +134,14 @@ export interface UserDetailDto {
   ssn: string | null;
   gender: string | null;
   address: AddressInfo;
-  department: string | null;
-  area: string | null;
-  jobTitle: string | null;
+  // Organización asignada (Core, `GET /catalogs/...`): listas `{ id, nombre }`
+  // con los mismos ids que los combos; `[]` si no tiene ninguno. Reemplazan a
+  // los antiguos `department`/`area`/`jobTitle` de texto libre, que el backend
+  // ya no devuelve (Guia_Integracion_Frontend §5.2).
+  cargos: CatalogEntry[];
+  puestos: CatalogEntry[];
+  departamentos: CatalogEntry[];
+  areas: CatalogEntry[];
   manager: ManagerSummary | null;
   employeeCode: string | null;
   hireDate: string | null;
@@ -200,7 +205,10 @@ export interface NewUserResult {
 // `subsidiariaIds`/`ubicacionIds` (DEV, Guía_Endpoints): una lista REEMPLAZA
 // la actual, una lista vacía las quita todas y omitirla (`undefined`) no toca
 // nada. Un id inexistente rechaza TODA la actualización con 400
-// `INVALID_LOCATION`.
+// `INVALID_LOCATION`. Misma regla para `cargoIds`/`puestoIds`/`departamentoIds`/
+// `areaIds` (ids de `GET /catalogs/...`), con 400 `INVALID_CATALOG_ITEM`. El
+// backend ya no acepta `department`/`area`/`jobTitle`: si llegan, los ignora en
+// silencio.
 export interface UpdateUserRequest {
   firstName: string | null;
   lastName: string | null;
@@ -210,15 +218,16 @@ export interface UpdateUserRequest {
   ssn: string | null;
   gender: string | null;
   address: AddressInfo | null;
-  department: string | null;
-  area: string | null;
-  jobTitle: string | null;
   managerId: number | null;
   employeeCode: string | null;
   hireDate: string | null;
   contractEndDate: string | null;
   subsidiariaIds?: number[];
   ubicacionIds?: number[];
+  cargoIds?: number[];
+  puestoIds?: number[];
+  departamentoIds?: number[];
+  areaIds?: number[];
 }
 
 // `POST /users/{id}/verify-email` — el backend fuerza `emailVerified=true`

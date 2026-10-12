@@ -121,9 +121,15 @@ export interface AppUser {
 
   // "Organización" — todos opcionales/editables en cualquier momento; no se
   // piden al crear la cuenta (ver CreateUserInput), se completan después.
-  department: string; // Departamento
-  area: string; // Área
-  jobTitle: string; // Cargo o puesto
+  // Cargo(s), puesto(s), departamento(s) y área(s) — ids de los catálogos del
+  // Core Service (`GET /catalogs/cargos|puestos|departamentos|areas`, ver
+  // `OrganizationCatalogService`), varios de cada uno por persona. Reemplazan
+  // a los antiguos `department`/`area`/`jobTitle` de texto libre. `[]` = sin
+  // asignar.
+  cargoIds: number[];
+  puestoIds: number[];
+  departamentoIds: number[];
+  areaIds: number[];
   managerId: string | null; // Administrador responsable — id de otro AppUser (admin/supervisor), null = sin asignar
   employeeId: string; // ID empleado
   hireDate: string; // ISO date — Fecha de contratación
@@ -131,8 +137,9 @@ export interface AppUser {
   // Subsidiaria(s) (negocio/marca/empresa) y ubicación(es) (tienda/store/
   // punto de venta/sucursal) — a diferencia del resto de "Organización", SÍ
   // se piden al crear la cuenta (ver CreateUserInput). `id`s numéricos
-  // porque referencian el catálogo REAL del backend (`CatalogService`,
-  // `core/services/`), no un valor propio de este mock. ARREGLOS, no un
+  // porque referencian el catálogo REAL del backend (`GET /catalogs/
+  // subsidiarias|ubicaciones`, `OrganizationCatalogService`), no un valor propio
+  // de este mock. ARREGLOS, no un
   // solo valor: el backend modela acceso a VARIAS subsidiarias/ubicaciones
   // por persona (`empleado_subsidiaria`/`empleado_ubicacion`, tablas de
   // relación N:M, ver `CreateUserRequest.subsidiariaIds`/`.ubicacionIds` en

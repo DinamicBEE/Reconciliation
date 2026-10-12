@@ -31,6 +31,7 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   INVALID_ROLE: 'Uno de los roles indicados no es válido.',
   INVALID_PERMISSION: 'Uno de los permisos indicados no es válido.',
   INVALID_LOCATION: 'Una de las subsidiarias o ubicaciones indicadas no existe o no está activa.',
+  INVALID_CATALOG_ITEM: 'Uno de los cargos, puestos, departamentos o áreas indicados no existe o no está activo.',
   INVALID_USER_STATUS: 'El estado indicado no es válido.',
   ROLE_ASSIGNMENT_FORBIDDEN: 'No tienes permiso para asignar roles a un usuario.',
   CANNOT_DELETE_SELF: 'No puedes eliminar tu propia cuenta.',
