@@ -38,8 +38,9 @@
         class="toolbar__filter"
         [ngModel]="service.statusFilter()"
         (ngModelChange)="onStatusFilterChange($event)"
+        [nzLoading]="salesCatalog.loading()"
       >
-        @for (opt of statusOptions; track opt.value) {
+        @for (opt of statusOptions(); track opt.value) {
           <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
         }
       </nz-select>
@@ -48,8 +49,9 @@
         class="toolbar__filter"
         [ngModel]="service.tenderMediaFilter()"
         (ngModelChange)="onTenderMediaFilterChange($event)"
+        [nzLoading]="salesCatalog.loading()"
       >
-        @for (opt of tenderMediaOptions; track opt.value) {
+        @for (opt of tenderMediaOptions(); track opt.value) {
           <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
         }
       </nz-select>

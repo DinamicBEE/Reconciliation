@@ -38,6 +38,7 @@ import {
 } from './data/sale.util';
 import { buildSalesCsv } from './data/sale-export.util';
 import { MoneyPipe } from '../../core/country/money.pipe';
+import { SalesCatalogService } from './data/sales-catalog.service';
 
 // Lookup inverso de `STORE_LABEL` ("Sucursal Polanco" → 'polanco') — ver el
 // comentario de `storeOptions` en el componente sobre por qué existe este
@@ -115,22 +116,27 @@ export class SalesDashboard {
     return [{ value: 'all' as const, label: 'Todas las empresas' }, ...known];
   });
 
-  // Mismo vocabulario/orden que reconciliation-dashboard.ts (statusOptions)
-  // — "los mismos estados que los de la conciliación".
-  protected readonly statusOptions: { value: StatusFilter; label: string }[] = [
-    { value: 'all', label: 'Todos los estados' },
-    { value: 'conciliado', label: 'Conciliado' },
-    { value: 'desconciliado', label: 'Desconciliado' },
-    { value: 'por_conciliar', label: 'Por conciliar' },
-  ];
+  // Medios de pago y estados de conciliación REALES del Core Service
+  // (`GET /sales/catalogs/tender-media` y `/reconciliation-statuses`, ver
+  // SalesCatalogService). El valor es el `id` del catálogo.
+  protected readonly salesCatalog = inject(SalesCatalogService);
 
-  protected readonly tenderMediaOptions: { value: TenderMediaFilter; label: string }[] = [
+  protected readonly statusOptions = computed<{ value: StatusFilter; label: string }[]>(() => [
+    { value: 'all', label: 'Todos los estados' },
+    ...this.salesCatalog.reconciliationStatuses().map((s) => ({ value: s.id, label: s.description })),
+  ]);
+
+  // `pendingReview`: código del POS que llegó en una venta sin estar sembrado.
+  protected readonly tenderMediaOptions = computed<{ value: TenderMediaFilter; label: string }[]>(() => [
     { value: 'all', label: 'Todos los medios' },
-    { value: 'bbva', label: 'BBVA' },
-    { value: 'rappi', label: 'Rappi' },
-    { value: 'didi_food', label: 'DiDi Food' },
-    { value: 'efectivo', label: 'Efectivo' },
-  ];
+    ...this.salesCatalog
+      .tenderMedia()
+      .map((m) => ({ value: m.id, label: m.pendingReview ? `${m.description} (por revisar)` : m.description })),
+  ]);
+
+  constructor() {
+    this.salesCatalog.ensureLoaded();
+  }
 
   // Mismo texto que `statusOptions` (sin 'all') — como Record en vez de array
   // porque así lo consume `buildSalesCsv()`, igual que `storeLabel`/

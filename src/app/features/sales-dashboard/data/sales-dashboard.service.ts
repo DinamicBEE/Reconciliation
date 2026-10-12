@@ -1,18 +1,52 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { ReconciliationStatus, TenderMedia } from '../../../shared/models/reconciliation-item.model';
 import { Sale, Store } from '../../../shared/models/sale.model';
 import { MOCK_SALES } from './sales-mock.data';
 import { saleReconciliationStatus } from './sale.util';
+import { SalesCatalogService } from './sales-catalog.service';
 
-export type TenderMediaFilter = TenderMedia | 'all';
+// Medio de pago y estado: `id` REAL de los catálogos del Core Service
+// (`GET /sales/catalogs/tender-media` y `/reconciliation-statuses`, ver
+// `SalesCatalogService`) — el mismo valor que recibirá `GET /sales` en sus
+// filtros `tenderMedia`/`status`.
+export type TenderMediaFilter = number | 'all';
 export type StoreFilter = Store | 'all';
-export type StatusFilter = ReconciliationStatus | 'all';
+export type StatusFilter = number | 'all';
 export type DateRangeFilter = [Date, Date] | null;
 // Filtro "Empresa" (subsidiaria) del toolbar — id REAL del catálogo del
 // backend (`Sale.subsidiariaId`/`CatalogService.subsidiarias()`), a
 // diferencia de `StoreFilter` (que sigue siendo un slug fijo del mock, ver
 // sale.model.ts).
 export type SubsidiariaFilter = number | 'all';
+
+// Puente TEMPORAL id del catálogo → valor del mock de ventas, mientras la tabla
+// siga siendo `MOCK_SALES` (sin `GET /sales`). Estado: el `code` del backend
+// (`por_conciliar`/`conciliado`/`desconciliado`) es el mismo valor que
+// `ReconciliationStatus`. Medio de pago: por nombre normalizado
+// ("Efectivo" → 'efectivo', "Rappi" → 'rappi'); un medio del POS que el mock no
+// modela (Transferencia, tarjetas...) no coincide con ninguna venta. Al integrar
+// `GET /sales` este puente desaparece: los ids viajan tal cual al backend.
+function normalize(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+const MOCK_TENDER_MEDIA = new Set<string>(['rappi', 'didi_food', 'efectivo', 'bbva']);
+
+export function mockTenderMediaFor(description: string): TenderMedia | null {
+  const slug = normalize(description);
+  return MOCK_TENDER_MEDIA.has(slug) ? (slug as TenderMedia) : null;
+}
+
+const MOCK_STATUSES = new Set<string>(['conciliado', 'desconciliado', 'por_conciliar']);
+
+export function mockStatusFor(code: string): ReconciliationStatus | null {
+  return MOCK_STATUSES.has(code) ? (code as ReconciliationStatus) : null;
+}
 
 function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -41,6 +75,7 @@ export interface ReprocessTarget {
  */
 @Injectable()
 export class SalesDashboardService {
+  private readonly salesCatalog = inject(SalesCatalogService);
   private readonly sales = signal<Sale[]>(MOCK_SALES);
   readonly selectedSale = signal<Sale | null>(null);
 
@@ -55,15 +90,20 @@ export class SalesDashboardService {
     const range = this.dateRange();
     const subsidiaria = this.subsidiariaFilter();
     const store = this.storeFilter();
-    const status = this.statusFilter();
-    const tenderMedia = this.tenderMediaFilter();
+    const statusId = this.statusFilter();
+    const tenderMediaId = this.tenderMediaFilter();
+    const statusOption = statusId === 'all' ? null : this.salesCatalog.findReconciliationStatus(statusId);
+    const status = statusOption ? mockStatusFor(statusOption.code) : null;
+    const tenderMediaOption = tenderMediaId === 'all' ? null : this.salesCatalog.findTenderMedia(tenderMediaId);
+    const tenderMedia = tenderMediaOption ? mockTenderMediaFor(tenderMediaOption.description) : null;
     const term = this.search().trim().toLowerCase();
 
     return this.sales().filter((sale) => {
       if (subsidiaria !== 'all' && sale.subsidiariaId !== subsidiaria) return false;
       if (store !== 'all' && sale.store !== store) return false;
-      if (status !== 'all' && saleReconciliationStatus(sale) !== status) return false;
-      if (tenderMedia !== 'all' && sale.tenderMedia !== tenderMedia) return false;
+      if (statusId !== 'all' && saleReconciliationStatus(sale) !== status) return false;
+      // Igual que `GET /sales`: la venta debe tener ALGÚN pago con ese medio.
+      if (tenderMediaId !== 'all' && !sale.payments.some((payment) => payment.method === tenderMedia)) return false;
       if (term && !sale.customer.name.toLowerCase().includes(term)) return false;
       if (range) {
         const saleTime = new Date(sale.date).getTime();
