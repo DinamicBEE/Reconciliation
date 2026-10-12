@@ -1,0 +1,261 @@
+<!doctype html>
+<!--
+  FUENTE del PDF "Análisis front vs. back DEV" (docs/analisis-front-vs-back-dev_v4.pdf).
+  Respaldos (regla de docs/ en CLAUDE.md): docs/implementaciones/analisis-front-vs-back-dev_v1.0.pdf y _v2.0.pdf;
+  docs/avances/analisis-front-vs-back-dev_v3.pdf.
+  Regenerar: powershell -ExecutionPolicy Bypass -File docs/fuentes/generar-pdf.ps1 -Name analisis-front-vs-back-dev -Output docs/analisis-front-vs-back-dev_v4.pdf
+  Al actualizar: subir <meta name="doc-version">, la portada y el "Historial de versiones".
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="doc-version" content="4.0">
+<title>Análisis comparativo front vs. back DEV — v4.0</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 9.2pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 20pt; margin: 0 0 6px; color: #fff; }
+  h2 { font-size: 13.5pt; margin: 22px 0 8px; color: #0f172a; border-bottom: 2px solid #142850; padding-bottom: 4px; }
+  h3 { font-size: 10.4pt; margin: 14px 0 6px; color: #142850; }
+  code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 8pt; font-family: Consolas, "Courier New", monospace; }
+  .cover { background: #0f1b3d; color: #fff; padding: 20px 22px; border-radius: 6px; margin-bottom: 16px; }
+  .eyebrow { font-size: 8pt; letter-spacing: 1.5px; color: #93c5fd; font-weight: bold; text-transform: uppercase; }
+  .subtitle { font-size: 11pt; color: #cbd5e1; margin-bottom: 12px; }
+  .meta { width: 100%; border-collapse: collapse; font-size: 8.6pt; }
+  .meta td { padding: 3px 0; vertical-align: top; }
+  .meta td.l { color: #93c5fd; width: 140px; font-weight: bold; }
+  .meta td.v { color: #e2e8f0; }
+  .meta code { background: #1e2f5c; color: #e2e8f0; }
+  .cards { display: flex; gap: 9px; margin: 10px 0 8px; }
+  .card { flex: 1; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 4px; padding: 8px 11px; }
+  .card .n { font-size: 20pt; font-weight: bold; line-height: 1; }
+  .card .t { font-size: 7.8pt; color: #475569; margin-top: 3px; }
+  .card.g { border-left-color: #16a34a; } .card.g .n { color: #16a34a; }
+  .card.o { border-left-color: #d97706; } .card.o .n { color: #d97706; }
+  .card.r { border-left-color: #dc2626; } .card.r .n { color: #dc2626; }
+  .card.p { border-left-color: #7c3aed; } .card.p .n { color: #7c3aed; }
+  table.data { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 8.4pt; }
+  table.data th { background: #142850; color: #fff; text-align: left; padding: 5px 7px; font-size: 8pt; }
+  table.data td { padding: 4px 7px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  table.data tr:nth-child(even) td { background: #f8fafc; }
+  .m { display: inline-block; min-width: 42px; text-align: center; padding: 1px 6px; border-radius: 4px; font-size: 7.4pt; font-weight: bold; color: #fff; font-family: Consolas, monospace; }
+  .m.GET { background: #2563eb; } .m.POST { background: #16a34a; } .m.PATCH { background: #d97706; } .m.DELETE { background: #dc2626; }
+  .b { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 7.4pt; font-weight: bold; white-space: nowrap; }
+  .b.ok { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  .b.chg { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }
+  .b.miss { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+  .b.und { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+  .b.hi { background: #fee2e2; color: #b91c1c; } .b.md { background: #fef3c7; color: #b45309; } .b.lo { background: #f1f5f9; color: #475569; }
+  .callout { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 5px; padding: 9px 13px; margin: 8px 0; font-size: 8.7pt; }
+  .callout.warn { background: #fffbeb; border-color: #fde68a; }
+  .callout.crit { background: #fef2f2; border-color: #fecaca; }
+  .callout ul { margin: 4px 0 0; padding-left: 17px; } .callout li { margin-bottom: 3px; }
+  .ep { border: 1px solid #e2e8f0; border-radius: 5px; margin-bottom: 9px; page-break-inside: avoid; }
+  .ep-head { background: #f8fafc; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; border-radius: 5px 5px 0 0; }
+  .ep-head .path { font-family: Consolas, monospace; font-weight: bold; font-size: 9pt; }
+  .ep-head .desc { margin-left: auto; color: #475569; font-size: 8pt; }
+  .ep table { width: 100%; border-collapse: collapse; font-size: 8.2pt; }
+  .ep td { padding: 3px 10px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+  .ep tr:last-child td { border-bottom: 0; }
+  .ep td.k { width: 92px; color: #64748b; font-weight: bold; font-size: 7.8pt; }
+  .small { font-size: 8pt; color: #475569; }
+  .pb { page-break-before: always; }
+  .footer { margin-top: 18px; padding-top: 7px; border-top: 1px solid #e2e8f0; font-size: 7.4pt; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="eyebrow">Análisis de integración · Actualizado con la DEV de catálogos y la separación capture / core (v4.0)</div>
+  <h1>Front vs. Back <code style="background:#1e2f5c;color:#fff;font-size:17pt">DEV</code> y guía de integración</h1>
+  <div class="subtitle">Usuarios, roles, permisos, catálogos y ventas: qué quedó implementado en el front, qué cambió en DEV y qué sigue abierto</div>
+  <table class="meta">
+    <tr><td class="l">Front</td><td class="v"><code>feature/login-coctel-del-mar-integration</code>: commits <code>3d816d5</code> (base de la v3.0) + <code>e597bc6</code> (catálogos de organización), <code>4f1b2e6</code> (fechas y pila DEV v2) y <code>2326ba6</code> (catálogos de ventas). Proyecto <code>reconciliation</code>.</td></tr>
+    <tr><td class="l">Back</td><td class="v">Rama <code>DEV</code> (commit <code>0244b60</code>, 09-Oct-2026, <i>feature/catalogs</i>), proyecto <code>coctel_midd</code>. Servicios: auth-service, <b>capture-service</b> y <b>core-service</b> (antes sales-service), gateway y db-migration. La migración <b>V1 se reescribió</b> (fusiona V2–V4), así que hace falta una base nueva.</td></tr>
+    <tr><td class="l">Guía del back</td><td class="v"><code>Guia_Integracion_Frontend</code> (08-Oct-2026, 20 pp., en el repo del back) reemplaza a <code>Guia_Endpoints_Usuarios_Roles_Permisos</code>.</td></tr>
+    <tr><td class="l">Método</td><td class="v">La guía se contrastó contra el <b>código real de DEV</b> (controladores, DTO, <code>SecurityConfig</code>, migraciones, rutas del gateway) y contra la pila levantada en local. No se modificó nada del back.</td></tr>
+    <tr><td class="l">Versión</td><td class="v">4.0 — 12-Oct-2026 · Responsable portal: Irving Canul. Respaldo de la v3.0 en <code>docs/avances/analisis-front-vs-back-dev_v3.pdf</code>; las v1.0 y v2.0, en <code>docs/implementaciones/</code>.</td></tr>
+  </table>
+</div>
+
+<h2 style="margin-top:0;">1. Resumen</h2>
+<div class="cards">
+  <div class="card g"><div class="n">27</div><div class="t">endpoints conectados: los 19 de usuarios/sesión, los 6 catálogos de organización (<code>/catalogs/*</code>) y 2 catálogos de ventas</div></div>
+  <div class="card o"><div class="n">8</div><div class="t">conectados en la v4.0 (sección 4)</div></div>
+  <div class="card p"><div class="n">4</div><div class="t">endpoints de ventas pendientes: <code>GET /sales</code>, <code>GET /sales/summary</code>, <code>POST /sales/capture</code> y <code>GET /sales/captures</code> (sección 7)</div></div>
+  <div class="card r"><div class="n">7</div><div class="t">preguntas abiertas para el equipo de back (sección 8)</div></div>
+</div>
+<div class="callout">
+  <b>Resuelto desde la v3.0</b> (verificado con 150 pruebas de contrato contra la pila DEV local y recorridos en el navegador)
+  <ul>
+    <li><b>Catálogos de organización</b> (<code>GET /catalogs/subsidiarias</code>, <code>/ubicaciones</code>, <code>/cargos</code>, <code>/puestos</code>, <code>/departamentos</code>, <code>/areas</code>). Alimentan el alta y la sección "Organización" del detalle de usuario. Subsidiarias y ubicaciones salen ahora del catálogo global, no de las de la sesión del administrador.</li>
+    <li><b>Cambio que rompía el front, ya resuelto:</b> DEV retiró <code>department</code>, <code>area</code> y <code>jobTitle</code> (texto libre) y los ignoraba en silencio, así que la pestaña Organización perdía lo editado. Ahora se manejan <code>cargoIds</code>, <code>puestoIds</code>, <code>departamentoIds</code> y <code>areaIds</code> (selección múltiple).</li>
+    <li><b>Catálogos de ventas</b> (<code>GET /sales/catalogs/tender-media</code> y <code>/reconciliation-statuses</code>): llenan los filtros "Medio de pago" y "Estado" del Resumen de venta.</li>
+    <li><b>Fechas de calendario:</b> los selectores mostraban un día antes (lectura en UTC). Se corrigió con un util compartido en hora local.</li>
+    <li><b>Entorno:</b> <code>dev-env/levantar-backend.ps1</code> levanta la DEV actual con 4 servicios en una base nueva, y la siembra agrega roles, una segunda subsidiaria y los catálogos de organización. Se agregó <code>/catalogs</code> a <code>proxy.conf.js</code>.</li>
+  </ul>
+</div>
+<div class="callout crit">
+  <b>Hallazgos que siguen abiertos</b>
+  <ul>
+    <li><b>DEV ya no trae roles predefinidos</b> y sigue sin <code>POST /roles</code>. En una base limpia, <code>GET /roles</code> devuelve <code>[]</code>: no hay forma de crear roles desde el portal y la pantalla "Nuevo rol" no tiene backend. Hoy solo funciona con la siembra local de los 5 roles.</li>
+    <li><b><code>view_catalogs</code> sigue sin existir en DEV</b> (son 9 permisos fijos): la pantalla "Catálogos cargados" depende de la siembra local.</li>
+    <li><b>Core y Capture responden errores sin <code>code</code></b> (formato <code>ProblemDetail</code>: <code>title</code>, <code>status</code>, <code>detail</code>). El front aún no muestra el <code>detail</code>; es necesario antes de conectar <code>GET /sales</code> y <code>POST /sales/capture</code>.</li>
+    <li><b>Medios de pago del POS vs. orígenes de conciliación:</b> el back devuelve los códigos del POS (Efectivo, Rappi, Transferencia, tarjetas) y el portal concilia por BBVA, Rappi, DiDi Food y Efectivo. Falta definir cómo se relacionan.</li>
+    <li><b><code>PATCH /users/{id}/unlock</code></b> sigue en el código y la nueva guía tampoco lo documenta.</li>
+  </ul>
+</div>
+
+<h2>2. Matriz comparativa de endpoints</h2>
+<table class="data">
+  <tr><th style="width:3%">#</th><th style="width:7%">Método</th><th style="width:27%">Endpoint</th><th style="width:14%">Permiso en DEV</th><th style="width:14%">Estado en el front</th><th>Nota</th></tr>
+  <tr><td>1</td><td><span class="m POST">POST</span></td><td><code>/auth/login</code></td><td>Público</td><td><span class="b ok">Implementado</span></td><td>Muestra el mensaje del 423 tal cual (minutos restantes).</td></tr>
+  <tr><td>2</td><td><span class="m POST">POST</span></td><td><code>/auth/refresh</code></td><td>Público</td><td><span class="b ok">Implementado</span></td><td>Un solo refresh en curso; <code>SESSION_IDLE_TIMEOUT</code> cierra con aviso.</td></tr>
+  <tr><td>3</td><td><span class="m POST">POST</span></td><td><code>/auth/logout</code></td><td>Público</td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>4</td><td><span class="m GET">GET</span></td><td><code>/auth/me</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>5</td><td><span class="m POST">POST</span></td><td><code>/auth/change-password</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Encadena el refresh posterior.</td></tr>
+  <tr><td>6</td><td><span class="m GET">GET</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td><code>size=100</code> y recorre todas las páginas.</td></tr>
+  <tr><td>7</td><td><span class="m GET">GET</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v4.0</span></td><td>Lee <code>cargos</code>, <code>puestos</code>, <code>departamentos</code> y <code>areas</code> (<code>{ id, nombre }</code>).</td></tr>
+  <tr><td>8</td><td><span class="m POST">POST</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v4.0</span></td><td>Subsidiarias y ubicaciones del catálogo global; las ubicaciones se filtran por subsidiaria.</td></tr>
+  <tr><td>9</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v4.0</span></td><td>Envía las 6 listas completas (<code>subsidiariaIds</code>, <code>ubicacionIds</code>, <code>cargoIds</code>, <code>puestoIds</code>, <code>departamentoIds</code>, <code>areaIds</code>).</td></tr>
+  <tr><td>10</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/roles</code></td><td><code>manage_users</code> + <code>manage_roles</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios en DEV.</td></tr>
+  <tr><td>11</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/status</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>12</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/verify-email</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>13</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/close-sessions</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>14</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/reset-password</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>15</td><td><span class="m DELETE">DELETE</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>16</td><td><span class="m GET">GET</span></td><td><code>/users/{id}/audit-log</code></td><td><code>view_audit_log</code></td><td><span class="b ok">Implementado</span></td><td><code>organization_updated</code> ahora también cubre cargos, puestos, departamentos y áreas.</td></tr>
+  <tr><td>17</td><td><span class="m GET">GET</span></td><td><code>/audit-log</code></td><td><code>view_audit_log</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
+  <tr><td>18</td><td><span class="m GET">GET</span></td><td><code>/roles</code></td><td><code>manage_users</code> o <code>manage_roles</code></td><td><span class="b ok">Implementado</span></td><td>En una base limpia devuelve <code>[]</code> (no hay roles predefinidos).</td></tr>
+  <tr><td>19</td><td><span class="m GET">GET</span></td><td><code>/permissions</code></td><td><code>manage_users</code> o <code>manage_roles</code></td><td><span class="b ok">Implementado</span></td><td>9 permisos fijos (sin <code>view_catalogs</code>).</td></tr>
+  <tr><td>20</td><td><span class="m GET">GET</span></td><td><code>/catalogs/subsidiarias</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Alta y Organización (selección múltiple).</td></tr>
+  <tr><td>21</td><td><span class="m GET">GET</span></td><td><code>/catalogs/ubicaciones</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Trae <code>subsidiariaId</code>: filtra y depura según las subsidiarias elegidas.</td></tr>
+  <tr><td>22</td><td><span class="m GET">GET</span></td><td><code>/catalogs/cargos</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Organización → <code>cargoIds</code>.</td></tr>
+  <tr><td>23</td><td><span class="m GET">GET</span></td><td><code>/catalogs/puestos</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Organización → <code>puestoIds</code>.</td></tr>
+  <tr><td>24</td><td><span class="m GET">GET</span></td><td><code>/catalogs/departamentos</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Organización → <code>departamentoIds</code>.</td></tr>
+  <tr><td>25</td><td><span class="m GET">GET</span></td><td><code>/catalogs/areas</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Organización → <code>areaIds</code>.</td></tr>
+  <tr><td>26</td><td><span class="m GET">GET</span></td><td><code>/sales/catalogs/tender-media</code></td><td><code>view_dashboard</code></td><td><span class="b ok">Implementado en v4.0</span></td><td>Filtro "Medio de pago" del Resumen de venta; <code>pendingReview</code> se marca "(por revisar)".</td></tr>
+  <tr><td>27</td><td><span class="m GET">GET</span></td><td><code>/sales/catalogs/reconciliation-statuses</code></td><td><code>view_dashboard</code></td><td><span class="b ok">Implementado en v4.0</span></td><td>Filtro "Estado" del Resumen de venta.</td></tr>
+  <tr><td>28</td><td><span class="m GET">GET</span></td><td><code>/sales</code></td><td><code>view_dashboard</code></td><td><span class="b miss">Pendiente</span></td><td>Tabla del Resumen de venta (sección 7).</td></tr>
+  <tr><td>29</td><td><span class="m GET">GET</span></td><td><code>/sales/summary</code></td><td><code>view_dashboard</code></td><td><span class="b miss">Pendiente</span></td><td>Totales de un día y una tienda (sección 7).</td></tr>
+  <tr><td>30</td><td><span class="m POST">POST</span></td><td><code>/sales/capture</code></td><td><code>capture_sales</code></td><td><span class="b miss">Pendiente</span></td><td>Botón "Reprocesar" (sección 7).</td></tr>
+  <tr><td>31</td><td><span class="m GET">GET</span></td><td><code>/sales/captures</code></td><td><code>view_dashboard</code></td><td><span class="b miss">Pendiente</span></td><td>Bitácora de capturas de un día (sección 7).</td></tr>
+  <tr><td>—</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/unlock</code></td><td><code>manage_users</code></td><td><span class="b und">Sin documentar</span></td><td>Sigue en <code>UserAdminController</code>; la nueva guía tampoco lo menciona.</td></tr>
+</table>
+<p class="small">Conteo: 19 de sesión/usuarios/roles/bitácora + 6 de <code>/catalogs/*</code> + 2 catálogos de ventas = <b>27 conectados</b>; 4 de ventas pendientes. En la pantalla de ventas, los selects de subsidiaria y de ubicación/tienda se llenan con lo que regresa el login (sección 7).</p>
+
+<div class="pb"></div>
+<h2 style="margin-top:0;">3. Cambios de DEV en endpoints ya implementados — estado en la v4.0</h2>
+<table class="data">
+  <tr><th style="width:17%">Endpoint / tema</th><th style="width:28%">Qué cambió en DEV</th><th>Qué se hizo en el front</th><th style="width:11%">Estado</th></tr>
+  <tr><td><code>GET /users/{id}</code></td><td>Ya no trae <code>department</code>, <code>area</code> ni <code>jobTitle</code>; trae <code>cargos</code>, <code>puestos</code>, <code>departamentos</code> y <code>areas</code> como listas <code>{ id, nombre }</code>.</td><td><code>AppUser</code> guarda <code>cargoIds</code>/<code>puestoIds</code>/<code>departamentoIds</code>/<code>areaIds</code> (<code>organizationIdsFromDetail</code>). En modo lectura, si un elemento ya está dado de baja (el catálogo solo trae habilitados), se muestra el nombre que vino en el detalle.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>PATCH /users/{id}</code></td><td>Acepta <code>cargoIds</code>, <code>puestoIds</code>, <code>departamentoIds</code> y <code>areaIds</code>: cada lista reemplaza la actual y <code>[]</code> la vacía. Nuevo 400 <code>INVALID_CATALOG_ITEM</code>. Los campos de texto retirados se ignoran en silencio (200 sin guardar).</td><td>"Cargo o puesto" se separa en <b>Cargos</b> y <b>Puestos</b>; los cuatro son selección múltiple y se envían siempre completos. Al quitar una subsidiaria se depuran sus ubicaciones. <code>INVALID_CATALOG_ITEM</code> está en el catálogo de errores. Se eliminó <code>organization-catalog.ts</code> (listas fijas).</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>POST /users</code></td><td>Asignar <code>roleIds</code> exige <code>manage_roles</code> (403 <code>ROLE_ASSIGNMENT_FORBIDDEN</code>). <code>status</code> admite minúsculas.</td><td>Sin cambios de contrato en el front. Subsidiarias y ubicaciones del catálogo global.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>GET /roles</code></td><td><b>No hay roles predefinidos</b>: los crea el usuario y la base nace sin roles. El primer administrador recibe todos los permisos, sin rol.</td><td>La siembra local (<code>dev-env/seed-demo-users.sql</code>) agrega los 5 roles de la matriz 7.16. <b>Abierto:</b> sin <code>POST /roles</code> no se pueden crear desde el portal.</td><td><span class="b chg">Depende del back</span></td></tr>
+  <tr><td>Formato de errores</td><td>Tres formatos: Auth <code>{ error, code }</code>; Spring estándar sin <code>code</code> (Gateway, Capture, Core); <code>ProblemDetail</code> de Core y Capture (<code>detail</code> trae el texto útil).</td><td>Auth y Spring ya se manejan. <b>Pendiente:</b> mostrar <code>detail</code> de <code>ProblemDetail</code> en el interceptor, antes de conectar ventas.</td><td><span class="b chg">Parcial</span></td></tr>
+  <tr><td>Esquema de base</td><td>V2–V4 se fusionaron en V1 y se agregaron catálogos, cliente y tablas de ventas: Flyway rechaza una base creada con el V1 anterior.</td><td><code>levantar-backend.ps1</code> usa el proyecto <code>coctel_dev_v2</code> (base nueva). La pila anterior conserva su volumen.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td>Fechas de calendario</td><td>Sin cambio en el back (<code>YYYY-MM-DD</code>).</td><td>Bug del front corregido: <code>new Date('2025-01-10')</code> se leía en UTC y el selector mostraba 09/01. <code>shared/utils/iso-date.util.ts</code> trabaja en hora local (detalle de usuario y perfil).</td><td><span class="b ok">Hecho</span></td></tr>
+</table>
+
+<h2>4. Endpoints conectados en la v4.0</h2>
+<p class="small">Probados contra la pila DEV local (<code>dev-env/pruebas-endpoints.mjs</code>) y en el navegador, sin datos simulados.</p>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/catalogs/subsidiarias · /ubicaciones · /cargos · /puestos · /departamentos · /areas</span><span class="desc">Core · <span class="b ok">Implementado</span></span></div>
+  <table>
+    <tr><td class="k">Hecho</td><td><code>OrganizationCatalogService</code> (<code>core/services</code>): carga perezosa la primera vez que se entra al alta o al detalle de un usuario, una vez por sesión. Cada catálogo se pide por separado (si falla uno, los otros cinco cargan igual) y se limpian al cerrar sesión. <code>ubicacionesFor()</code> filtra por subsidiaria y <code>pruneUbicaciones()</code> quita las ubicaciones de una subsidiaria deseleccionada, solo por acción del usuario. Si un catálogo viene vacío, el select muestra "Sin opciones en el catálogo".</td></tr>
+    <tr><td class="k">Decisión</td><td>El alta y "Organización" usan el <b>catálogo global</b>. <code>CatalogService</code> (las subsidiarias y ubicaciones de la sesión, que vienen en el login) queda para los filtros de pantallas operativas, como ventas.</td></tr>
+    <tr><td class="k">Probado</td><td>200 con <code>[{ id, nombre }]</code> en los seis; <code>subsidiariaId</code> en ubicaciones; 401 sin token; basta una sesión (200 sin <code>manage_users</code>); <code>PATCH</code> con las 4 listas persiste y el detalle devuelve <code>{ id, nombre }</code>; id inexistente → 400 <code>INVALID_CATALOG_ITEM</code>; listas vacías quitan la organización.</td></tr>
+  </table>
+</div>
+
+<div class="ep">
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/sales/catalogs/tender-media · /sales/catalogs/reconciliation-statuses</span><span class="desc">Core · <span class="b ok">Implementado</span></span></div>
+  <table>
+    <tr><td class="k">Hecho</td><td><code>SalesCatalogService</code> (<code>sales-dashboard/data</code>), solo con <code>view_dashboard</code> (sin él da 403 y no se pide). Los filtros "Medio de pago" y "Estado" del Resumen de venta usan el <b>id</b> del catálogo: es el valor que recibirá <code>GET /sales</code> en <code>tenderMedia</code> y <code>status</code>. Un medio con <code>pendingReview</code> se marca "(por revisar)".</td></tr>
+    <tr><td class="k">Puente temporal</td><td>Mientras la tabla siga siendo simulada (sin <code>GET /sales</code>), el id se traduce al mock: el estado, por <code>code</code> (idéntico); el medio de pago, por nombre normalizado, con la misma regla del back ("la venta debe tener algún pago con ese medio"). Los medios del POS que el mock no modela (Transferencia, tarjetas) no coinciden con ninguna venta. Este puente desaparece al conectar <code>GET /sales</code>.</td></tr>
+    <tr><td class="k">Hallazgo</td><td>Los medios de pago del back son los <b>códigos del POS</b> (100 Efectivo, 102 Rappi, 108 Transferencia, 201 Tarjeta Crédito, 205 Tarjeta Débito), no los orígenes de conciliación del front (BBVA, Rappi, DiDi Food, Efectivo). Hay que definir con el back y el DED cómo se relacionan ambos (sección 8).</td></tr>
+  </table>
+</div>
+
+<h3>4.1 Verificación</h3>
+<p class="small"><code>node dev-env/pruebas-endpoints.mjs</code> ejecuta <b>150 verificaciones de contrato</b> contra la pila DEV v2: las 136 de la v3.0 (ajustadas al retiro de <code>department</code>) más 14 de <code>/catalogs/*</code> y del <code>PATCH</code> con cargo/puesto/departamento/área. En el navegador, sin datos simulados: detalle de usuario con organización real, edición y guardado de las seis listas, filtro de ubicaciones por subsidiaria, fechas sin desfase tras recargar y filtros del Resumen de venta cargados del back.</p>
+
+<div class="pb"></div>
+<h2 style="margin-top:0;">5. Cambios transversales que condicionan la implementación</h2>
+<h3>5.1 Catálogo de permisos: DEV vs. front</h3>
+<table class="data">
+  <tr><th style="width:24%">Permiso</th><th style="width:17%">DEV (migración V1)</th><th style="width:19%">Front hoy</th><th>Consecuencia</th></tr>
+  <tr><td><code>capture_sales</code></td><td>Sí (ahora en V1)</td><td>En <code>PermissionKey</code> y en el grid; <b>aún no se evalúa</b></td><td>Debe gobernar el botón "Reprocesar" (<code>POST /sales/capture</code>). Hoy Reprocesar usa una regla por rol (ADMIN, CONTABILIDAD), que además deja de servir sin roles predefinidos.</td></tr>
+  <tr><td><code>view_catalogs</code></td><td><b>No existe</b></td><td>Sí (pantalla <code>/catalogos</code>, menú, guard)</td><td>Contra un DEV limpio, <code>/catalogos</code> queda inaccesible. Solo lo resuelve la siembra local.</td></tr>
+  <tr><td>Los otros 8</td><td colspan="2">Coinciden (<code>view_dashboard, view_reconciliation, manage_differences, import_settlements, export_reports, manage_users, manage_roles, view_audit_log</code>)</td><td>Los 4 de conciliación aún no abren ningún endpoint en DEV.</td></tr>
+</table>
+
+<h3>5.2 Roles</h3>
+<table class="data">
+  <tr><th style="width:22%">Escenario</th><th>Qué pasa</th></tr>
+  <tr><td>DEV limpio</td><td>No hay roles. El administrador inicial (<code>ADMIN_EMAIL</code>) tiene los 9 permisos sin rol. <code>GET /roles</code> → <code>[]</code>, y sin <code>POST /roles</code> no se pueden crear desde el portal.</td></tr>
+  <tr><td>Pila local sembrada</td><td>5 roles de la matriz 7.16 (ADMIN, ALTAS, CONTABILIDAD, TESORERIA, COSTOS) con sus permisos por defecto, más <code>capture_sales</code> para ADMIN y <code>view_catalogs</code> donde aplica.</td></tr>
+  <tr><td>Impacto en el front</td><td>Lo que dependa de un código de rol fijo deja de funcionar en un DEV limpio: <code>canReprocessSales</code> (ADMIN/CONTABILIDAD), "Roles y permisos" solo para ADMIN (<code>hasRole('ADMIN')</code>) y <code>MANAGER_ROLE_IDS</code>. La guía pide decidir menús y botones por <b>permiso</b>, no por rol: pendiente de migrar.</td></tr>
+</table>
+
+<h3>5.3 Entorno y configuración del front</h3>
+<table class="data">
+  <tr><th style="width:20%">Tema</th><th>Estado y cómo quedó</th></tr>
+  <tr><td>Gateway y proxy</td><td><b>Hecho.</b> <code>proxy.conf.js</code> reenvía <code>/auth</code>, <code>/users</code>, <code>/roles</code>, <code>/permissions</code>, <code>/audit-log</code>, <code>/sales</code> y (<b>nuevo</b>) <code>/catalogs</code> al Gateway (8080). <code>/catalogos</code> (ruta del portal) no choca: el proxy compara por prefijo.</td></tr>
+  <tr><td>Pila DEV</td><td><b>Hecho.</b> <code>dev-env/levantar-backend.ps1</code> levanta db-migration → auth, capture, core → gateway con el <code>docker-compose.yml</code> del back sin modificarlo, en el proyecto <code>coctel_dev_v2</code> (base nueva por la V1 reescrita). Quita los contenedores de pilas anteriores con el mismo nombre; sus volúmenes se conservan.</td></tr>
+  <tr><td>Siembra</td><td><b>Hecho.</b> <code>dev-env/seed-demo-users.sql</code>: 26 cuentas demo, 5 roles, matriz 7.16 + <code>capture_sales</code> (ADMIN), subsidiarias "Conciliación Bancaria" (4 sucursales) y "Hipermar Fish" (2 tiendas reales de Facturiza), catálogos de cargo, puesto, departamento y área con asignación por empleado.</td></tr>
+  <tr><td>CORS y Vercel</td><td>Sin cambios: <code>API_URL</code> + <code>scripts/set-api-url.mjs</code>. <b>Pendiente del back:</b> agregar el dominio del portal a <code>CORS_ALLOWED_ORIGINS</code>.</td></tr>
+</table>
+
+<h2>6. Estado del orden de implementación</h2>
+<table class="data">
+  <tr><th style="width:4%">#</th><th style="width:44%">Entregable</th><th style="width:20%">Estado</th><th>Pendiente</th></tr>
+  <tr><td>1</td><td>Entorno: pila DEV, siembra, proxy</td><td><span class="b ok">Hecho (v4.0: DEV v2)</span></td><td>—</td></tr>
+  <tr><td>2</td><td>Usuarios, roles, permisos y bitácora (19 endpoints)</td><td><span class="b ok">Hecho (v3.0)</span></td><td>—</td></tr>
+  <tr><td>3</td><td>Catálogos de organización y retiro de <code>department</code>/<code>area</code>/<code>jobTitle</code></td><td><span class="b ok">Hecho (v4.0)</span></td><td>Listas reales de cargos, puestos, departamentos y áreas (las entrega el cliente).</td></tr>
+  <tr><td>4</td><td>Catálogos de filtros de ventas (medio de pago, estado)</td><td><span class="b ok">Hecho (v4.0)</span></td><td>—</td></tr>
+  <tr><td>5</td><td>Errores <code>ProblemDetail</code> de Core/Capture en el interceptor</td><td><span class="b miss">Abierto</span></td><td>Requisito de 6–8.</td></tr>
+  <tr><td>6</td><td><code>GET /sales</code> → tabla del Resumen de venta</td><td><span class="b miss">Abierto</span></td><td>Remapeo del modelo <code>Sale</code>; retiro del mock y del puente de filtros.</td></tr>
+  <tr><td>7</td><td><code>GET /sales/summary</code> → totales del día por tienda</td><td><span class="b miss">Abierto</span></td><td>—</td></tr>
+  <tr><td>8</td><td><code>POST /sales/capture</code> + <code>GET /sales/captures</code> → Reprocesar y su bitácora</td><td><span class="b miss">Abierto</span></td><td>Pasar Reprocesar de rol a <code>capture_sales</code>.</td></tr>
+  <tr><td>9</td><td>Reglas por rol → por permiso (<code>canReprocessSales</code>, <code>hasRole('ADMIN')</code>, <code>MANAGER_ROLE_IDS</code>)</td><td><span class="b miss">Abierto</span></td><td>Necesario para un DEV sin roles predefinidos.</td></tr>
+</table>
+
+<div class="pb"></div>
+<h2 style="margin-top:0;">7. Ventas: Capture Service y Core Service</h2>
+<p class="small">DEV separó el antiguo sales-service en <b>capture-service</b> (trae ventas de Facturiza y guarda la bitácora de corridas) y <b>core-service</b> (solo lectura: consulta de ventas, resumen y todos los catálogos para combos). El Gateway enruta <code>/sales/capture</code> y <code>/sales/captures</code> a capture-service, y el resto de <code>/sales/**</code> y <code>/catalogs/**</code> a core-service.</p>
+<table class="data">
+  <tr><th style="width:7%">Método</th><th style="width:18%">Endpoint</th><th style="width:12%">Permiso</th><th style="width:33%">Qué devuelve</th><th>Dónde va en el front</th></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/sales</code></td><td><code>view_dashboard</code></td><td><b>Listado paginado de documentos</b> (una fila por factura o nota de crédito): folio, tipo, fecha y hora, tienda, cliente, medio de pago principal (<code>mixed</code> si hubo varios), estado de conciliación, subtotal, impuestos y total. Filtros: <code>dateFrom</code>/<code>dateTo</code>, <code>store</code>, <code>tenderMedia</code>, <code>status</code> (ids), <code>search</code>. Paginación base 1 (<code>page</code>, <code>pageSize</code> ≤ 100; responde <code>data</code> y <code>total</code>).</td><td><b>Resumen de venta → tabla principal</b>, con paginación en el servidor y los filtros del toolbar (los de medio y estado ya usan ids del back). Reemplaza a <code>MOCK_SALES</code>. El detalle (<code>GET /sales/{id}</code>) y la exportación aún no existen: el drawer y "Exportar" quedan sin backend.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/sales/summary?ubicacionId&amp;date</code></td><td><code>view_dashboard</code></td><td><b>Agregado de un día y una tienda</b> (no filas): conteo y totales de documentos (las notas de crédito restan), total de pagos, pagos por medio (<code>byTender</code>), impuestos por tributo (<code>byTax</code>) y descuentos/propinas (<code>extras</code>).</td><td><b>Resumen de venta → bloque de totales del día</b>, visible cuando los filtros acotan a <b>un día y una tienda</b> (la misma condición que Reprocesar). Además, <code>byTender</code> es el <b>lado "ventas" por medio de pago y día</b> que necesita la <b>Conciliación bancaria</b> para cuadrar contra las liquidaciones, en lugar de sumar ventas simuladas.</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/sales/capture</code></td><td><code>capture_sales</code></td><td>Captura síncrona e idempotente de una o varias tiendas y un día o rango (tiendas × días ≤ 31). 200 OK · 207 parcial · 502 Facturiza no respondió · 409 en curso · 404 tienda inexistente; detalle por tienda y por día.</td><td><b>Botón "Reprocesar"</b> del Resumen de venta, visible solo con <code>capture_sales</code>, con indicador de progreso y el detalle por día al terminar (200/207).</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/sales/captures?ubicacionId&amp;date</code></td><td><code>view_dashboard</code></td><td>Historial de corridas (manuales y automáticas) de una tienda y un día.</td><td>Bitácora de capturas junto a Reprocesar (p. ej. un drawer "Historial de capturas" del día y la tienda filtrados).</td></tr>
+</table>
+<div class="callout">
+  <b>Subsidiarias y tiendas en la pantalla de ventas.</b> Los selects de subsidiaria y de ubicación/tienda se llenan con lo que regresa el login (<code>AuthUser.subsidiarias</code> y <code>AuthUser.ubicaciones</code>, vía <code>CatalogService</code>). El id de esas ubicaciones es el que reciben <code>store</code> en <code>GET /sales</code> y <code>ubicacionId</code> en el resumen y la captura. Eso eliminará el puente por nombre del mock (<code>LABEL_TO_STORE</code>).
+</div>
+
+<h2>8. Preguntas abiertas para el equipo de back</h2>
+<ul class="small" style="margin:4px 0 0;padding-left:18px;">
+  <li>¿Cuándo habrá <code>POST/PATCH/DELETE /roles</code>? Sin roles predefinidos y sin ese endpoint, el portal no puede crear roles.</li>
+  <li>¿Se sembrará <code>view_catalogs</code>, o la pantalla de catálogos cambia de permiso?</li>
+  <li>¿Pueden Core y Capture devolver un <code>code</code> estable en sus errores, como Auth?</li>
+  <li>¿Habrá <code>GET /sales/{id}</code> (detalle) y <code>GET /sales/export</code>? ¿Se limitará <code>GET /sales</code> a las tiendas del usuario? (hoy cualquiera con <code>view_dashboard</code> ve todas).</li>
+  <li>¿Cómo se relacionan los medios de pago del POS (Efectivo, Rappi, Transferencia, tarjetas) con los orígenes de conciliación del portal (BBVA, Rappi, DiDi Food, Efectivo)?</li>
+  <li>¿<code>PATCH /users/{id}/unlock</code> se conserva o se usa solo <code>status: active</code>? Sigue sin documentarse.</li>
+  <li>¿Se puede agregar un <code>Sort</code> estable a <code>GET /users</code>? Para Vercel: ¿origen del Gateway y dominio del portal en <code>CORS_ALLOWED_ORIGINS</code>?</li>
+</ul>
+
+<h2>9. Historial de versiones</h2>
+<table class="data">
+  <tr><th style="width:9%">Versión</th><th style="width:14%">Fecha</th><th>Cambios</th></tr>
+  <tr><td>1.0</td><td>06-Oct-2026</td><td>Primer análisis: front <code>ab89ce2</code> vs. back <code>DEV</code> <code>de23127</code> y guía <code>Guia_Endpoints_Usuarios_Roles_Permisos</code>. Respaldado en <code>docs/implementaciones/analisis-front-vs-back-dev_v1.0.pdf</code>.</td></tr>
+  <tr><td>2.0</td><td>06-Oct-2026</td><td>Ajustes a login, change-password, <code>GET /users</code>, <code>GET /users/{id}</code>, <code>PATCH /users/{id}</code> y catálogo de errores. Respaldada en <code>docs/implementaciones/analisis-front-vs-back-dev_v2.0.pdf</code>.</td></tr>
+  <tr><td>3.0</td><td>08-Oct-2026</td><td>Los 19 endpoints de la guía quedan conectados; entorno resuelto; hallazgos de paginación y permisos. Respaldada en <code>docs/avances/analisis-front-vs-back-dev_v3.pdf</code>.</td></tr>
+  <tr><td>4.0</td><td>12-Oct-2026</td><td>Contraste con la DEV <code>0244b60</code> (capture/core, V1 reescrita, sin roles predefinidos) y la <code>Guia_Integracion_Frontend</code>. Conectados los 6 <code>GET /catalogs/*</code> y los catálogos de ventas de medio de pago y estado; retiro de <code>department</code>/<code>area</code>/<code>jobTitle</code>; corrección de fechas; pila DEV v2 con siembra de roles y catálogos. Sección de ventas reescrita: diferencia entre <code>GET /sales</code> y <code>GET /sales/summary</code> y dónde va cada uno. En la pantalla de ventas, subsidiaria y tienda salen del login.</td></tr>
+</table>
+<div class="footer">Análisis front vs. back DEV · Cóctel del Mar · v4.0 · 12-Oct-2026 · Fuente: docs/fuentes/analisis-front-vs-back-dev.html</div>
+</body>
+</html>
