@@ -3051,6 +3051,21 @@ Backend `coctel_midd` DEV (rama `feature/catalogs`, Guia_Integracion_Frontend §
    departamentos y áreas llegan vacíos hasta que el cliente entregue las listas: el select muestra "Sin
    opciones en el catálogo".
 
+### Actualización: fechas de calendario en hora local + pila DEV v2 con catálogos sembrados
+
+1. **Fechas sin hora (`yyyy-MM-dd`) ↔ `nz-date-picker`: siempre en hora LOCAL** —
+   `shared/utils/iso-date.util.ts` (`parseIsoDate`, `toIsoDate`, `toIsoDateOrNull`), compartido por
+   `UserDetail` y `Profile`. Antes `new Date('2025-01-10')` se leía como medianoche UTC y en México/Colombia el
+   selector mostraba el día anterior (09/01/2025). Todo campo de fecha de calendario nuevo debe usar estas
+   funciones, nunca `new Date(iso)` ni `toISOString().slice(0, 10)`.
+2. **Sin mock de organización:** `MOCK_USERS` ya no siembra subsidiarias/ubicaciones (ni cargo, puesto,
+   departamento, área): llegan del backend (`GET /users` y `GET /users/{id}`).
+3. **`dev-env/levantar-backend.ps1`** levanta la pila DEV actual (auth, capture, core, gateway) en el proyecto
+   de compose `coctel_dev_v2` (base nueva: DEV reescribió la migración V1). Quita contenedores de pilas anteriores
+   con el mismo nombre, pero no sus volúmenes. **`seed-demo-users.sql`** siembra además los 5 roles de la matriz
+   7.16 (DEV ya no los trae), `capture_sales` para ADMIN, la subsidiaria Hipermar Fish con sus 2 tiendas de
+   Facturiza y los catálogos de cargo/puesto/departamento/área con su asignación por empleado.
+
 ## Patrón: encabezado de página (`nz-page-header`) — regla general
 
 **Toda pantalla del shell pone su título con `nz-page-header`** (`NzPageHeaderModule`,

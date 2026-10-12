@@ -4,9 +4,11 @@
 #   ... -Reseed                                                                       # solo vuelve a aplicar la siembra
 #
 # No modifica el repo del backend: usa SU docker-compose.yml tal cual (--project-directory) con las variables
-# de dev-env/.env y un nombre de proyecto propio (coctel_dev) => volumen NUEVO (coctel_dev_coctel_postgres_data).
-# Si existe una pila anterior con los mismos nombres de contenedor (docker run manual de feature/login), la
-# DETIENE y la renombra a <nombre>-legacy: su volumen y sus datos quedan intactos para volver atrás.
+# de dev-env/.env y un nombre de proyecto propio (coctel_dev_v2) => volumen propio (coctel_dev_v2_coctel_postgres_data).
+# "v2" porque DEV reescribió la migración V1 (fusionó V2-V4 y agregó catálogos, cliente y la separación
+# capture-service / core-service): Flyway rechaza una base creada con el V1 anterior, así que hace falta una
+# base nueva. Los contenedores de una pila anterior con los mismos nombres (proyecto coctel_dev, docker run
+# manual, ...) se ELIMINAN — solo los contenedores: sus volúmenes y datos quedan intactos para volver atrás.
 #
 # El Gateway queda en http://localhost:<GATEWAY_PORT> (8080 por defecto; proxy.conf.js lee el mismo valor de dev-env/.env).
 param(
@@ -15,7 +17,7 @@ param(
   [switch]$Reseed
 )
 $ErrorActionPreference = 'Stop'
-$project = 'coctel_dev'
+$project = 'coctel_dev_v2'
 $backend = (Resolve-Path $BackendDir).Path
 $envFile = Join-Path $PSScriptRoot '.env'
 if (-not (Test-Path $envFile)) { Copy-Item (Join-Path $PSScriptRoot '.env.example') $envFile; Write-Host "Creado $envFile desde .env.example" }
@@ -39,20 +41,22 @@ function Invoke-Seed {
 if ($Down) { & docker @compose down; exit $LASTEXITCODE }
 if ($Reseed) { Invoke-Seed; exit 0 }
 
-# 1. Apartar contenedores de una pila anterior (otro proyecto de compose / docker run manual).
+# 1. Quitar contenedores de una pila anterior con los mismos nombres (otro proyecto de compose / docker run
+#    manual). Solo el contenedor: su volumen de datos no se toca.
 $existing = @(docker ps -a --format '{{.Names}}')
-foreach ($name in 'coctel-del-mar-postgres', 'coctel-del-mar-auth-service', 'coctel-del-mar-gateway', 'coctel-del-mar-sales-service', 'coctel-del-mar-db-migration') {
+$names = 'coctel-del-mar-postgres', 'coctel-del-mar-db-migration', 'coctel-del-mar-auth-service', 'coctel-del-mar-capture-service',
+  'coctel-del-mar-core-service', 'coctel-del-mar-sales-service', 'coctel-del-mar-gateway'
+foreach ($name in $names) {
   if ($existing -notcontains $name) { continue }
   $labels = (docker inspect $name | ConvertFrom-Json)[0].Config.Labels
   $owner = $labels.'com.docker.compose.project'
   if ($owner -ne $project) {
-    Write-Host "Apartando contenedor anterior $name -> $name-legacy"
-    docker stop $name | Out-Null
-    docker rename $name "$name-legacy" | Out-Null
+    Write-Host "Quitando contenedor anterior $name (proyecto '$owner'; su volumen se conserva)"
+    docker rm -f $name | Out-Null
   }
 }
 
-# 2. Construir y levantar (db-migration crea el esquema y termina; luego auth, sales y gateway).
+# 2. Construir y levantar (db-migration crea el esquema y termina; luego auth, capture, core y gateway).
 & docker @compose up -d --build
 if ($LASTEXITCODE -ne 0) { throw 'docker compose up falló.' }
 
@@ -67,6 +71,6 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 if (-not $ok) { throw 'El Gateway no respondió a tiempo (docker compose -p coctel_dev logs gateway).' }
 
-# 4. Sembrar las cuentas demo y el catálogo.
+# 4. Sembrar cuentas demo, roles, subsidiarias/ubicaciones y catálogos organizacionales.
 Invoke-Seed
 Write-Host "Listo: Gateway en http://localhost:$gatewayPort - admin@conciliacion.mx / Conciliacion2026"

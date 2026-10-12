@@ -1,11 +1,14 @@
--- Siembra de la DB local de desarrollo con las 26 cuentas demo del portal (ids 2-27) y el catálogo
--- de subsidiaria/ubicación. GENERADO desde la DB local anterior (feature/login); es idempotente.
+-- Siembra de la DB local de desarrollo con las 26 cuentas demo del portal (ids 2-27), los 5 roles de la
+-- matriz 7.16, el catálogo de subsidiarias/ubicaciones y los catálogos organizacionales (cargo, puesto,
+-- departamento, área) con su asignación por empleado. Es idempotente.
 -- Se aplica DESPUÉS de levantar la pila de DEV (db-migration ya creó el esquema; el auth-service ya
 -- creó el administrador id 1). NO es una migración del backend: vive en este repo (dev-env/).
 --
 -- Contraseñas: son las de desarrollo que muestra la pantalla de login (hash bcrypt, nunca en claro).
 -- Matriz de permisos: se AGREGA lo que el front usa (7.16) además de lo que siembra DEV — p. ej.
--- 'view_catalogs', que DEV no define (ver docs/analisis-front-vs-back-dev_v2.pdf, §5.1-5.2).
+-- 'view_catalogs', que DEV no define (ver docs/analisis-front-vs-back-dev_v3.pdf, §5.1-5.2).
+-- Los JSON de `empleado` aún traen departamento/area/puesto de la DB anterior: json_populate_recordset
+-- ignora esas llaves (las columnas ya no existen); esos valores ahora viven en los catálogos de abajo.
 BEGIN;
 
 -- Catálogos de organización
@@ -20,9 +23,20 @@ INSERT INTO app_permission (code, description, module)
 SELECT code, description, module FROM json_to_recordset($seed$[{"code":"view_catalogs","description":"Consultar catalogos cargados","module":"Catalogos"}]$seed$::json) AS x(code text, description text, module text)
 ON CONFLICT (code) DO NOTHING;
 
+-- Roles: DEV ya no siembra roles predefinidos (los crea el usuario y no hay POST /roles todavía), así que
+-- se siembran aquí los 5 de la matriz 7.16 que usan las cuentas demo.
+INSERT INTO app_role (code, name) VALUES
+  ('ADMIN', 'Administrador'),
+  ('ALTAS', 'Encargado de altas de usuarios'),
+  ('CONTABILIDAD', 'Contabilidad'),
+  ('TESORERIA', 'Tesorería'),
+  ('COSTOS', 'Costos')
+ON CONFLICT (code) DO NOTHING;
+
 -- Matriz rol → permisos por defecto (aditiva)
 INSERT INTO app_role_permission (role_id, permission_id)
 SELECT r.id, p.id FROM json_to_recordset($seed$[{"role_code":"ADMIN","perm_code":"view_dashboard"}, 
+ {"role_code":"ADMIN","perm_code":"capture_sales"}, 
  {"role_code":"ADMIN","perm_code":"view_reconciliation"}, 
  {"role_code":"ADMIN","perm_code":"manage_differences"}, 
  {"role_code":"ADMIN","perm_code":"import_settlements"}, 
@@ -336,10 +350,50 @@ SELECT u.id, p.id, x.enabled FROM json_to_recordset($seed$[{"email":"roberto.san
 JOIN app_user u ON u.email = x.email JOIN app_permission p ON p.code = x.perm_code
 ON CONFLICT (user_id, permission_id) DO NOTHING;
 
+
+-- Segunda subsidiaria con sus tiendas reales de Facturiza (coctel_midd/docs/datos_prueba_ubicaciones.sql) —
+-- permite probar el filtro de ubicaciones por subsidiaria en el alta/edición de usuarios.
+INSERT INTO subsidiaria (id, brand_id_api, nombre, razon_social, nit)
+VALUES (2, 2, 'Hipermar Fish', 'HICO FISH SAS', '900665499-1') ON CONFLICT DO NOTHING;
+INSERT INTO ubicacion (id, subsidiaria_id, store_id_api, nombre, prefijo_fiscal) VALUES
+  (5, 2, 3, 'Hipermar Sede 123', 'H23E'),
+  (6, 2, 4, 'Tienda 4 (prueba)', 'H24E')
+ON CONFLICT DO NOTHING;
+-- Roberto Sánchez (Tesorería) pertenece también a Hipermar Fish (multi-subsidiaria).
+INSERT INTO empleado_subsidiaria (empleado_id, subsidiaria_id) VALUES (4, 2) ON CONFLICT DO NOTHING;
+INSERT INTO empleado_ubicacion (empleado_id, ubicacion_id) VALUES (4, 5) ON CONFLICT DO NOTHING;
+
+-- Catálogos organizacionales (Core: GET /catalogs/cargos|puestos|departamentos|areas). Nacen VACÍOS en DEV
+-- (los entrega el cliente); estos valores salen de los textos que tenían las 26 cuentas antes de que el
+-- backend retirara department/area/jobTitle, más los ejemplos de coctel_midd/docs/datos_prueba_organizacion.sql.
+INSERT INTO cargo (nombre) VALUES ('Gerente'), ('Coordinador'), ('Analista'), ('Auxiliar') ON CONFLICT (nombre) DO NOTHING;
+INSERT INTO puesto (nombre) VALUES ('Analista de Conciliación'), ('Supervisor de Conciliación'), ('Supervisor de Tesorería'), ('Auditor de Procesos'), ('Administrador de Plataforma'), ('Cajero') ON CONFLICT (nombre) DO NOTHING;
+INSERT INTO departamento (nombre) VALUES ('Finanzas'), ('Tecnología'), ('Auditoría Interna'), ('Recursos Humanos'), ('Operaciones') ON CONFLICT (nombre) DO NOTHING;
+INSERT INTO area (nombre) VALUES ('Conciliación Bancaria'), ('Tesorería'), ('Contabilidad'), ('Sistemas'), ('Cumplimiento') ON CONFLICT (nombre) DO NOTHING;
+
+-- Asignación por empleado (varios de cada uno por persona son válidos).
+INSERT INTO empleado_cargo (empleado_id, cargo_id)
+SELECT x.empleado_id, c.id FROM json_to_recordset($seed$[{"empleado_id": 2, "nombre": "Gerente"}, {"empleado_id": 3, "nombre": "Auxiliar"}, {"empleado_id": 4, "nombre": "Auxiliar"}, {"empleado_id": 5, "nombre": "Auxiliar"}, {"empleado_id": 6, "nombre": "Auxiliar"}, {"empleado_id": 7, "nombre": "Analista"}, {"empleado_id": 8, "nombre": "Coordinador"}, {"empleado_id": 9, "nombre": "Analista"}, {"empleado_id": 10, "nombre": "Analista"}, {"empleado_id": 11, "nombre": "Analista"}, {"empleado_id": 12, "nombre": "Coordinador"}, {"empleado_id": 13, "nombre": "Analista"}, {"empleado_id": 14, "nombre": "Analista"}, {"empleado_id": 15, "nombre": "Analista"}, {"empleado_id": 16, "nombre": "Analista"}, {"empleado_id": 17, "nombre": "Coordinador"}, {"empleado_id": 18, "nombre": "Analista"}, {"empleado_id": 19, "nombre": "Analista"}, {"empleado_id": 20, "nombre": "Coordinador"}, {"empleado_id": 21, "nombre": "Analista"}, {"empleado_id": 22, "nombre": "Analista"}, {"empleado_id": 23, "nombre": "Analista"}, {"empleado_id": 24, "nombre": "Analista"}, {"empleado_id": 25, "nombre": "Coordinador"}, {"empleado_id": 26, "nombre": "Analista"}, {"empleado_id": 27, "nombre": "Analista"}, {"empleado_id": 8, "nombre": "Analista"}]$seed$::json) AS x(empleado_id bigint, nombre text)
+JOIN cargo c ON c.nombre = x.nombre
+ON CONFLICT DO NOTHING;
+INSERT INTO empleado_puesto (empleado_id, puesto_id)
+SELECT x.empleado_id, c.id FROM json_to_recordset($seed$[{"empleado_id": 2, "nombre": "Administrador de Plataforma"}, {"empleado_id": 7, "nombre": "Analista de Conciliación"}, {"empleado_id": 8, "nombre": "Supervisor de Conciliación"}, {"empleado_id": 9, "nombre": "Analista de Conciliación"}, {"empleado_id": 10, "nombre": "Analista de Conciliación"}, {"empleado_id": 11, "nombre": "Analista de Conciliación"}, {"empleado_id": 12, "nombre": "Supervisor de Tesorería"}, {"empleado_id": 13, "nombre": "Analista de Conciliación"}, {"empleado_id": 14, "nombre": "Auditor de Procesos"}, {"empleado_id": 15, "nombre": "Analista de Conciliación"}, {"empleado_id": 16, "nombre": "Analista de Conciliación"}, {"empleado_id": 17, "nombre": "Supervisor de Conciliación"}, {"empleado_id": 18, "nombre": "Analista de Conciliación"}, {"empleado_id": 19, "nombre": "Auditor de Procesos"}, {"empleado_id": 20, "nombre": "Supervisor de Conciliación"}, {"empleado_id": 21, "nombre": "Analista de Conciliación"}, {"empleado_id": 22, "nombre": "Auditor de Procesos"}, {"empleado_id": 23, "nombre": "Analista de Conciliación"}, {"empleado_id": 24, "nombre": "Analista de Conciliación"}, {"empleado_id": 25, "nombre": "Supervisor de Tesorería"}, {"empleado_id": 26, "nombre": "Analista de Conciliación"}, {"empleado_id": 27, "nombre": "Auditor de Procesos"}]$seed$::json) AS x(empleado_id bigint, nombre text)
+JOIN puesto c ON c.nombre = x.nombre
+ON CONFLICT DO NOTHING;
+INSERT INTO empleado_departamento (empleado_id, departamento_id)
+SELECT x.empleado_id, c.id FROM json_to_recordset($seed$[{"empleado_id": 2, "nombre": "Tecnología"}, {"empleado_id": 3, "nombre": "Recursos Humanos"}, {"empleado_id": 4, "nombre": "Finanzas"}, {"empleado_id": 5, "nombre": "Finanzas"}, {"empleado_id": 6, "nombre": "Operaciones"}, {"empleado_id": 7, "nombre": "Finanzas"}, {"empleado_id": 8, "nombre": "Finanzas"}, {"empleado_id": 9, "nombre": "Finanzas"}, {"empleado_id": 10, "nombre": "Finanzas"}, {"empleado_id": 11, "nombre": "Finanzas"}, {"empleado_id": 12, "nombre": "Finanzas"}, {"empleado_id": 13, "nombre": "Finanzas"}, {"empleado_id": 14, "nombre": "Auditoría Interna"}, {"empleado_id": 15, "nombre": "Finanzas"}, {"empleado_id": 16, "nombre": "Finanzas"}, {"empleado_id": 17, "nombre": "Tecnología"}, {"empleado_id": 18, "nombre": "Finanzas"}, {"empleado_id": 19, "nombre": "Auditoría Interna"}, {"empleado_id": 20, "nombre": "Tecnología"}, {"empleado_id": 21, "nombre": "Finanzas"}, {"empleado_id": 22, "nombre": "Auditoría Interna"}, {"empleado_id": 23, "nombre": "Recursos Humanos"}, {"empleado_id": 24, "nombre": "Finanzas"}, {"empleado_id": 25, "nombre": "Operaciones"}, {"empleado_id": 26, "nombre": "Finanzas"}, {"empleado_id": 27, "nombre": "Auditoría Interna"}]$seed$::json) AS x(empleado_id bigint, nombre text)
+JOIN departamento c ON c.nombre = x.nombre
+ON CONFLICT DO NOTHING;
+INSERT INTO empleado_area (empleado_id, area_id)
+SELECT x.empleado_id, c.id FROM json_to_recordset($seed$[{"empleado_id": 2, "nombre": "Sistemas"}, {"empleado_id": 4, "nombre": "Tesorería"}, {"empleado_id": 5, "nombre": "Contabilidad"}, {"empleado_id": 6, "nombre": "Contabilidad"}, {"empleado_id": 7, "nombre": "Conciliación Bancaria"}, {"empleado_id": 8, "nombre": "Conciliación Bancaria"}, {"empleado_id": 9, "nombre": "Conciliación Bancaria"}, {"empleado_id": 10, "nombre": "Conciliación Bancaria"}, {"empleado_id": 11, "nombre": "Conciliación Bancaria"}, {"empleado_id": 12, "nombre": "Tesorería"}, {"empleado_id": 13, "nombre": "Conciliación Bancaria"}, {"empleado_id": 14, "nombre": "Cumplimiento"}, {"empleado_id": 15, "nombre": "Conciliación Bancaria"}, {"empleado_id": 16, "nombre": "Contabilidad"}, {"empleado_id": 17, "nombre": "Sistemas"}, {"empleado_id": 18, "nombre": "Conciliación Bancaria"}, {"empleado_id": 19, "nombre": "Cumplimiento"}, {"empleado_id": 20, "nombre": "Sistemas"}, {"empleado_id": 21, "nombre": "Conciliación Bancaria"}, {"empleado_id": 22, "nombre": "Cumplimiento"}, {"empleado_id": 23, "nombre": "Contabilidad"}, {"empleado_id": 24, "nombre": "Conciliación Bancaria"}, {"empleado_id": 25, "nombre": "Tesorería"}, {"empleado_id": 26, "nombre": "Conciliación Bancaria"}, {"empleado_id": 27, "nombre": "Cumplimiento"}, {"empleado_id": 5, "nombre": "Tesorería"}]$seed$::json) AS x(empleado_id bigint, nombre text)
+JOIN area c ON c.nombre = x.nombre
+ON CONFLICT DO NOTHING;
+
 -- Las secuencias deben ir por delante de los ids sembrados a mano
 SELECT setval(pg_get_serial_sequence('empleado', 'id'), (SELECT max(id) FROM empleado));
 SELECT setval(pg_get_serial_sequence('app_user', 'id'), (SELECT max(id) FROM app_user));
 SELECT setval(pg_get_serial_sequence('subsidiaria', 'id'), (SELECT max(id) FROM subsidiaria));
 SELECT setval(pg_get_serial_sequence('ubicacion', 'id'), (SELECT max(id) FROM ubicacion));
+SELECT setval(pg_get_serial_sequence('app_role', 'id'), (SELECT max(id) FROM app_role));
 
 COMMIT;

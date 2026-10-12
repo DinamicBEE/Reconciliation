@@ -15,19 +15,7 @@ import { AccessCatalogService } from '../user-management/data/access-catalog.ser
 import { AppUser, GENDER_OPTIONS, PHONE_PATTERN, fullName } from '../user-management/data/user-management.model';
 import { avatarTokensFor, initialsFor } from '../../shared/utils/avatar-color.util';
 import { COUNTRY_PROFILE } from '../../core/country/active-country';
-
-// `nz-date-picker` trabaja con `Date | null` — el model guarda la fecha
-// (sin hora) como ISO string (`'yyyy-MM-dd'`) o `null`. Mismo cruce de
-// frontera que `user-detail.ts` (ver ese archivo); se duplica aquí en vez
-// de compartirse porque, por ahora, sigue siendo el único otro consumidor
-// de `nz-date-picker` sobre este mismo campo.
-function parseIsoDate(value: string | null): Date | null {
-  return value ? new Date(value) : null;
-}
-
-function toIsoDate(value: Date | null): string {
-  return value ? value.toISOString().slice(0, 10) : '';
-}
+import { parseIsoDate, toIsoDate } from '../../shared/utils/iso-date.util';
 
 /**
  * Perfil del usuario logeado — mismo registro, misma fuente de verdad que

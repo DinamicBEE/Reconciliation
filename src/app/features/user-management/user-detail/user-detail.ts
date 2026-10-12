@@ -36,26 +36,12 @@ import { AccessCatalogService } from '../data/access-catalog.service';
 import { AccessControlService } from '../../auth/data/access-control.service';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
+import { parseIsoDate, toIsoDate, toIsoDateOrNull } from '../../../shared/utils/iso-date.util';
 import { OrganizationCatalogKind, OrganizationCatalogService } from '../../../core/services/organization-catalog.service';
 import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
 import { COUNTRY_PROFILE } from '../../../core/country/active-country';
 import { AuthService, UserDetailDto } from '../../auth/data/auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
-
-// `nz-date-picker` trabaja con `Date | null` — el model guarda fecha (sin
-// hora) como ISO string (`'yyyy-MM-dd'`) o `null`. Estas 2 funciones son las
-// únicas que cruzan esa frontera, en los 2 sentidos.
-function parseIsoDate(value: string | null): Date | null {
-  return value ? new Date(value) : null;
-}
-
-function toIsoDate(value: Date | null): string {
-  return value ? value.toISOString().slice(0, 10) : '';
-}
-
-function toIsoDateOrNull(value: Date | null): string | null {
-  return value ? value.toISOString().slice(0, 10) : null;
-}
 
 @Component({
   selector: 'app-user-detail',

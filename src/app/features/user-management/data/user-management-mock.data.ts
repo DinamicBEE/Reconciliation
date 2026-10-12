@@ -7,8 +7,9 @@ import { AppUser, AppUserAddress } from './user-management.model';
 // índice en vez de escribirlos 25 veces a mano. `mustChangePassword` tampoco
 // se declara por usuario aquí — se defaultea a `false` para los 25 al
 // construir `MOCK_USERS`, con UNA excepción a propósito (ver ese bloque).
-// `subsidiariaIds`/`ubicacionIds`/`backendUserId` (catálogo real + puente al
-// backend) tampoco — mismo criterio, ver el `.map()` de más abajo.
+// La organización (subsidiarias, ubicaciones, cargos, puestos, departamentos,
+// áreas) y `backendUserId` (puente al backend) tampoco — ver el `.map()` de más
+// abajo: la organización no tiene valores mock, la trae el backend.
 type MockUserSeed = Omit<
   AppUser,
   | 'birthDate'
@@ -656,20 +657,17 @@ export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   // `user-detail` la sobreescribe con lo que devuelva `GET /users/{id}` en
   // caliente (ver `UserDetail`, efecto que llama `AuthService.getUserDetail`).
   temporaryPassword: null,
-  // La única subsidiaria real sembrada hoy (id 1, "Conciliación Bancaria")
-  // para los 26; ubicación varía por índice entre las 4 reales sembradas
-  // (ids 1-4) — mismos valores con los que se sembró cada uno en el backend
-  // real (ver el script de siembra, MASTER.md). Arreglo de UN elemento
-  // porque así se sembraron; nada impide que `POST /users`
-  // (`UserManagementService.createUser`) le asigne varias a alguien nuevo.
-  // Cargo/puesto/departamento/área: los asigna el backend (ids de `GET
-  // /catalogs/...`); el detalle real (`GET /users/{id}`) los sobreescribe.
+  // Organización (subsidiarias, ubicaciones, cargos, puestos, departamentos y
+  // áreas): SIN valores mock — son ids de los catálogos del Core Service
+  // (`GET /catalogs/...`) y los pone el backend: subsidiarias/ubicaciones llegan
+  // con `GET /users` (`syncFromBackend`) y el resto con `GET /users/{id}`
+  // (`UserDetail`). Vacío mientras no hayan llegado.
   cargoIds: [],
   puestoIds: [],
   departamentoIds: [],
   areaIds: [],
-  subsidiariaIds: [1],
-  ubicacionIds: [(index % 4) + 1],
+  subsidiariaIds: [],
+  ubicacionIds: [],
   backendUserId: BACKEND_USER_ID[seed.id] ?? null,
   lockedUntil: null,
 }));
