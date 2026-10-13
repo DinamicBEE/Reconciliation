@@ -3066,6 +3066,38 @@ Backend `coctel_midd` DEV (rama `feature/catalogs`, Guia_Integracion_Frontend §
    7.16 (DEV ya no los trae), `capture_sales` para ADMIN, la subsidiaria Hipermar Fish con sus 2 tiendas de
    Facturiza y los catálogos de cargo/puesto/departamento/área con su asignación por empleado.
 
+### Actualización: `GET /sales` (Resumen de venta) y CRUD de roles (`/roles`)
+
+1. **Resumen de venta sobre `GET /sales`** (Core Service). `SalesApiService` (`sales-dashboard/data`) y
+   `SalesDashboardService` traducen los filtros a la query (`dateFrom`/`dateTo` en hora local, `store` = id de
+   las ubicaciones del LOGIN, `tenderMedia`/`status` = ids de `SalesCatalogService`, `search` con 300 ms de
+   espera) y la tabla **pagina en el servidor** (`nzFrontPagination` apagado, `page` base 1, 10/20/50/100 por
+   página). Un cambio de filtro vuelve a la página 1; una consulta nueva cancela la anterior. Se retiraron el
+   mock de la pantalla (`MOCK_SALES` sigue solo para la conciliación simulada), el puente por nombre de tiendas
+   (`LABEL_TO_STORE`), el puente de filtros y `sale-export.util.ts`.
+   - **Exportar** recorre todas las páginas de los filtros actuales (de 100 en 100; no existe
+     `GET /sales/export`) y arma el CSV con `sale-list-export.util.ts`.
+   - **Drawer:** muestra lo que trae la fila (folio, tipo, fecha y hora, tienda, cliente, medio con pago mixto,
+     estado, importes). El detalle completo espera `GET /sales/{id}`.
+   - **Empresa (subsidiaria):** select deshabilitado con tooltip: `GET /sales` no filtra por subsidiaria y las
+     ubicaciones del login no traen la suya.
+   - **Reprocesar:** sigue simulado (`POST /sales/capture` pendiente); su objetivo ya usa el id de la tienda.
+2. **CRUD de roles.** `AuthService.createRole/getRole/updateRole/deleteRole`. `RoleCreate` sirve para el alta
+   (`/gestion-de-roles/nuevo`, `POST`) y la edición (`/gestion-de-roles/:code`, precarga con `GET`, guarda con
+   `PATCH` solo lo que cambió, confirmación con permisos agregados/quitados y a cuántas personas afecta).
+   - El nombre se valida contra los roles existentes por nombre y por **código derivado**
+     (`roles-permissions/data/role-code.util.ts`, réplica de `toCode` del back); máximo 80 caracteres. La
+     pantalla muestra el código que tendrá el rol.
+   - Tras editar permisos: recarga del catálogo, `syncFromBackend()` y `renewSession()` si la sesión propia
+     tiene el rol (el back propaga el cambio a sus personas).
+   - **Baja** (`DELETE`, con confirmación) desde la columna **Acciones** de "Roles y permisos" y desde el
+     encabezado de la edición ("Eliminar rol"). Se deshabilita con tooltip mientras el rol tenga personas
+     asignadas (el back respondería 409 `ROLE_IN_USE`). La fila completa abre la edición.
+   - Códigos nuevos: `ROLE_NOT_FOUND`, `ROLE_ALREADY_EXISTS`, `ROLE_IN_USE`.
+3. **`dev-env`:** proyecto `coctel_dev_v3` (la V1 agregó `app_user_special_permission`), siembra de permisos
+   especiales y **`seed-demo-sales.sql`**: 168 ventas de prueba deterministas (7 días × 6 tiendas × 4, notas
+   crédito, pagos mixtos, los 3 estados), porque la captura real necesita credenciales de Facturiza.
+
 ## Patrón: encabezado de página (`nz-page-header`) — regla general
 
 **Toda pantalla del shell pone su título con `nz-page-header`** (`NzPageHeaderModule`,

@@ -1,11 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { NgStyle } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTableModule } from 'ng-zorro-antd/table';
+import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzMessageService } from 'ng-zorro-antd/message';
+import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
+import { AuthService } from '../auth/data/auth.service';
 import { avatarTokensFor, initialsFor } from '../../shared/utils/avatar-color.util';
 import { AccessCatalogService } from '../user-management/data/access-catalog.service';
 import { AppUser, RoleId, fullName } from '../user-management/data/user-management.model';
@@ -25,11 +30,13 @@ interface RoleRow {
  * con los permisos que trae por defecto y las personas que lo tienen
  * (`UserManagementService.allUsers`, la misma colección de "Administración de
  * usuarios", sincronizada con `GET /users` al entrar). Exclusiva del rol ADMIN
- * (`permissionGuard` con `data.role`). Desde aquí se da de alta un rol nuevo.
+ * (`permissionGuard` con `data.role`). Desde aquí se da de alta un rol nuevo, se
+ * abre su edición (`/gestion-de-roles/:code`) y se da de baja (`DELETE
+ * /roles/{code}`, con confirmación; deshabilitado mientras tenga usuarios).
  */
 @Component({
   selector: 'app-roles-permissions',
-  imports: [NgStyle, RouterLink, NzPageHeaderModule, NzCardModule, NzTableModule, NzButtonModule, NzAvatarModule],
+  imports: [NgStyle, RouterLink, NzPageHeaderModule, NzCardModule, NzTableModule, NzButtonModule, NzAvatarModule, NzTooltipModule, NzModalModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './roles-permissions.html',
   styleUrl: './roles-permissions.scss',
@@ -38,7 +45,14 @@ export class RolesPermissions {
   protected readonly catalog = inject(AccessCatalogService);
   private readonly users = inject(UserManagementService);
 
+  private readonly auth = inject(AuthService);
+  private readonly modal = inject(NzModalService);
+  private readonly message = inject(NzMessageService);
+  private readonly router = inject(Router);
+
   protected readonly fullName = fullName;
+  // Código del rol cuya baja está en curso (deshabilita su botón mientras tanto).
+  protected readonly deleting = signal<string | null>(null);
 
   protected readonly rows = computed<RoleRow[]>(() => {
     const users = this.users.allUsers();
@@ -57,6 +71,33 @@ export class RolesPermissions {
     this.users.syncFromBackend();
   }
 
+  protected onEdit(role: RoleRow): void {
+    void this.router.navigate(['/gestion-de-roles', role.id]);
+  }
+
+  protected onDelete(role: RoleRow): void {
+    if (role.users.length > 0) return;
+    this.modal.confirm({
+      nzTitle: '¿Eliminar este rol?',
+      nzContent: `Se dará de baja el rol <b>${escapeHtml(role.label)}</b> (${role.id}). Ya no se podrá asignar y su nombre quedará reservado: no podrás crear otro rol con el mismo nombre.`,
+      nzOkText: 'Eliminar',
+      nzOkDanger: true,
+      nzCancelText: 'Cancelar',
+      nzOnOk: async () => {
+        this.deleting.set(role.id);
+        try {
+          await firstValueFrom(this.auth.deleteRole(role.id));
+          this.message.success(`Rol "${role.label}" eliminado.`);
+          this.catalog.load();
+        } catch {
+          // 409 ROLE_IN_USE / 404: el aviso lo da `httpErrorAlertInterceptor`.
+        } finally {
+          this.deleting.set(null);
+        }
+      },
+    });
+  }
+
   protected avatarStyle(user: AppUser): Record<string, string> {
     return avatarTokensFor(user.id);
   }
@@ -64,4 +105,8 @@ export class RolesPermissions {
   protected initials(user: AppUser): string {
     return initialsFor(fullName(user));
   }
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }

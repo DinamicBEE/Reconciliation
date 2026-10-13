@@ -389,6 +389,18 @@ SELECT x.empleado_id, c.id FROM json_to_recordset($seed$[{"empleado_id": 2, "nom
 JOIN area c ON c.nombre = x.nombre
 ON CONFLICT DO NOTHING;
 
+-- Permisos especiales (app_user_special_permission, DEV 3852101): los permisos efectivos de cada cuenta que
+-- NINGUNO de sus roles otorga (p. ej. un permiso agregado a mano a una persona). Editar un rol no se los quita.
+INSERT INTO app_user_special_permission (user_id, permission_id)
+SELECT up.user_id, up.permission_id
+FROM app_user_permission up
+WHERE NOT EXISTS (
+  SELECT 1 FROM app_user_role ur
+  JOIN app_role_permission rp ON rp.role_id = ur.role_id
+  WHERE ur.user_id = up.user_id AND rp.permission_id = up.permission_id
+)
+ON CONFLICT DO NOTHING;
+
 -- Las secuencias deben ir por delante de los ids sembrados a mano
 SELECT setval(pg_get_serial_sequence('empleado', 'id'), (SELECT max(id) FROM empleado));
 SELECT setval(pg_get_serial_sequence('app_user', 'id'), (SELECT max(id) FROM app_user));

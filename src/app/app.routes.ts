@@ -79,6 +79,14 @@ export const routes: Routes = [
         loadComponent: () => import('./features/roles-permissions/role-create/role-create').then((m) => m.RoleCreate),
       },
       {
+        // Edición de un rol (`GET`/`PATCH`/`DELETE /roles/{code}`) — mismo
+        // componente que el alta, en modo edición por el parámetro :code.
+        path: 'gestion-de-roles/:code',
+        canActivate: [permissionGuard],
+        data: { permission: 'manage_roles', role: 'ADMIN' },
+        loadComponent: () => import('./features/roles-permissions/role-create/role-create').then((m) => m.RoleCreate),
+      },
+      {
         path: 'usuarios',
         canActivate: [permissionGuard],
         data: { permission: 'manage_users' },

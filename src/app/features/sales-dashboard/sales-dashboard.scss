@@ -126,3 +126,8 @@
 // (`_summary-columns.scss`) ya NO es consumida por esta pantalla — sigue
 // viva solo para el form de creación de usuario en `user-detail`, ver
 // MASTER.md "Patrón: Drawer de detalle...".
+
+.sale-drawer__note {
+  font-size: 12px;
+  margin: 12px 0 0;
+}

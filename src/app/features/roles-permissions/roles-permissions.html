@@ -27,12 +27,13 @@
           <tr>
             <th style="width: 220px">Rol</th>
             <th>Permisos</th>
-            <th class="text-center" colspan="2">Usuarios</th>
+            <th class="text-center">Usuarios</th>
+            <th class="text-center" style="width: 110px">Acciones</th>
           </tr>
         </thead>
         <tbody>
           @for (role of tbl.data; track role.id) {
-            <tr>
+            <tr class="clickable-row" (click)="onEdit(role)">
               <td class="cell-top">
                 <span class="cell-title">{{ role.label }}</span>
                 <span class="cell-subtitle font-mono">{{ role.id }}</span>
@@ -68,7 +69,12 @@
                             [nzText]="initials(user)"
                             [ngStyle]="avatarStyle(user)"
                           />
-                          <a class="user-item__name" [routerLink]="['/usuarios', user.id]" [attr.title]="fullName(user)">
+                          <a
+                            class="user-item__name"
+                            [routerLink]="['/usuarios', user.id]"
+                            [attr.title]="fullName(user)"
+                            (click)="$event.stopPropagation()"
+                          >
                             {{ fullName(user) }}
                           </a>
                         </li>
@@ -82,6 +88,50 @@
                 } @else {
                   <span class="text-muted">Sin usuarios asignados</span>
                 }
+              </td>
+              <!-- Acciones: editar (detalle del rol) y eliminar (`DELETE
+                   /roles/{code}`, con confirmación). Eliminar se deshabilita
+                   mientras el rol tenga usuarios (el backend respondería 409
+                   ROLE_IN_USE); el <span> lleva el tooltip porque un botón
+                   `disabled` no dispara hover. -->
+              <td class="cell-top text-center" (click)="$event.stopPropagation()">
+                <div class="row-actions">
+                  <button
+                    nz-button
+                    nzType="text"
+                    type="button"
+                    (click)="onEdit(role)"
+                    nz-tooltip
+                    nzTooltipTitle="Editar rol"
+                    aria-label="Editar rol"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 20h4L19 9l-4-4L4 16v4ZM14 6l4 4" />
+                    </svg>
+                  </button>
+                  <span
+                    nz-tooltip
+                    [nzTooltipTitle]="
+                      role.users.length
+                        ? 'No se puede eliminar: ' + role.users.length + (role.users.length === 1 ? ' usuario tiene' : ' usuarios tienen') + ' este rol'
+                        : 'Eliminar rol'
+                    "
+                  >
+                    <button
+                      nz-button
+                      nzType="text"
+                      nzDanger
+                      type="button"
+                      [disabled]="role.users.length > 0 || deleting() === role.id"
+                      (click)="onDelete(role)"
+                      aria-label="Eliminar rol"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+                      </svg>
+                    </button>
+                  </span>
+                </div>
               </td>
             </tr>
           }

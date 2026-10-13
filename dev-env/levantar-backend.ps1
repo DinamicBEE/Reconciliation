@@ -4,10 +4,9 @@
 #   ... -Reseed                                                                       # solo vuelve a aplicar la siembra
 #
 # No modifica el repo del backend: usa SU docker-compose.yml tal cual (--project-directory) con las variables
-# de dev-env/.env y un nombre de proyecto propio (coctel_dev_v2) => volumen propio (coctel_dev_v2_coctel_postgres_data).
-# "v2" porque DEV reescribió la migración V1 (fusionó V2-V4 y agregó catálogos, cliente y la separación
-# capture-service / core-service): Flyway rechaza una base creada con el V1 anterior, así que hace falta una
-# base nueva. Los contenedores de una pila anterior con los mismos nombres (proyecto coctel_dev, docker run
+# de dev-env/.env y un nombre de proyecto propio (coctel_dev_v3) => volumen propio (coctel_dev_v3_coctel_postgres_data).
+# El sufijo sube cada vez que DEV modifica la migración V1 (Flyway rechaza una base creada con el V1 anterior):
+# v2 = V2-V4 fusionadas en V1 + catálogos + capture/core; v3 = tabla app_user_special_permission (roles CRUD). Los contenedores de una pila anterior con los mismos nombres (proyecto coctel_dev, docker run
 # manual, ...) se ELIMINAN — solo los contenedores: sus volúmenes y datos quedan intactos para volver atrás.
 #
 # El Gateway queda en http://localhost:<GATEWAY_PORT> (8080 por defecto; proxy.conf.js lee el mismo valor de dev-env/.env).
@@ -17,7 +16,7 @@ param(
   [switch]$Reseed
 )
 $ErrorActionPreference = 'Stop'
-$project = 'coctel_dev_v2'
+$project = 'coctel_dev_v3'
 $backend = (Resolve-Path $BackendDir).Path
 $envFile = Join-Path $PSScriptRoot '.env'
 if (-not (Test-Path $envFile)) { Copy-Item (Join-Path $PSScriptRoot '.env.example') $envFile; Write-Host "Creado $envFile desde .env.example" }
@@ -29,13 +28,16 @@ $compose = @('compose', '-p', $project, '--project-directory', $backend, '-f', (
   '-f', (Join-Path $PSScriptRoot 'docker-compose.gateway-port.yml'), '--env-file', $envFile)
 
 function Invoke-Seed {
-  Write-Host 'Aplicando siembra de cuentas demo...'
-  # Se copia el archivo al contenedor y se ejecuta con psql -f: canalizar el SQL por stdin desde
+  # Se copia cada archivo al contenedor y se ejecuta con psql -f: canalizar el SQL por stdin desde
   # PowerShell 5.1 pasa por la codificación de la consola y convierte los acentos en '?'.
-  docker cp (Join-Path $PSScriptRoot 'seed-demo-users.sql') coctel-del-mar-postgres:/tmp/seed-demo-users.sql | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw 'No se pudo copiar la siembra al contenedor.' }
-  docker exec coctel-del-mar-postgres psql -U coctel_app -d coctel_del_mar -v ON_ERROR_STOP=1 -q -f /tmp/seed-demo-users.sql
-  if ($LASTEXITCODE -ne 0) { throw 'La siembra falló.' }
+  # Orden: cuentas/roles/catálogos primero; las ventas de prueba necesitan las ubicaciones sembradas.
+  foreach ($file in 'seed-demo-users.sql', 'seed-demo-sales.sql') {
+    Write-Host "Aplicando $file..."
+    docker cp (Join-Path $PSScriptRoot $file) "coctel-del-mar-postgres:/tmp/$file" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "No se pudo copiar $file al contenedor." }
+    docker exec coctel-del-mar-postgres psql -U coctel_app -d coctel_del_mar -v ON_ERROR_STOP=1 -q -f "/tmp/$file"
+    if ($LASTEXITCODE -ne 0) { throw "La siembra $file falló." }
+  }
 }
 
 if ($Down) { & docker @compose down; exit $LASTEXITCODE }
@@ -71,6 +73,6 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 if (-not $ok) { throw 'El Gateway no respondió a tiempo (docker compose -p coctel_dev logs gateway).' }
 
-# 4. Sembrar cuentas demo, roles, subsidiarias/ubicaciones y catálogos organizacionales.
+# 4. Sembrar cuentas demo, roles, subsidiarias/ubicaciones, catálogos organizacionales y ventas de prueba.
 Invoke-Seed
 Write-Host "Listo: Gateway en http://localhost:$gatewayPort - admin@conciliacion.mx / Conciliacion2026"
