@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse, provideHttpClient, withInterceptors } fr
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { AuthService } from '../../features/auth/data/auth.service';
+import { AuthService } from '../auth/auth.service';
 import { authTokenInterceptor } from './auth-token.interceptor';
 
 // `environment.apiUrl` es '' en el entorno de pruebas (rutas relativas).

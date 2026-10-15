@@ -1,7 +1,25 @@
+import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { forkJoin } from 'rxjs';
-import { AuthService, PermissionDto, RoleDto } from '../../auth/data/auth.service';
-import { PermissionDef, PermissionKey, RoleDef, RoleId } from './user-management.model';
+import { environment } from '../../../environments/environment';
+import { PermissionDef, PermissionKey, RoleDef, RoleId } from '../../shared/models/access.model';
+import { AuthService } from './auth.service';
+
+// `GET /roles` — catálogo de roles con los permisos que traen por defecto
+// (solo lectura: se cargan por migración). Exige `manage_users` o `manage_roles`.
+export interface RoleDto {
+  code: string;
+  name: string;
+  defaultPermissions: string[];
+}
+
+// `GET /permissions` — catálogo de permisos; `module` es el título del grupo en
+// la pantalla "Seguridad y acceso". Exige `manage_users` o `manage_roles`.
+export interface PermissionDto {
+  code: string;
+  description: string;
+  module: string;
+}
 
 // Permisos del backend que dan acceso a los catálogos (`GET /roles`, `GET
 // /permissions`: "manage_users o manage_roles", ver la guía de endpoints).
@@ -22,12 +40,18 @@ const CATALOG_PERMISSIONS: PermissionKey[] = ['manage_users', 'manage_roles'];
  * etiquetas de rol del encabezado/perfil, que caen a una versión legible del
  * código (`roleLabel`) — ver MASTER.md.
  *
+ * Vive en `core/auth` (ADR-0001): lo consumen el layout (etiqueta de rol del
+ * header) y varias features. Los dos GET de catálogo se piden aquí mismo; el
+ * CRUD de roles es de `RolesApiService` (`user-management/data`).
+ *
  * Se carga solo: un `effect` observa la sesión y pide ambos catálogos al iniciar
  * sesión (si hay permiso) y los limpia al cerrarla.
  */
 @Injectable({ providedIn: 'root' })
 export class AccessCatalogService {
   private readonly auth = inject(AuthService);
+  private readonly http = inject(HttpClient);
+  private readonly apiUrl = environment.apiUrl;
 
   readonly roles = signal<readonly RoleDef[]>([]);
   readonly permissions = signal<readonly PermissionDef[]>([]);
@@ -66,7 +90,10 @@ export class AccessCatalogService {
     if (this.loading()) return;
     this.loading.set(true);
     this.loadFailed.set(false);
-    forkJoin([this.auth.listRoles(), this.auth.listPermissions()]).subscribe({
+    forkJoin([
+      this.http.get<RoleDto[]>(`${this.apiUrl}/roles`),
+      this.http.get<PermissionDto[]>(`${this.apiUrl}/permissions`),
+    ]).subscribe({
       next: ([roles, permissions]) => {
         this.roles.set(roles.map(toRoleDef));
         this.permissions.set(permissions.map(toPermissionDef));

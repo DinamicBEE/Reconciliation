@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, map, of, throwError } from 'rxjs';
-import { AuthService, CreateUserRequest, UpdateUserRequest, UpdateUserRolesRequest, UserDetailDto } from '../../auth/data/auth.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { CreateUserRequest, UpdateUserRequest, UpdateUserRolesRequest, UserDetailDto, UsersApiService } from './users-api.service';
 import {
   AppUser,
   AppUserAddress,
@@ -130,10 +131,20 @@ let nextUserSeq = maxSeq(MOCK_USERS.map((u) => u.id)) + 1;
 @Injectable({ providedIn: 'root' })
 export class UserManagementService {
   private readonly auth = inject(AuthService);
+  private readonly usersApi = inject(UsersApiService);
 
   private readonly usersSignal = signal<AppUser[]>(MOCK_USERS);
 
   readonly allUsers = this.usersSignal.asReadonly();
+
+  // Registro de este módulo que corresponde a la sesión actual, resuelto por
+  // email (`AuthUser.username`). La sesión ya no guarda este vínculo
+  // (ADR-0001, punto 5): lo resuelve el feature que lo necesita. `null` si la
+  // cuenta no tiene registro aquí.
+  readonly currentAppUser = computed<AppUser | null>(() => {
+    const email = this.auth.currentUser()?.username;
+    return email ? this.findUserByEmail(email) : null;
+  });
 
   readonly search = signal('');
   readonly roleFilter = signal<RoleFilter>('all');
@@ -255,14 +266,13 @@ export class UserManagementService {
   // este módulo (no hay todavía un backend de administración de usuarios
   // que los comparta). Solo resuelve para cuentas de demo cuyo email
   // coincide con las sembradas en coctel-del-mar; si no hay match, la sesión
-  // sigue autenticada pero sin `AppUser` vinculado (ver
-  // `AccessControlService.currentAppUser`).
+  // sigue autenticada pero sin `AppUser` vinculado (ver `currentAppUser`).
   findUserByEmail(email: string): AppUser | null {
     const target = email.trim().toLowerCase();
     return this.usersSignal().find((u) => u.email.toLowerCase() === target) ?? null;
   }
 
-  // CU3 pasos 1-2: alta REAL (`POST /users`, ver `AuthService.createUser`) —
+  // CU3 pasos 1-2: alta REAL (`POST /users`, ver `UsersApiService.createUser`) —
   // ya no genera nada localmente: `id` (numérico, el `backendUserId`),
   // `roleIds`/`permissions` efectivos y `temporaryPassword` vienen todos de
   // la respuesta del backend. `roleIds` en el alta solo se respeta si quien
@@ -292,7 +302,7 @@ export class UserManagementService {
       status: input.status === 'active' ? 'ACTIVE' : 'INACTIVE',
     };
 
-    return this.auth.createUser(request).pipe(
+    return this.usersApi.createUser(request).pipe(
       map((result) => {
         const user: AppUser = {
           // Mínimo 4 dígitos (regla de negocio) — el padding es solo
@@ -367,10 +377,10 @@ export class UserManagementService {
   // completo al no encontrar ningún `user.backendUserId` que hiciera match.
   //
   // Pagina: `GET /users` devuelve de a `size` (100) y el backend informa
-  // `totalPages` — `AuthService.listAllUsers()` recorre todas las páginas, así
+  // `totalPages` — `UsersApiService.listAllUsers()` recorre todas las páginas, así
   // que con más de 100 cuentas la lista ya no se trunca.
   syncFromBackend(): void {
-    this.auth.listAllUsers().subscribe({
+    this.usersApi.listAllUsers().subscribe({
       next: (users) => {
         const byBackendId = new Map(users.map((u) => [u.id, u]));
         const knownBackendIds = new Set(
@@ -418,7 +428,7 @@ export class UserManagementService {
   // llamada esa cuenta YA tiene registro local (otra sync concurrente, o se
   // insertó por otra vía), no duplica.
   private fetchAndInsertUser(backendUserId: number): void {
-    this.auth.getUserDetail(backendUserId).subscribe({
+    this.usersApi.getUserDetail(backendUserId).subscribe({
       next: (detail) => {
         if (this.usersSignal().some((u) => u.backendUserId === backendUserId)) return;
         this.usersSignal.update((list) => [this.buildUserFromDetail(detail), ...list]);
@@ -515,7 +525,7 @@ export class UserManagementService {
   // `updateInfo`/`updateOrganization` como 2 llamadas separadas para ESE
   // caso de uso. Ver `UpdateUserProfileInput`.
   //
-  // CU3 paso 3: `PATCH /users/{id}` real (ver `AuthService.updateUser`) —
+  // CU3 paso 3: `PATCH /users/{id}` real (ver `UsersApiService.updateUser`) —
   // requiere que el usuario ya esté vinculado (`backendUserId`); no debería
   // quedar ninguno sin vincular tras sembrar los 26 (ver MASTER.md). La
   // respuesta (`UserSummaryDto`) NO repite los campos que se acaban de
@@ -573,7 +583,7 @@ export class UserManagementService {
       areaIds: input.areaIds,
     };
 
-    return this.auth.updateUser(backendUserId, request).pipe(
+    return this.usersApi.updateUser(backendUserId, request).pipe(
       map((summary) => {
         const updated: AppUser = {
           ...user,
@@ -615,7 +625,7 @@ export class UserManagementService {
     return !!user && (!sameSet(user.roleIds, roleIds) || !sameSet(user.permissions, permissions));
   }
 
-  // `PATCH /users/{id}/roles` real (ver `AuthService.updateUserRoles`). Cambiar los
+  // `PATCH /users/{id}/roles` real (ver `UsersApiService.updateUserRoles`). Cambiar los
   // roles asignados resetea los permisos a la UNIÓN de los defaults de esos
   // roles (`AccessCatalogService.defaultPermissionsForRoles`) — el componente
   // parte de ahí y el admin ajusta lo que necesite; aquí llega el RESULTADO
@@ -648,7 +658,7 @@ export class UserManagementService {
       ...(permissionsChanged ? { permissions } : {}),
     };
 
-    return this.auth.updateUserRoles(user.backendUserId, request).pipe(
+    return this.usersApi.updateUserRoles(user.backendUserId, request).pipe(
       map((summary) => {
         const updated: AppUser = {
           ...user,
@@ -662,7 +672,7 @@ export class UserManagementService {
         };
         this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
 
-        if (this.auth.currentUser()?.appUserId === userId) {
+        if (this.currentAppUser()?.id === userId) {
           this.auth.renewSession().subscribe();
         }
         return updated;
@@ -683,7 +693,7 @@ export class UserManagementService {
   // uno tiene su propia AuditAction para que el historial diga exactamente
   // qué pasó, no un genérico "estado cambiado".
   //
-  // CU3 paso 4: `PATCH /users/{id}/status` real (ver `AuthService.changeStatus`)
+  // CU3 paso 4: `PATCH /users/{id}/status` real (ver `UsersApiService.changeStatus`)
   // — mismo criterio que `updateUserProfile`: requiere `backendUserId`, y la
   // respuesta (`UserSummaryDto`) es autoritativa para roles/permisos/estado/
   // mustChangePassword/emailVerified/subsidiarias/ubicaciones (se reconcilian
@@ -700,7 +710,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.changeStatus(user.backendUserId, status).pipe(
+    return this.usersApi.changeStatus(user.backendUserId, status).pipe(
       map((summary) => {
         const updated: AppUser = {
           ...user,
@@ -726,7 +736,7 @@ export class UserManagementService {
     );
   }
 
-  // CU3 paso 5: `PATCH /users/{id}/unlock` real (ver `AuthService.unlockUser`)
+  // CU3 paso 5: `PATCH /users/{id}/unlock` real (ver `UsersApiService.unlockUser`)
   // — desbloquea una cuenta bloqueada (por intentos fallidos o manual). El
   // backend responde un `UserSummaryDto`; además deja en cero el contador de
   // intentos y borra `lockedUntil` (ver `setStatus`, mismo efecto que
@@ -740,7 +750,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.unlockUser(user.backendUserId).pipe(
+    return this.usersApi.unlockUser(user.backendUserId).pipe(
       map((summary) => {
         const updated: AppUser = {
           ...user,
@@ -755,7 +765,7 @@ export class UserManagementService {
   }
 
   // CU3 paso 6: `POST /users/{id}/verify-email` real (ver
-  // `AuthService.verifyEmail`) — el guard `user.emailVerified` evita una
+  // `UsersApiService.verifyEmail`) — el guard `user.emailVerified` evita una
   // llamada innecesaria (el botón ya está oculto en ese caso, ver
   // `user-detail.html`), no algo que el backend exija (fuerza el flag
   // igual si se llama de nuevo).
@@ -771,7 +781,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.verifyEmail(user.backendUserId).pipe(
+    return this.usersApi.verifyEmail(user.backendUserId).pipe(
       map(() => {
         const updated: AppUser = { ...user, emailVerified: true };
         this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
@@ -780,7 +790,7 @@ export class UserManagementService {
     );
   }
 
-  // `POST /users/{id}/close-sessions` real (ver `AuthService.closeUserSessions`):
+  // `POST /users/{id}/close-sessions` real (ver `UsersApiService.closeUserSessions`):
   // revoca todos los refresh tokens vigentes de la persona — no cambia su
   // contraseña ni su estado, puede volver a entrar (el access token ya emitido
   // vive hasta 15 min). La respuesta trae el contador resultante.
@@ -793,7 +803,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.closeUserSessions(user.backendUserId).pipe(
+    return this.usersApi.closeUserSessions(user.backendUserId).pipe(
       map((res) => {
         const updated: AppUser = { ...user, activeSessions: res.activeSessions };
         this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
@@ -802,7 +812,7 @@ export class UserManagementService {
     );
   }
 
-  // `POST /users/{id}/reset-password` real (ver `AuthService.resetUserPassword`): el
+  // `POST /users/{id}/reset-password` real (ver `UsersApiService.resetUserPassword`): el
   // backend devuelve a la persona a su contraseña temporal (NOMBRE + PRIMER
   // APELLIDO + año de alta), marca `mustChangePassword` y REVOCA todas sus
   // sesiones (`activeSessions` queda en 0); no cambia su estado — un bloqueo se
@@ -817,7 +827,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.resetUserPassword(user.backendUserId).pipe(
+    return this.usersApi.resetUserPassword(user.backendUserId).pipe(
       map((res) => {
         const updated: AppUser = {
           ...user,
@@ -831,7 +841,7 @@ export class UserManagementService {
     );
   }
 
-  // `DELETE /users/{id}` real (ver `AuthService.deleteUser`): baja LÓGICA — la
+  // `DELETE /users/{id}` real (ver `UsersApiService.deleteUser`): baja LÓGICA — la
   // cuenta deja de poder entrar y desaparece de listados y detalle, pero su fila
   // y su bitácora se conservan y su correo queda libre. Un administrador no
   // puede darse de baja a sí mismo (409 `CANNOT_DELETE_SELF`; la UI además lo
@@ -845,7 +855,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.deleteUser(user.backendUserId).pipe(
+    return this.usersApi.deleteUser(user.backendUserId).pipe(
       map(() => {
         this.usersSignal.update((list) => list.filter((u) => u.id !== userId));
         this.selectedIdsSignal.update((current) => {
@@ -856,24 +866,6 @@ export class UserManagementService {
       }),
     );
   }
-
-  // Llamado por `ChangePassword` tras confirmar el cambio (ver
-  // `AuthService.changePassword`, que valida/actualiza la CONTRASEÑA en sí —
-  // este método solo apaga la bandera en el registro de `user-management`,
-  // el único de los dos que la conoce). Sin entrada de auditoría propia:
-  // "Contraseña restablecida" (`password_reset`) ya quedó registrada cuando
-  // se ORIGINÓ la obligación (alta de cuenta o reset de un admin) — esto es
-  // solo completarla, no un evento nuevo que reportar.
-  clearMustChangePassword(userId: string): void {
-    const user = this.findUser(userId);
-    if (!user || !user.mustChangePassword) return;
-
-    // Ya definió su propia contraseña — la temporal deja de estar vigente
-    // (el backend deja de devolver `temporaryPassword`).
-    const updated: AppUser = { ...user, mustChangePassword: false, temporaryPassword: null };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-  }
-
 }
 
 // Igualdad de conjuntos (sin importar el orden) — roles/permisos son conjuntos.

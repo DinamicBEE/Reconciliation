@@ -1,53 +1,19 @@
+import { PermissionKey, RoleId } from '../../../shared/models/access.model';
+
+// Los tipos de acceso (`RoleId`, `PermissionKey`, `PermissionDef`, `RoleDef`)
+// viven en `shared/models/access.model.ts` (ADR-0001); se re-exportan aquí para
+// el código interno de este feature.
+export type { PermissionDef, PermissionKey, RoleDef, RoleId } from '../../../shared/models/access.model';
+
 // Dominio de "Administración de usuarios". Vive en este feature (no en
 // shared/models) hasta que un segundo feature lo necesite — ver MASTER.md
 // ("Estructura de carpetas"). No confundir con `AuthUser` de
-// `features/auth/data/auth.service.ts`: ese es el tipo mínimo de sesión
+// `core/auth/auth.service.ts`: ese es el tipo mínimo de sesión
 // (usuario que inició sesión); `AppUser` es el registro administrable
 // completo (roles, permisos, estado, seguridad, organización) que ve este
 // módulo.
 
 export type UserStatus = 'active' | 'inactive' | 'blocked';
-
-// Códigos TAL CUAL los sembró coctel-del-mar/coctel_midd (`app_role.code`,
-// ver V1__init_schema.sql de ese repo y `UserSummaryDto.roles` en /auth/login)
-// — el backend es la fuente de verdad de qué roles EXISTEN y de sus nombres y
-// permisos por defecto: `GET /roles` (ver `AccessCatalogService`). Este tipo
-// solo da nombre a los códigos que el código del front compara (p. ej.
-// `MANAGER_ROLE_IDS`, `canReprocessSales`); NO hay lista de roles propia del
-// front. El acceso a cada pantalla lo decide el PERMISO (`permissionGuard`,
-// `features/auth/data/permission.guard.ts`, rutas en `app.routes.ts`), no el rol.
-export type RoleId = 'ADMIN' | 'ALTAS' | 'CONTABILIDAD' | 'TESORERIA' | 'COSTOS';
-
-export type PermissionKey =
-  | 'view_dashboard'
-  | 'view_reconciliation'
-  | 'manage_differences'
-  | 'import_settlements'
-  | 'export_reports'
-  | 'manage_users'
-  | 'manage_roles'
-  | 'view_audit_log'
-  | 'view_catalogs'
-  | 'capture_sales';
-
-// Una entrada de `GET /permissions` (`code` → key, `description` → label,
-// `module` → group: título del bloque en el grid de "Seguridad y acceso").
-export interface PermissionDef {
-  key: PermissionKey;
-  label: string;
-  group: string;
-}
-
-// Una entrada de `GET /roles` (`code` → id, `name` → label). Permisos que una
-// persona recién asignada a este rol recibe por defecto — el admin puede
-// ajustarlos después por usuario (ver "Seguridad y acceso" en user-detail).
-// Cambiar los roles asignados RESETEA a la unión de estos sets
-// (`AccessCatalogService.defaultPermissionsForRoles`).
-export interface RoleDef {
-  id: RoleId;
-  label: string;
-  defaultPermissions: PermissionKey[];
-}
 
 // Dirección postal — sub-objeto propio (no 7 campos sueltos en AppUser)
 // porque siempre se edita/muestra como una unidad ("la dirección"), nunca un
@@ -155,9 +121,8 @@ export interface AppUser {
   // `UserDetail.onUnlockBackendClick`); `null` para un registro que solo
   // vive en este mock (no debería quedar ninguno tras sembrar los 26 en el
   // backend, ver el mismo punto de MASTER.md). NO confundir con
-  // `AppUser.id` (el id 'uXXXX' de ESTE registro mock) ni con
-  // `AuthUser.appUserId` (que apunta al revés, del `AuthUser` de sesión
-  // hacia este mismo `AppUser.id`).
+  // `AppUser.id` (el id 'uXXXX' de ESTE registro mock). La sesión se vincula
+  // a este registro por email (`UserManagementService.currentAppUser`).
   backendUserId: number | null;
 }
 

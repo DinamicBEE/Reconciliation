@@ -2,8 +2,8 @@ import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { AuthService } from '../../features/auth/data/auth.service';
-import { INVALID_CREDENTIALS_CODE, extractErrorCode, isSessionIdleTimeout } from '../../features/auth/data/auth-errors';
+import { AuthService } from '../auth/auth.service';
+import { INVALID_CREDENTIALS_CODE, extractErrorCode, isSessionIdleTimeout } from '../auth/auth-errors';
 
 // Endpoints del auth-service real que NO llevan Bearer — `permitAll()` en
 // SecurityConfig.java (coctel_midd): login todavía no tiene sesión, refresh

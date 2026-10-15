@@ -1,6 +1,6 @@
 import { Component, effect, inject } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
-import { AuthService } from './features/auth/data/auth.service';
+import { AuthService } from './core/auth/auth.service';
 
 // Root sin chrome propio: `login` y lo protegido por Shell (dashboard, etc.)
 // se resuelven como rutas hijas (ver app.routes.ts) — antes app-shell vivía

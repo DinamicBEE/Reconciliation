@@ -9,19 +9,19 @@ import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzSelectModule } from 'ng-zorro-antd/select';
-import { AuthService } from '../auth/data/auth.service';
-import { UserManagementService } from '../user-management/data/user-management.service';
-import { AccessCatalogService } from '../user-management/data/access-catalog.service';
-import { AppUser, GENDER_OPTIONS, PHONE_PATTERN, fullName } from '../user-management/data/user-management.model';
-import { avatarTokensFor, initialsFor } from '../../shared/utils/avatar-color.util';
-import { COUNTRY_PROFILE } from '../../core/country/active-country';
-import { parseIsoDate, toIsoDate } from '../../shared/utils/iso-date.util';
+import { AuthService } from '../../../core/auth/auth.service';
+import { UserManagementService } from '../data/user-management.service';
+import { AccessCatalogService } from '../../../core/auth/access-catalog.service';
+import { AppUser, GENDER_OPTIONS, PHONE_PATTERN, fullName } from '../data/user-management.model';
+import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
+import { COUNTRY_PROFILE } from '../../../core/country/active-country';
+import { parseIsoDate, toIsoDate } from '../../../shared/utils/iso-date.util';
 
 /**
  * Perfil del usuario logeado — mismo registro, misma fuente de verdad que
  * `UserDetail` (ver `features/user-management/user-detail`): se resuelve el
- * `AppUser` vinculado a la sesión actual (`AuthUser.appUserId`) vía
- * `UserManagementService.findUser`, nunca datos propios de esta pantalla.
+ * `AppUser` de la sesión actual (`UserManagementService.currentAppUser`,
+ * resuelto por email), nunca datos propios de esta pantalla.
  * "Información general" + "Dirección" son de solo lectura por defecto; el
  * botón "Editar" del header habilita `infoForm` para ambas secciones a la
  * vez y guarda con el MISMO `UserManagementService.updateInfo` que usa
@@ -59,10 +59,7 @@ export class Profile {
   protected readonly fullName = fullName;
   protected readonly genderOptions = GENDER_OPTIONS;
 
-  protected readonly user = computed<AppUser | null>(() => {
-    const id = this.auth.currentUser()?.appUserId;
-    return id ? this.userMgmt.findUser(id) : null;
-  });
+  protected readonly user = this.userMgmt.currentAppUser;
 
   // Roles REALES de la sesión con el nombre de `GET /roles` (ver Header).
   protected readonly roleLabel = computed(() =>
@@ -101,8 +98,8 @@ export class Profile {
     // service evita que este effect se re-dispare por cualquier cambio en
     // el registro de usuarios, solo por un cambio de sesión real.
     effect(() => {
-      const id = this.auth.currentUser()?.appUserId;
-      const found = id ? untracked(() => this.userMgmt.findUser(id)) : null;
+      const email = this.auth.currentUser()?.username;
+      const found = email ? untracked(() => this.userMgmt.findUserByEmail(email)) : null;
       this.resetForm(found);
       this.isEditing.set(false);
     });

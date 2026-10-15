@@ -46,7 +46,6 @@ function storedSession(overrides: Record<string, unknown> = {}) {
     user: {
       username: 'admin@conciliacion.mx',
       displayName: 'Admin',
-      appUserId: null,
       roles: ['ADMIN'],
       permissions: ['manage_users'],
       mustChangePasswordHint: false,
@@ -138,14 +137,13 @@ describe('AuthService', () => {
   describe('completeLogin', () => {
     it('crea la sesión, expone el usuario y el token y la persiste en sessionStorage', () => {
       const service = setup();
-      service.completeLogin(loginResult({ mustChangePassword: true }), 'u0001');
+      service.completeLogin(loginResult({ mustChangePassword: true }));
 
       expect(service.isAuthenticated()).toBe(true);
       expect(service.accessToken()).toBe('access-1');
       expect(service.currentUser()).toEqual({
         username: 'admin@conciliacion.mx',
         displayName: 'Admin',
-        appUserId: 'u0001',
         roles: ['ADMIN'],
         permissions: ['manage_users'],
         mustChangePasswordHint: true,
@@ -163,7 +161,7 @@ describe('AuthService', () => {
       const service = setup();
       service.invalidateSession('idle_timeout');
       expect(service.sessionEndReason()).toBe('idle_timeout');
-      service.completeLogin(loginResult(), null);
+      service.completeLogin(loginResult());
       expect(service.sessionEndReason()).toBeNull();
     });
   });
@@ -171,7 +169,7 @@ describe('AuthService', () => {
   describe('logout', () => {
     it('cierra la sesión local y avisa al backend con el refreshToken', () => {
       const service = setup();
-      service.completeLogin(loginResult(), null);
+      service.completeLogin(loginResult());
 
       service.logout();
 
@@ -187,7 +185,7 @@ describe('AuthService', () => {
 
     it('si /auth/logout falla la sesión local sigue cerrada', () => {
       const service = setup();
-      service.completeLogin(loginResult(), null);
+      service.completeLogin(loginResult());
       service.logout();
       httpMock.expectOne('/auth/logout').flush({}, { status: 0, statusText: 'Unknown Error' });
       expect(service.isAuthenticated()).toBe(false);
@@ -204,7 +202,7 @@ describe('AuthService', () => {
   describe('invalidateSession', () => {
     it('cierra la sesión sin llamar a /auth/logout y registra el motivo', () => {
       const service = setup();
-      service.completeLogin(loginResult(), null);
+      service.completeLogin(loginResult());
 
       service.invalidateSession('invalid_token');
 
@@ -260,7 +258,7 @@ describe('AuthService', () => {
     it('rota los tokens con POST /auth/refresh 30 s antes de que expire', () => {
       vi.useFakeTimers();
       const service = setup();
-      service.completeLogin(loginResult({ expiresIn: 60 }), null);
+      service.completeLogin(loginResult({ expiresIn: 60 }));
 
       vi.advanceTimersByTime(29_000);
       httpMock.expectNone('/auth/refresh');
@@ -277,7 +275,7 @@ describe('AuthService', () => {
     it('cierra por inactividad si el refresh responde SESSION_IDLE_TIMEOUT', () => {
       vi.useFakeTimers();
       const service = setup();
-      service.completeLogin(loginResult({ expiresIn: 60 }), null);
+      service.completeLogin(loginResult({ expiresIn: 60 }));
 
       vi.advanceTimersByTime(30_000);
       httpMock
@@ -292,7 +290,7 @@ describe('AuthService', () => {
     it('con cualquier otro rechazo del refresh hace logout', () => {
       vi.useFakeTimers();
       const service = setup();
-      service.completeLogin(loginResult({ expiresIn: 60 }), null);
+      service.completeLogin(loginResult({ expiresIn: 60 }));
 
       vi.advanceTimersByTime(30_000);
       httpMock
@@ -307,7 +305,7 @@ describe('AuthService', () => {
     it('logout cancela el refresco programado', () => {
       vi.useFakeTimers();
       const service = setup();
-      service.completeLogin(loginResult({ expiresIn: 60 }), null);
+      service.completeLogin(loginResult({ expiresIn: 60 }));
       service.logout();
       httpMock.expectOne('/auth/logout').flush({});
 
@@ -319,7 +317,7 @@ describe('AuthService', () => {
   describe('markPasswordChangeRequired', () => {
     it('enciende la bandera de cambio de contraseña y la persiste', () => {
       const service = setup();
-      service.completeLogin(loginResult(), null);
+      service.completeLogin(loginResult());
       service.markPasswordChangeRequired();
       expect(service.currentUser()?.mustChangePasswordHint).toBe(true);
       expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!).user.mustChangePasswordHint).toBe(true);

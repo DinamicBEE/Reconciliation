@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { PermissionKey, RoleId } from '../../user-management/data/user-management.model';
+import { PermissionKey, RoleId } from '../../shared/models/access.model';
 import { AccessControlService } from './access-control.service';
 
 // Restringe una ruta hija de Shell a quien tenga el permiso declarado en

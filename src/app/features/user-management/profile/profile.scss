@@ -6,8 +6,8 @@
 // nacieron en `user-management` (`user-detail`/`user-list`/`user-audit`) y
 // se promovieron a `shared/` al aparecer este segundo feature como
 // consumidor (ver MASTER.md "Estructura de carpetas").
-@use '../../shared/styles/data-table';
-@use '../../shared/styles/info-fields';
+@use '../../../shared/styles/data-table';
+@use '../../../shared/styles/info-fields';
 
 .profile {
   margin: 0 auto;

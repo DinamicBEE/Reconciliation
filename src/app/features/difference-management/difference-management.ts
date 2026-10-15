@@ -18,7 +18,7 @@ import { parseSettlementsCsv } from './data/csv-import.util';
 import { TENDER_MEDIA_LABEL, TenderMedia } from '../../shared/models/reconciliation-item.model';
 import { MoneyPipe } from '../../core/country/money.pipe';
 import { COUNTRY_PROFILE } from '../../core/country/active-country';
-import { AccessControlService } from '../auth/data/access-control.service';
+import { AccessControlService } from '../../core/auth/access-control.service';
 
 const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
 

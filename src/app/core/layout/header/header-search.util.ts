@@ -1,4 +1,4 @@
-import { PermissionKey, RoleId } from '../../../features/user-management/data/user-management.model';
+import { PermissionKey, RoleId } from '../../../shared/models/access.model';
 
 // Registro de pantallas buscables desde el Header — cada una declara el
 // permiso que hace falta para verla (`AccessControlService.hasPermission`,

@@ -7,9 +7,8 @@ import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzMessageService } from 'ng-zorro-antd/message';
-import { AccessControlService } from '../data/access-control.service';
-import { AuthService } from '../data/auth.service';
-import { UserManagementService } from '../../user-management/data/user-management.service';
+import { AccessControlService } from '../../../core/auth/access-control.service';
+import { AuthService } from '../../../core/auth/auth.service';
 
 // Mínimo 8, al menos una letra y un dígito — más estricto que el `minLength(6)`
 // de login.ts a propósito: ahí solo se valida "algo se escribió" para poder
@@ -37,7 +36,6 @@ export class ChangePassword {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly auth = inject(AuthService);
   private readonly access = inject(AccessControlService);
-  private readonly userMgmt = inject(UserManagementService);
   private readonly message = inject(NzMessageService);
   private readonly router = inject(Router);
 
@@ -88,15 +86,10 @@ export class ChangePassword {
       next: () => {
         this.submitting.set(false);
 
-        // AuthService ya actualizó `mustChangePasswordHint` en la sesión
-        // (ver ese método); acá se apaga la bandera EQUIVALENTE del
-        // `AppUser` vinculado en `user-management`, cuando hay uno (ver
-        // comentario en AuthService.changePassword sobre por qué son dos
-        // servicios distintos, no uno).
-        const appUserId = this.auth.currentUser()?.appUserId;
-        if (appUserId) {
-          this.userMgmt.clearMustChangePassword(appUserId);
-        }
+        // AuthService ya apagó `mustChangePasswordHint` en la sesión (fuente
+        // única de la bandera). El registro de `user-management` se pone al
+        // día solo en su siguiente `syncFromBackend` (ADR-0001: esta pantalla
+        // ya no depende de ese feature).
 
         this.message.success('Tu contraseña se actualizó correctamente.');
         this.router.navigateByUrl(this.access.homeRoute());

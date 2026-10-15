@@ -24,11 +24,13 @@ import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
-import { AuthService } from '../../auth/data/auth.service';
-import { AccessCatalogService } from '../../user-management/data/access-catalog.service';
-import { PermissionDef, PermissionKey, fullName } from '../../user-management/data/user-management.model';
-import { UserManagementService } from '../../user-management/data/user-management.service';
-import { toRoleCode } from '../data/role-code.util';
+import { AuthService } from '../../../../core/auth/auth.service';
+import { AccessCatalogService } from '../../../../core/auth/access-catalog.service';
+import { RolesApiService } from '../../data/roles-api.service';
+import { PermissionDef, PermissionKey } from '../../../../shared/models/access.model';
+import { fullName } from '../../data/user-management.model';
+import { UserManagementService } from '../../data/user-management.service';
+import { toRoleCode } from '../../data/role-code.util';
 
 // Mismo límite que el backend (`CreateRoleRequest.name`, @Size(max = 80)).
 const ROLE_NAME_MAX_LENGTH = 80;
@@ -81,6 +83,7 @@ export class RoleCreate {
 
   protected readonly catalog = inject(AccessCatalogService);
   private readonly auth = inject(AuthService);
+  private readonly rolesApi = inject(RolesApiService);
   private readonly users = inject(UserManagementService);
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
@@ -179,7 +182,7 @@ export class RoleCreate {
       return;
     }
     this.loadingRole.set(true);
-    this.auth.getRole(code).subscribe({
+    this.rolesApi.getRole(code).subscribe({
       next: (role) => {
         const permissions = new Set(role.defaultPermissions as PermissionKey[]);
         this.original.set({ name: role.name, permissions });
@@ -239,7 +242,7 @@ export class RoleCreate {
     this.saving.set(true);
     try {
       const role = await firstValueFrom(
-        this.auth.createRole({ name: this.roleName(), permissions: [...this.selected()] }),
+        this.rolesApi.createRole({ name: this.roleName(), permissions: [...this.selected()] }),
       );
       this.message.success(`Rol "${role.name}" creado (${role.code}).`);
       this.catalog.load();
@@ -257,7 +260,7 @@ export class RoleCreate {
     this.saving.set(true);
     try {
       const role = await firstValueFrom(
-        this.auth.updateRole(code, {
+        this.rolesApi.updateRole(code, {
           ...(this.nameChanged() ? { name: this.roleName() } : {}),
           ...(this.permissionsChanged() ? { permissions: [...this.selected()] } : {}),
         }),
@@ -284,7 +287,7 @@ export class RoleCreate {
       nzCancelText: 'Cancelar',
       nzOnOk: async () => {
         try {
-          await firstValueFrom(this.auth.deleteRole(code));
+          await firstValueFrom(this.rolesApi.deleteRole(code));
           this.message.success(`Rol "${original.name}" eliminado.`);
           this.catalog.load();
           void this.router.navigate(['/gestion-de-roles']);

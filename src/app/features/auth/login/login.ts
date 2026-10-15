@@ -7,10 +7,9 @@ import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { ThemeService } from '../../../core/services/theme.service';
-import { AccessControlService } from '../data/access-control.service';
-import { AuthService } from '../data/auth.service';
-import { extractErrorCode, serverErrorText } from '../data/auth-errors';
-import { UserManagementService } from '../../user-management/data/user-management.service';
+import { AccessControlService } from '../../../core/auth/access-control.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { extractErrorCode, serverErrorText } from '../../../core/auth/auth-errors';
 
 // Copys alineados TEXTUAL con el contrato real del backend
 // (Auth_Service_Endpoints.pdf, sección "2. Codigos de error").
@@ -37,7 +36,6 @@ export class Login {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly auth = inject(AuthService);
   private readonly access = inject(AccessControlService);
-  private readonly userMgmt = inject(UserManagementService);
   private readonly router = inject(Router);
   protected readonly theme = inject(ThemeService);
 
@@ -75,13 +73,9 @@ export class Login {
       next: (result) => {
         this.submitting.set(false);
 
-        // Vincula la sesión al registro local de `user-management` cuando el
-        // email coincide con una cuenta de demo (ver
-        // `UserManagementService.findUserByEmail`) — `null` si no hay match,
-        // la sesión queda igual de autenticada, solo sin `AppUser` del que
-        // leer permisos/nombre/foto (ver AuthService.AuthUser.appUserId).
-        const appUserId = this.userMgmt.findUserByEmail(result.email)?.id ?? null;
-        this.auth.completeLogin(result, appUserId);
+        // La sesión se arma solo con lo que devolvió el backend (ADR-0001,
+        // punto 5) — sin vincularla al registro mock de `user-management`.
+        this.auth.completeLogin(result);
 
         // Cambio de contraseña obligatorio pendiente → directo a esa
         // pantalla, ni siquiera pasa por homeRoute() (el propio authGuard

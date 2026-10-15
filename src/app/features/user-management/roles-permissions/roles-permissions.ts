@@ -10,11 +10,12 @@ import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
-import { AuthService } from '../auth/data/auth.service';
-import { avatarTokensFor, initialsFor } from '../../shared/utils/avatar-color.util';
-import { AccessCatalogService } from '../user-management/data/access-catalog.service';
-import { AppUser, RoleId, fullName } from '../user-management/data/user-management.model';
-import { UserManagementService } from '../user-management/data/user-management.service';
+import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
+import { AccessCatalogService } from '../../../core/auth/access-catalog.service';
+import { RolesApiService } from '../data/roles-api.service';
+import { RoleId } from '../../../shared/models/access.model';
+import { AppUser, fullName } from '../data/user-management.model';
+import { UserManagementService } from '../data/user-management.service';
 
 // Una fila de la tabla: el rol, sus permisos (descripción de `GET /permissions`)
 // y las personas que lo tienen asignado.
@@ -45,7 +46,7 @@ export class RolesPermissions {
   protected readonly catalog = inject(AccessCatalogService);
   private readonly users = inject(UserManagementService);
 
-  private readonly auth = inject(AuthService);
+  private readonly rolesApi = inject(RolesApiService);
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
   private readonly router = inject(Router);
@@ -86,7 +87,7 @@ export class RolesPermissions {
       nzOnOk: async () => {
         this.deleting.set(role.id);
         try {
-          await firstValueFrom(this.auth.deleteRole(role.id));
+          await firstValueFrom(this.rolesApi.deleteRole(role.id));
           this.message.success(`Rol "${role.label}" eliminado.`);
           this.catalog.load();
         } catch {

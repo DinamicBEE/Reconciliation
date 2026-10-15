@@ -15,8 +15,8 @@ import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AppUser, RoleId, STATUS_META, STATUS_OPTIONS, UserStatus, fullName } from '../data/user-management.model';
-import { AccessCatalogService } from '../data/access-catalog.service';
-import { AccessControlService } from '../../auth/data/access-control.service';
+import { AccessCatalogService } from '../../../core/auth/access-catalog.service';
+import { AccessControlService } from '../../../core/auth/access-control.service';
 import { RoleFilter, StatusFilter, UserManagementService } from '../data/user-management.service';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
@@ -196,7 +196,7 @@ export class UserList {
   // Nadie puede darse de baja a sí mismo (409 CANNOT_DELETE_SELF) — se deshabilita
   // el botón de la propia cuenta.
   protected isSelf(user: AppUser): boolean {
-    return this.access.currentAppUser()?.id === user.id;
+    return this.service.currentAppUser()?.id === user.id;
   }
 
   // `DELETE /users/{id}` real: baja LÓGICA — la cuenta deja de poder entrar y sale

@@ -35,7 +35,7 @@ type MockUserSeed = Omit<
 // (uno por rol) listados en login.html ("Cuentas de demo") — para que el
 // módulo de administración se sienta parte de la misma app y no un dataset
 // desconectado. Su `email` es además el puente hacia la sesión real (ver
-// `UserManagementService.findUserByEmail`, `AuthService.AuthUser.appUserId`):
+// `UserManagementService.findUserByEmail`/`currentAppUser`):
 // solo se resuelven permisos/nombre/foto para cuentas cuyo email coincide
 // con lo sembrado en coctel-del-mar. El resto son personas ficticias para dar variedad realista
 // de roles/estado/último acceso (incluyendo "nunca ha iniciado sesión") y de
@@ -613,7 +613,7 @@ function extraProfileFields(
 // el backend real. Un usuario creado DESPUÉS de este seed (vía
 // `UserManagementService.createUser`, que ahora llama a `POST /users`) no
 // pasa por aquí — su `backendUserId` llega directo en la respuesta del
-// alta, ver `AuthService.createUser`.
+// alta, ver `UsersApiService.createUser`.
 const BACKEND_USER_ID: Partial<Record<string, number>> = {
   u0001: 2, // admin@conciliacion.mx
   u0002: 7, // analista@conciliacion.mx
@@ -655,7 +655,7 @@ export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   mustChangePassword: seed.id === 'u0018',
   // Valor mock de partida; para cualquier cuenta con `backendUserId`,
   // `user-detail` la sobreescribe con lo que devuelva `GET /users/{id}` en
-  // caliente (ver `UserDetail`, efecto que llama `AuthService.getUserDetail`).
+  // caliente (ver `UserDetail`, efecto que llama `UsersApiService.getUserDetail`).
   temporaryPassword: null,
   // Organización (subsidiarias, ubicaciones, cargos, puestos, departamentos y
   // áreas): SIN valores mock — son ids de los catálogos del Core Service

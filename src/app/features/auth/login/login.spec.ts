@@ -4,10 +4,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { Subject, of } from 'rxjs';
 import { ThemeService } from '../../../core/services/theme.service';
-import { UserManagementService } from '../../user-management/data/user-management.service';
-import { AccessControlService } from '../data/access-control.service';
-import { SessionEndReason } from '../data/auth-errors';
-import { AuthService, LoginResult } from '../data/auth.service';
+import { AccessControlService } from '../../../core/auth/access-control.service';
+import { SessionEndReason } from '../../../core/auth/auth-errors';
+import { AuthService, LoginResult } from '../../../core/auth/auth.service';
 import { Login } from './login';
 
 const RESULT: LoginResult = {
@@ -30,7 +29,6 @@ describe('Login', () => {
   const mustChangePassword = signal(false);
   let auth: { login: ReturnType<typeof vi.fn>; completeLogin: ReturnType<typeof vi.fn>; sessionEndReason: typeof sessionEndReason };
   let access: { mustChangePassword: typeof mustChangePassword; homeRoute: ReturnType<typeof vi.fn> };
-  let userMgmt: { findUserByEmail: ReturnType<typeof vi.fn> };
   let router: { navigateByUrl: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
@@ -38,7 +36,6 @@ describe('Login', () => {
     mustChangePassword.set(false);
     auth = { login: vi.fn(), completeLogin: vi.fn(), sessionEndReason };
     access = { mustChangePassword, homeRoute: vi.fn(() => '/dashboard') };
-    userMgmt = { findUserByEmail: vi.fn(() => null) };
     router = { navigateByUrl: vi.fn(() => Promise.resolve(true)) };
 
     await TestBed.configureTestingModule({
@@ -46,7 +43,6 @@ describe('Login', () => {
       providers: [
         { provide: AuthService, useValue: auth },
         { provide: AccessControlService, useValue: access },
-        { provide: UserManagementService, useValue: userMgmt },
         { provide: Router, useValue: router },
         { provide: ThemeService, useValue: { mode: signal('light'), toggle: vi.fn() } },
       ],
@@ -134,23 +130,14 @@ describe('Login', () => {
   describe('envío correcto', () => {
     it('llama a login con las credenciales, completa la sesión y navega a homeRoute', async () => {
       auth.login.mockReturnValue(of(RESULT));
-      userMgmt.findUserByEmail.mockReturnValue({ id: 'u0001' });
       access.homeRoute.mockReturnValue('/usuarios');
       await fillValid();
 
       await submit();
 
       expect(auth.login).toHaveBeenCalledWith('admin@conciliacion.mx', 'Conciliacion2026');
-      expect(userMgmt.findUserByEmail).toHaveBeenCalledWith('admin@conciliacion.mx');
-      expect(auth.completeLogin).toHaveBeenCalledWith(RESULT, 'u0001');
+      expect(auth.completeLogin).toHaveBeenCalledWith(RESULT);
       expect(router.navigateByUrl).toHaveBeenCalledWith('/usuarios');
-    });
-
-    it('sin cuenta local vinculada completa la sesión con appUserId null', async () => {
-      auth.login.mockReturnValue(of(RESULT));
-      await fillValid();
-      await submit();
-      expect(auth.completeLogin).toHaveBeenCalledWith(RESULT, null);
     });
 
     it('con cambio de contraseña pendiente navega a /cambiar-password', async () => {

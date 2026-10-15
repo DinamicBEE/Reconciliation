@@ -32,15 +32,15 @@ import {
 } from '../data/user-management.model';
 import { AuditLogService } from '../data/audit-log.service';
 import { UserManagementService, backendStatusToLocal, organizationIdsFromDetail } from '../data/user-management.service';
-import { AccessCatalogService } from '../data/access-catalog.service';
-import { AccessControlService } from '../../auth/data/access-control.service';
+import { AccessCatalogService } from '../../../core/auth/access-catalog.service';
+import { AccessControlService } from '../../../core/auth/access-control.service';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
 import { parseIsoDate, toIsoDate, toIsoDateOrNull } from '../../../shared/utils/iso-date.util';
 import { OrganizationCatalogKind, OrganizationCatalogService } from '../../../core/services/organization-catalog.service';
 import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
 import { COUNTRY_PROFILE } from '../../../core/country/active-country';
-import { AuthService, UserDetailDto } from '../../auth/data/auth.service';
+import { UserDetailDto, UsersApiService } from '../data/users-api.service';
 import { HttpErrorResponse } from '@angular/common/http';
 
 @Component({
@@ -82,7 +82,7 @@ export class UserDetail {
   // opciones de subsidiarias, ubicaciones, cargos, puestos, departamentos y áreas
   // al crear y al editar "Organización".
   protected readonly catalog = inject(OrganizationCatalogService);
-  private readonly auth = inject(AuthService);
+  private readonly usersApi = inject(UsersApiService);
   // Vocabulario del país activo: identificación personal, dirección, teléfono.
   protected readonly country = inject(COUNTRY_PROFILE);
   private readonly fb = inject(NonNullableFormBuilder);
@@ -402,7 +402,7 @@ export class UserDetail {
       this.auditTotal.set(0);
       const backendUserId = id ? untracked(() => this.service.findUser(id)?.backendUserId ?? null) : null;
       if (backendUserId === null) return;
-      const sub = this.auth.getUserDetail(backendUserId).subscribe({
+      const sub = this.usersApi.getUserDetail(backendUserId).subscribe({
         next: (detail) => this.backendDetail.set(detail),
         error: () => this.backendDetail.set(null),
       });
@@ -693,7 +693,7 @@ export class UserDetail {
   // falla, `user()` simplemente se queda con el detalle anterior (mismo
   // criterio que el effect del constructor).
   private refreshBackendDetail(backendUserId: number): void {
-    this.auth.getUserDetail(backendUserId).subscribe({
+    this.usersApi.getUserDetail(backendUserId).subscribe({
       next: (detail) => this.backendDetail.set(detail),
       error: () => {},
     });
@@ -768,7 +768,7 @@ export class UserDetail {
   }
 
   // Nadie puede darse de baja a sí mismo (409 CANNOT_DELETE_SELF).
-  protected readonly isSelf = computed(() => !!this.userId() && this.access.currentAppUser()?.id === this.userId());
+  protected readonly isSelf = computed(() => !!this.userId() && this.service.currentAppUser()?.id === this.userId());
 
   // `DELETE /users/{id}` real: baja LÓGICA — la cuenta deja de poder entrar y sale
   // de la lista, pero su historial se conserva (sigue consultable) y su correo
@@ -800,7 +800,7 @@ export class UserDetail {
   }
 
   // CU3 paso 5: desbloquea la cuenta REAL en el backend (`PATCH
-  // /users/{id}/unlock`, ver AuthService.unlockUser) — solo visible cuando
+  // /users/{id}/unlock`, ver UsersApiService.unlockUser) — solo visible cuando
   // `user.backendUserId` no es null (una de las 4 cuentas demo sembradas
   // ahí, ver BACKEND_USER_ID en user-management-mock.data.ts). Sin
   // relación con el botón "Cambiar estado" de arriba: ESE mueve el

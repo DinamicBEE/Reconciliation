@@ -26,14 +26,15 @@
 
 ```
 src/app/
-├── core/              # singletons, se instancian una sola vez
+├── core/              # singletons, se instancian una sola vez — NUNCA depende de features/
+│   ├── auth/            # sesión (AuthService), AccessControlService, AccessCatalogService, auth-errors, guards
 │   ├── layout/shell/    # Grid de <app-menu> + <app-header> + <router-outlet>
 │   ├── layout/menu/     # nav lateral colapsable (iconos + etiquetas)
 │   ├── layout/header/   # toggle de tema, selector de paleta, card de usuario logeado
 │   └── services/        # ThemeService, PaletteService, MenuService, color-utils
 ├── shared/            # reutilizable entre features — NUNCA depende de features/
 │   ├── components/      # match-status-tag, sale-status-tag, sparkline, radial-progress
-│   ├── models/           # tipos de dominio compartidos (TransactionMatch, Sale, etc.)
+│   ├── models/           # tipos de dominio compartidos (TransactionMatch, Sale, RoleId/PermissionKey, etc.)
 │   ├── mock-data/        # datasets mock usados por 2+ features (ver abajo)
 │   ├── utils/            # funciones puras usadas por 2+ features (cross-match.util.ts)
 │   └── styles/           # partials SCSS (@use) — ver "Patrón de layout" abajo
@@ -59,6 +60,22 @@ Una función de derivación pura y testeable (sin estado, sin DI) que un
 específica de ESE feature (`data/<algo>.util.ts`), o en `shared/utils/` si un
 segundo feature la necesita (así terminó `cross-match.util.ts`). Nunca inline
 en el service ni en el componente.
+
+**Actualización (ADR-0001, 2026-10-15):** la sesión y el control de acceso se
+movieron de `features/auth/data/` a `core/auth/` (`auth.service.ts`,
+`access-control.service.ts`, `access-catalog.service.ts`, `auth-errors.ts`,
+`*.guard.ts`); `features/auth/` conserva solo las pantallas de login y cambio de
+contraseña. `AuthService` ya no es cliente de `/users`, `/roles` ni
+`/audit-log`: esos viven en `UsersApiService`/`AuditLogService`
+(`user-management/data`) y `RolesApiService` (`user-management/data`).
+Las pantallas de Perfil y Roles y permisos se integraron al feature
+`user-management` (`profile/`, `roles-permissions/`) porque dependen de su
+estado; las rutas no cambian.
+`AuthUser.appUserId` desapareció: el `AppUser` de la sesión lo resuelve
+`UserManagementService.currentAppUser` por email, y el header muestra solo datos
+de `AuthUser`. Las menciones a `features/auth/data/*`, `appUserId` y
+`AccessControlService.currentAppUser` en secciones posteriores son históricas.
+Detalle en `docs/architecture/decisions/0001-organizacion-por-feature-y-limites.md`.
 
 ## Tokens de color
 
@@ -3086,7 +3103,7 @@ Backend `coctel_midd` DEV (rama `feature/catalogs`, Guia_Integracion_Frontend §
    (`/gestion-de-roles/nuevo`, `POST`) y la edición (`/gestion-de-roles/:code`, precarga con `GET`, guarda con
    `PATCH` solo lo que cambió, confirmación con permisos agregados/quitados y a cuántas personas afecta).
    - El nombre se valida contra los roles existentes por nombre y por **código derivado**
-     (`roles-permissions/data/role-code.util.ts`, réplica de `toCode` del back); máximo 80 caracteres. La
+     (`user-management/data/role-code.util.ts`, réplica de `toCode` del back); máximo 80 caracteres. La
      pantalla muestra el código que tendrá el rol.
    - Tras editar permisos: recarga del catálogo, `syncFromBackend()` y `renewSession()` si la sesión propia
      tiene el rol (el back propaga el cambio a sus personas).
@@ -3145,7 +3162,7 @@ flecha del page-header. `/login` y `/cambiar-password` (fuera del shell) quedan 
 
 ## Patrón: creación de roles (`/gestion-de-roles/nuevo`) + `nz-collapse` estándar
 
-`features/roles-permissions/role-create/` ("Nuevo rol", pantalla hija de
+`features/user-management/roles-permissions/role-create/` ("Nuevo rol", pantalla hija de
 "Roles y permisos" — flecha de volver + breadcrumb). Misma protección que su
 padre (`manage_roles` + rol ADMIN, ver la sección siguiente); el botón "Nuevo
 rol" vive en el encabezado de "Roles y permisos" (ya no en `user-list`).
@@ -3185,7 +3202,7 @@ rol" vive en el encabezado de "Roles y permisos" (ya no en `user-list`).
 
 ## Patrón: "Roles y permisos" (`/gestion-de-roles`) — pantalla exclusiva de un rol
 
-`features/roles-permissions/` — entrada propia en el menú lateral (escudo con
+`features/user-management/roles-permissions/` — entrada propia en el menú lateral (escudo con
 check, después de "Usuarios") y en el buscador del Header.
 
 1. **Solo ADMIN, no solo un permiso.** `manage_roles` también lo tiene ALTAS,
@@ -3218,7 +3235,7 @@ check, después de "Usuarios") y en el buscador del Header.
 ## Regla general: tablas (referencia: "Roles y permisos")
 
 Toda tabla nueva sigue estas características — se derivan de la tabla de
-`features/roles-permissions/` y complementan "Patrón: card de tabla". Las clases
+`features/user-management/roles-permissions/` y complementan "Patrón: card de tabla". Las clases
 de celda viven en `shared/styles/_data-table.scss` y el chip en
 `shared/styles/_chip.scss` (`@use` de ambos en el `.scss` de la pantalla).
 

@@ -1,16 +1,15 @@
 import { Injectable, computed, inject } from '@angular/core';
-import { AppUser, PermissionKey, RoleId } from '../../user-management/data/user-management.model';
-import { UserManagementService } from '../../user-management/data/user-management.service';
+import { PermissionKey, RoleId } from '../../shared/models/access.model';
 import { AuthService } from './auth.service';
 
 /**
  * Resuelve QUÉ puede ver/hacer el usuario logeado — separado de `AuthService`
  * a propósito: `AuthService` es (y debe seguir siendo) "tonto", solo sabe
- * quién inició sesión (`AuthUser`). `UserManagementService` ya depende de
- * `AuthService` (para `actorName` en auditoría) — si `AuthService`
- * importara este servicio de vuelta para resolver permisos, sería una
- * dependencia circular. Este servicio vive "por encima" de ambos: lee la
- * sesión de uno y el registro completo del otro.
+ * quién inició sesión (`AuthUser`). Todo se resuelve con datos del backend
+ * (`AuthUser`): este servicio ya NO depende de `UserManagementService` ni del
+ * registro mock de `user-management`, lo que rompe el ciclo
+ * auth ↔ user-management (ADR-0001, punto 5). El `AppUser` de la sesión, para
+ * quien lo necesite, lo expone `UserManagementService.currentAppUser`.
  *
  * `permissions` viene de `AuthUser.permissions` (`UserSummaryDto.permissions`
  * tal cual lo devolvió el backend real en el login/`GET /auth/me`) — FUENTE
@@ -25,13 +24,6 @@ import { AuthService } from './auth.service';
 @Injectable({ providedIn: 'root' })
 export class AccessControlService {
   private readonly auth = inject(AuthService);
-  private readonly userMgmt = inject(UserManagementService);
-
-  readonly currentAppUser = computed<AppUser | null>(() => {
-    const id = this.auth.currentUser()?.appUserId;
-    return id ? this.userMgmt.findUser(id) : null;
-  });
-
   readonly permissions = computed<ReadonlySet<PermissionKey>>(() => {
     const user = this.auth.currentUser();
     return new Set<PermissionKey>(user?.permissions ?? []);
@@ -56,17 +48,10 @@ export class AccessControlService {
   // en sentido contrario) — ver MASTER.md, "Patrón: refresh token de un
   // solo uso + cambio obligatorio de contraseña".
   //
-  // Dos fuentes, no una: `currentAppUser()?.mustChangePassword` (el registro
-  // mock de `user-management`, para las cuentas de demo con `appUserId`
-  // vinculado) OR `auth.currentUser()?.mustChangePasswordHint` (lo que
-  // devolvió el login REAL contra el auth-service, ver `AuthService`) — una
-  // cuenta autenticada por el backend real pero SIN match en el mock (no
-  // existe todavía un backend de administración de usuarios que comparta el
-  // mismo registro) solo tiene la segunda fuente, y aun así debe respetar
-  // el flag.
-  readonly mustChangePassword = computed(
-    () => (this.currentAppUser()?.mustChangePassword ?? false) || (this.auth.currentUser()?.mustChangePasswordHint ?? false),
-  );
+  // Fuente única: `auth.currentUser()?.mustChangePasswordHint` (lo que
+  // devolvió el backend en el login, `GET /auth/me` o un 403
+  // `PASSWORD_CHANGE_REQUIRED`).
+  readonly mustChangePassword = computed(() => this.auth.currentUser()?.mustChangePasswordHint ?? false);
 
   hasPermission(key: PermissionKey): boolean {
     return this.permissions().has(key);

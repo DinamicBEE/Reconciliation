@@ -17,7 +17,7 @@ import { ReconciliationStatusTag } from '../../shared/components/reconciliation-
 import { ReconciliationStatus } from '../../shared/models/reconciliation-item.model';
 import { COUNTRY_PROFILE } from '../../core/country/active-country';
 import { CatalogService } from '../../core/services/catalog.service';
-import { AccessControlService } from '../auth/data/access-control.service';
+import { AccessControlService } from '../../core/auth/access-control.service';
 import {
   DateRangeFilter,
   SALES_PAGE_SIZE_OPTIONS,

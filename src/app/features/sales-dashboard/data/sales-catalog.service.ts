@@ -2,8 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { finalize } from 'rxjs';
 import { environment } from '../../../../environments/environment';
-import { AccessControlService } from '../../auth/data/access-control.service';
-import { AuthService } from '../../auth/data/auth.service';
+import { AccessControlService } from '../../../core/auth/access-control.service';
+import { AuthService } from '../../../core/auth/auth.service';
 
 // `GET /sales/catalogs/tender-media` — medios de pago por código del POS.
 // `pendingReview = true`: el código llegó en una venta sin estar sembrado y el

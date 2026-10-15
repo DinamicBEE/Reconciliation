@@ -1,8 +1,8 @@
 import { Routes } from '@angular/router';
 import { Shell } from './core/layout/shell/shell';
-import { authGuard } from './features/auth/data/auth.guard';
-import { mustChangePasswordGuard } from './features/auth/data/must-change-password.guard';
-import { permissionGuard } from './features/auth/data/permission.guard';
+import { authGuard } from './core/auth/auth.guard';
+import { mustChangePasswordGuard } from './core/auth/must-change-password.guard';
+import { permissionGuard } from './core/auth/permission.guard';
 
 export const routes: Routes = [
   {
@@ -61,7 +61,7 @@ export const routes: Routes = [
         // Sin `data.permission` — el propio perfil es visible para
         // cualquier usuario autenticado, sin importar su rol.
         path: 'perfil',
-        loadComponent: () => import('./features/profile/profile').then((m) => m.Profile),
+        loadComponent: () => import('./features/user-management/profile/profile').then((m) => m.Profile),
       },
       {
         // "Roles y permisos": exclusiva del rol ADMIN (`data.role`) — además de
@@ -70,13 +70,13 @@ export const routes: Routes = [
         path: 'gestion-de-roles',
         canActivate: [permissionGuard],
         data: { permission: 'manage_roles', role: 'ADMIN' },
-        loadComponent: () => import('./features/roles-permissions/roles-permissions').then((m) => m.RolesPermissions),
+        loadComponent: () => import('./features/user-management/roles-permissions/roles-permissions').then((m) => m.RolesPermissions),
       },
       {
         path: 'gestion-de-roles/nuevo',
         canActivate: [permissionGuard],
         data: { permission: 'manage_roles', role: 'ADMIN' },
-        loadComponent: () => import('./features/roles-permissions/role-create/role-create').then((m) => m.RoleCreate),
+        loadComponent: () => import('./features/user-management/roles-permissions/role-create/role-create').then((m) => m.RoleCreate),
       },
       {
         // Edición de un rol (`GET`/`PATCH`/`DELETE /roles/{code}`) — mismo
@@ -84,7 +84,7 @@ export const routes: Routes = [
         path: 'gestion-de-roles/:code',
         canActivate: [permissionGuard],
         data: { permission: 'manage_roles', role: 'ADMIN' },
-        loadComponent: () => import('./features/roles-permissions/role-create/role-create').then((m) => m.RoleCreate),
+        loadComponent: () => import('./features/user-management/roles-permissions/role-create/role-create').then((m) => m.RoleCreate),
       },
       {
         path: 'usuarios',

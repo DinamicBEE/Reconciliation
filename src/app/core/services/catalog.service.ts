@@ -1,5 +1,5 @@
 import { Injectable, computed, inject } from '@angular/core';
-import { AuthService } from '../../features/auth/data/auth.service';
+import { AuthService } from '../auth/auth.service';
 import { CatalogEntry } from '../../shared/models/catalog-entry.model';
 
 /**

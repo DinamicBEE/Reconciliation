@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, WritableSignal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Observable, catchError, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { AuthService } from '../../features/auth/data/auth.service';
+import { AuthService } from '../auth/auth.service';
 import { CatalogEntry } from '../../shared/models/catalog-entry.model';
 
 // Opción de `GET /catalogs/ubicaciones`: además del nombre trae la subsidiaria a

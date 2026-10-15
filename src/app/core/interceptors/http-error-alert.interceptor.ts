@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { catchError, throwError } from 'rxjs';
 import { Router } from '@angular/router';
-import { AuthService } from '../../features/auth/data/auth.service';
+import { AuthService } from '../auth/auth.service';
 import {
   FORBIDDEN_WITHOUT_CODE_MESSAGE,
   PASSWORD_CHANGE_REQUIRED_CODE,
@@ -11,7 +11,7 @@ import {
   SERVER_ERROR_MESSAGE,
   backendErrorMessage,
   extractErrorCode,
-} from '../../features/auth/data/auth-errors';
+} from '../auth/auth-errors';
 
 // Códigos que YA tienen su propia UI dedicada en el punto donde ocurren —
 // mostrar TAMBIÉN un toast genérico aquí sería un segundo aviso del MISMO

@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { MenuService } from '../../services/menu.service';
-import { AccessControlService } from '../../../features/auth/data/access-control.service';
-import { AuthService } from '../../../features/auth/data/auth.service';
+import { AccessControlService } from '../../auth/access-control.service';
+import { AuthService } from '../../auth/auth.service';
 
 /**
  * Menú lateral del layout principal — navegación entre los módulos de nivel

@@ -28,7 +28,7 @@ import {
   summarizeBankImport,
 } from './data/bank-import.util';
 import { MoneyPipe } from '../../core/country/money.pipe';
-import { AccessControlService } from '../auth/data/access-control.service';
+import { AccessControlService } from '../../core/auth/access-control.service';
 
 // Tiempo simulado de la llamada al backend (ver `onImportFileSelected`) —
 // deliberadamente perceptible para que el spinner/estado "Conectando con el
