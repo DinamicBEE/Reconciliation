@@ -8,7 +8,8 @@
     "build": "ng build",
     "build:co": "ng build --configuration production,co",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "test:ci": "ng test --watch=false"
   },
   "private": true,
   "packageManager": "pnpm@11.1.2",

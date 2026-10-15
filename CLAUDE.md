@@ -60,3 +60,10 @@ Toda tabla nueva va en `<nz-card class="table-card" [nzBodyStyle]="{ padding: '2
 `nzSize="middle"`, celda principal título + subtítulo, listas en columna (dos columnas si
 crecen), indicadores en su propia celda centrada como `.chip` de solo lectura. Detalle en
 `design-system/conciliation/MASTER.md`, "Regla general: tablas".
+
+## Agentes de pruebas
+
+- Usa `angular-unit-tests` para configurar Vitest o trabajar en pruebas unitarias de Angular.
+- Usa `angular-e2e` para configurar Playwright o trabajar en flujos E2E.
+- Antes de delegar, indica cuál es la aplicación o funcionalidad objetivo.
+- Sigue las reglas generales del repositorio y conserva las herramientas de pruebas existentes, salvo que se pida migrarlas.
