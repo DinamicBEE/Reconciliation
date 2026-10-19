@@ -294,13 +294,16 @@ async function main() {
   r = await call('PATCH', `/users/${userId}/roles`, { token: T, body: { permissions: ['view_dashboard', 'view_catalogs'] } });
   check('solo permisos (sin roleIds) → 200, el rol no cambia', r.status === 200 && j(r.body?.roles) === '["TESORERIA"]' && r.body.permissions.length === 2 && r.body.permissions.includes('view_catalogs'), `${r.status} ${j(r.body)}`);
   r = await call('PATCH', `/users/${userId}/roles`, { token: T, body: { roleIds: ['CONTABILIDAD', 'COSTOS'] } });
-  check('solo roles (sin permissions) → 200 con varios roles y permisos intactos', r.status === 200 && r.body?.roles?.length === 2 && r.body.permissions.length === 2, `${r.status} ${j(r.body)}`);
+  // Desde DEV 5060a9d asignar un rol SUMA sus permisos por defecto a los actuales (nunca quita):
+  // {view_dashboard, view_catalogs} ∪ CONTABILIDAD ∪ COSTOS (export_reports en la siembra local).
+  const mergedPermissions = ['view_dashboard', 'view_catalogs', 'export_reports'];
+  check('solo roles (sin permissions) → 200 con varios roles; suma los permisos de los roles nuevos', r.status === 200 && r.body?.roles?.length === 2 && ['view_dashboard', 'view_catalogs'].every((p) => r.body.permissions.includes(p)) && r.body.permissions.length === mergedPermissions.length, `${r.status} ${j(r.body)}`);
   r = await call('PATCH', `/users/${userId}/roles`, { token: T, body: { roleIds: ['NO_EXISTE'] } });
   check('rol inexistente → 400 INVALID_ROLE', r.status === 400 && code(r) === 'INVALID_ROLE', `${r.status} ${j(r.body)}`);
   r = await call('PATCH', `/users/${userId}/roles`, { token: T, body: { permissions: ['no_existe'] } });
   check('permiso inexistente → 400 INVALID_PERMISSION', r.status === 400 && code(r) === 'INVALID_PERMISSION', `${r.status} ${j(r.body)}`);
   r = await call('GET', `/users/${userId}`, { token: T });
-  check('un rechazo no guarda nada (siguen 2 roles y 2 permisos)', r.body?.roles?.length === 2 && r.body.permissions.length === 2);
+  check('un rechazo no guarda nada (siguen 2 roles y los mismos permisos)', r.body?.roles?.length === 2 && r.body.permissions.length === mergedPermissions.length);
   r = await call('PATCH', '/users/999999/roles', { token: T, body: { permissions: [] } });
   check('usuario inexistente → 404 USER_NOT_FOUND', r.status === 404 && code(r) === 'USER_NOT_FOUND', `${r.status} ${j(r.body)}`);
   r = await call('PATCH', `/users/${userId}/roles`, { token: T, body: { permissions: [] } });

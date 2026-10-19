@@ -1,5 +1,5 @@
 -- Siembra de la DB local de desarrollo con las 26 cuentas demo del portal (ids 2-27), los 5 roles de la
--- matriz 7.16, el catálogo de subsidiarias/ubicaciones y los catálogos organizacionales (cargo, puesto,
+-- matriz 7.16, su asignación a las subsidiarias/tiendas que siembra la V1 y los catálogos organizacionales (cargo, puesto,
 -- departamento, área) con su asignación por empleado. Es idempotente.
 -- Se aplica DESPUÉS de levantar la pila de DEV (db-migration ya creó el esquema; el auth-service ya
 -- creó el administrador id 1). NO es una migración del backend: vive en este repo (dev-env/).
@@ -11,12 +11,9 @@
 -- ignora esas llaves (las columnas ya no existen); esos valores ahora viven en los catálogos de abajo.
 BEGIN;
 
--- Catálogos de organización
-INSERT INTO subsidiaria SELECT * FROM json_populate_recordset(null::subsidiaria, $seed$[{"id":1,"brand_id_api":1,"nombre":"Conciliación Bancaria","razon_social":"Conciliación Bancaria SA de CV","nit":"RFC-CB010101AAA","created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.36334+00:00","modified_at":"2026-09-30T18:14:37.36334+00:00","enabled":true}]$seed$::json) ON CONFLICT (id) DO NOTHING;
-INSERT INTO ubicacion SELECT * FROM json_populate_recordset(null::ubicacion, $seed$[{"id":1,"subsidiaria_id":1,"store_id_api":1,"nombre":"Sucursal Polanco","prefijo_fiscal":"POLE","created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.369057+00:00","modified_at":"2026-09-30T18:14:37.369057+00:00","enabled":true}, 
- {"id":2,"subsidiaria_id":1,"store_id_api":2,"nombre":"Sucursal Condesa","prefijo_fiscal":"CONE","created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.369057+00:00","modified_at":"2026-09-30T18:14:37.369057+00:00","enabled":true}, 
- {"id":3,"subsidiaria_id":1,"store_id_api":3,"nombre":"Sucursal Roma","prefijo_fiscal":"ROME","created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.369057+00:00","modified_at":"2026-09-30T18:14:37.369057+00:00","enabled":true}, 
- {"id":4,"subsidiaria_id":1,"store_id_api":4,"nombre":"Sucursal Centro","prefijo_fiscal":"CENE","created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.369057+00:00","modified_at":"2026-09-30T18:14:37.369057+00:00","enabled":true}]$seed$::json) ON CONFLICT (id) DO NOTHING;
+-- Subsidiarias y ubicaciones: las siembra la migración V1 de DEV (desde 541c538): 2 subsidiarias
+-- (1 "Coctel del Mar", 2 "Hipermar Fish") y 16 tiendas reales de Facturiza. Ya no se insertan aquí;
+-- las cuentas demo se asignan a esas tiendas (ver empleado_ubicacion).
 
 -- Permisos que el front usa y DEV no siembra
 INSERT INTO app_permission (code, description, module)
@@ -142,47 +139,47 @@ INSERT INTO empleado_subsidiaria SELECT * FROM json_populate_recordset(null::emp
  {"empleado_id":25,"subsidiaria_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.194212+00:00","modified_at":"2026-09-30T18:48:47.194212+00:00","enabled":true}, 
  {"empleado_id":26,"subsidiaria_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.21779+00:00","modified_at":"2026-09-30T18:48:47.21779+00:00","enabled":true}, 
  {"empleado_id":27,"subsidiaria_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.239971+00:00","modified_at":"2026-09-30T18:48:47.239971+00:00","enabled":true}]$seed$::json) ON CONFLICT DO NOTHING;
-INSERT INTO empleado_ubicacion SELECT * FROM json_populate_recordset(null::empleado_ubicacion, $seed$[{"empleado_id":2,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":2,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":2,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":2,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":3,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":3,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":3,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":3,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":4,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":4,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":4,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":4,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":5,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":5,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":5,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":5,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":6,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":6,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":6,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":6,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
- {"empleado_id":7,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.795643+00:00","modified_at":"2026-09-30T18:48:46.795643+00:00","enabled":true}, 
- {"empleado_id":8,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.819522+00:00","modified_at":"2026-09-30T18:48:46.819522+00:00","enabled":true}, 
- {"empleado_id":9,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.842204+00:00","modified_at":"2026-09-30T18:48:46.842204+00:00","enabled":true}, 
- {"empleado_id":10,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.868241+00:00","modified_at":"2026-09-30T18:48:46.868241+00:00","enabled":true}, 
- {"empleado_id":11,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.893679+00:00","modified_at":"2026-09-30T18:48:46.893679+00:00","enabled":true}, 
- {"empleado_id":12,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.9218+00:00","modified_at":"2026-09-30T18:48:46.9218+00:00","enabled":true}, 
- {"empleado_id":13,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.942931+00:00","modified_at":"2026-09-30T18:48:46.942931+00:00","enabled":true}, 
- {"empleado_id":14,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.963177+00:00","modified_at":"2026-09-30T18:48:46.963177+00:00","enabled":true}, 
- {"empleado_id":15,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.987899+00:00","modified_at":"2026-09-30T18:48:46.987899+00:00","enabled":true}, 
- {"empleado_id":16,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.009334+00:00","modified_at":"2026-09-30T18:48:47.009334+00:00","enabled":true}, 
- {"empleado_id":17,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.031947+00:00","modified_at":"2026-09-30T18:48:47.031947+00:00","enabled":true}, 
- {"empleado_id":18,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.053318+00:00","modified_at":"2026-09-30T18:48:47.053318+00:00","enabled":true}, 
- {"empleado_id":19,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.077154+00:00","modified_at":"2026-09-30T18:48:47.077154+00:00","enabled":true}, 
- {"empleado_id":20,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.096866+00:00","modified_at":"2026-09-30T18:48:47.096866+00:00","enabled":true}, 
- {"empleado_id":21,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.116703+00:00","modified_at":"2026-09-30T18:48:47.116703+00:00","enabled":true}, 
- {"empleado_id":22,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.136022+00:00","modified_at":"2026-09-30T18:48:47.136022+00:00","enabled":true}, 
- {"empleado_id":23,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.155196+00:00","modified_at":"2026-09-30T18:48:47.155196+00:00","enabled":true}, 
- {"empleado_id":24,"ubicacion_id":2,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.17646+00:00","modified_at":"2026-09-30T18:48:47.17646+00:00","enabled":true}, 
- {"empleado_id":25,"ubicacion_id":3,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.203937+00:00","modified_at":"2026-09-30T18:48:47.203937+00:00","enabled":true}, 
- {"empleado_id":26,"ubicacion_id":4,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.224714+00:00","modified_at":"2026-09-30T18:48:47.224714+00:00","enabled":true}, 
- {"empleado_id":27,"ubicacion_id":1,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.249588+00:00","modified_at":"2026-09-30T18:48:47.249588+00:00","enabled":true}]$seed$::json) ON CONFLICT DO NOTHING;
+INSERT INTO empleado_ubicacion SELECT * FROM json_populate_recordset(null::empleado_ubicacion, $seed$[{"empleado_id":2,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":2,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":2,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":2,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":3,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":3,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":3,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":3,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":4,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":4,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":4,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":4,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":5,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":5,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":5,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":5,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":6,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":6,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":6,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":6,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:14:37.446477+00:00","modified_at":"2026-09-30T18:14:37.446477+00:00","enabled":true}, 
+ {"empleado_id":7,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.795643+00:00","modified_at":"2026-09-30T18:48:46.795643+00:00","enabled":true}, 
+ {"empleado_id":8,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.819522+00:00","modified_at":"2026-09-30T18:48:46.819522+00:00","enabled":true}, 
+ {"empleado_id":9,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.842204+00:00","modified_at":"2026-09-30T18:48:46.842204+00:00","enabled":true}, 
+ {"empleado_id":10,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.868241+00:00","modified_at":"2026-09-30T18:48:46.868241+00:00","enabled":true}, 
+ {"empleado_id":11,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.893679+00:00","modified_at":"2026-09-30T18:48:46.893679+00:00","enabled":true}, 
+ {"empleado_id":12,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.9218+00:00","modified_at":"2026-09-30T18:48:46.9218+00:00","enabled":true}, 
+ {"empleado_id":13,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.942931+00:00","modified_at":"2026-09-30T18:48:46.942931+00:00","enabled":true}, 
+ {"empleado_id":14,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.963177+00:00","modified_at":"2026-09-30T18:48:46.963177+00:00","enabled":true}, 
+ {"empleado_id":15,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:46.987899+00:00","modified_at":"2026-09-30T18:48:46.987899+00:00","enabled":true}, 
+ {"empleado_id":16,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.009334+00:00","modified_at":"2026-09-30T18:48:47.009334+00:00","enabled":true}, 
+ {"empleado_id":17,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.031947+00:00","modified_at":"2026-09-30T18:48:47.031947+00:00","enabled":true}, 
+ {"empleado_id":18,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.053318+00:00","modified_at":"2026-09-30T18:48:47.053318+00:00","enabled":true}, 
+ {"empleado_id":19,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.077154+00:00","modified_at":"2026-09-30T18:48:47.077154+00:00","enabled":true}, 
+ {"empleado_id":20,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.096866+00:00","modified_at":"2026-09-30T18:48:47.096866+00:00","enabled":true}, 
+ {"empleado_id":21,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.116703+00:00","modified_at":"2026-09-30T18:48:47.116703+00:00","enabled":true}, 
+ {"empleado_id":22,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.136022+00:00","modified_at":"2026-09-30T18:48:47.136022+00:00","enabled":true}, 
+ {"empleado_id":23,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.155196+00:00","modified_at":"2026-09-30T18:48:47.155196+00:00","enabled":true}, 
+ {"empleado_id":24,"ubicacion_id":10,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.17646+00:00","modified_at":"2026-09-30T18:48:47.17646+00:00","enabled":true}, 
+ {"empleado_id":25,"ubicacion_id":11,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.203937+00:00","modified_at":"2026-09-30T18:48:47.203937+00:00","enabled":true}, 
+ {"empleado_id":26,"ubicacion_id":12,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.224714+00:00","modified_at":"2026-09-30T18:48:47.224714+00:00","enabled":true}, 
+ {"empleado_id":27,"ubicacion_id":9,"created_by":null,"modified_by":null,"created_at":"2026-09-30T18:48:47.249588+00:00","modified_at":"2026-09-30T18:48:47.249588+00:00","enabled":true}]$seed$::json) ON CONFLICT DO NOTHING;
 
 INSERT INTO app_user_role (user_id, role_id, enabled)
 SELECT u.id, r.id, x.enabled FROM json_to_recordset($seed$[{"email":"admin@conciliacion.mx","role_code":"ADMIN","enabled":true}, 
@@ -351,15 +348,8 @@ JOIN app_user u ON u.email = x.email JOIN app_permission p ON p.code = x.perm_co
 ON CONFLICT (user_id, permission_id) DO NOTHING;
 
 
--- Segunda subsidiaria con sus tiendas reales de Facturiza (coctel_midd/docs/datos_prueba_ubicaciones.sql) —
--- permite probar el filtro de ubicaciones por subsidiaria en el alta/edición de usuarios.
-INSERT INTO subsidiaria (id, brand_id_api, nombre, razon_social, nit)
-VALUES (2, 2, 'Hipermar Fish', 'HICO FISH SAS', '900665499-1') ON CONFLICT DO NOTHING;
-INSERT INTO ubicacion (id, subsidiaria_id, store_id_api, nombre, prefijo_fiscal) VALUES
-  (5, 2, 3, 'Hipermar Sede 123', 'H23E'),
-  (6, 2, 4, 'Tienda 4 (prueba)', 'H24E')
-ON CONFLICT DO NOTHING;
--- Roberto Sánchez (Tesorería) pertenece también a Hipermar Fish (multi-subsidiaria).
+-- Roberto Sánchez (Tesorería) pertenece también a Hipermar Fish (multi-subsidiaria), con la tienda
+-- Hipermar Sede 69 (id 5 en la V1).
 INSERT INTO empleado_subsidiaria (empleado_id, subsidiaria_id) VALUES (4, 2) ON CONFLICT DO NOTHING;
 INSERT INTO empleado_ubicacion (empleado_id, ubicacion_id) VALUES (4, 5) ON CONFLICT DO NOTHING;
 
@@ -387,6 +377,15 @@ ON CONFLICT DO NOTHING;
 INSERT INTO empleado_area (empleado_id, area_id)
 SELECT x.empleado_id, c.id FROM json_to_recordset($seed$[{"empleado_id": 2, "nombre": "Sistemas"}, {"empleado_id": 4, "nombre": "Tesorería"}, {"empleado_id": 5, "nombre": "Contabilidad"}, {"empleado_id": 6, "nombre": "Contabilidad"}, {"empleado_id": 7, "nombre": "Conciliación Bancaria"}, {"empleado_id": 8, "nombre": "Conciliación Bancaria"}, {"empleado_id": 9, "nombre": "Conciliación Bancaria"}, {"empleado_id": 10, "nombre": "Conciliación Bancaria"}, {"empleado_id": 11, "nombre": "Conciliación Bancaria"}, {"empleado_id": 12, "nombre": "Tesorería"}, {"empleado_id": 13, "nombre": "Conciliación Bancaria"}, {"empleado_id": 14, "nombre": "Cumplimiento"}, {"empleado_id": 15, "nombre": "Conciliación Bancaria"}, {"empleado_id": 16, "nombre": "Contabilidad"}, {"empleado_id": 17, "nombre": "Sistemas"}, {"empleado_id": 18, "nombre": "Conciliación Bancaria"}, {"empleado_id": 19, "nombre": "Cumplimiento"}, {"empleado_id": 20, "nombre": "Sistemas"}, {"empleado_id": 21, "nombre": "Conciliación Bancaria"}, {"empleado_id": 22, "nombre": "Cumplimiento"}, {"empleado_id": 23, "nombre": "Contabilidad"}, {"empleado_id": 24, "nombre": "Conciliación Bancaria"}, {"empleado_id": 25, "nombre": "Tesorería"}, {"empleado_id": 26, "nombre": "Conciliación Bancaria"}, {"empleado_id": 27, "nombre": "Cumplimiento"}, {"empleado_id": 5, "nombre": "Tesorería"}]$seed$::json) AS x(empleado_id bigint, nombre text)
 JOIN area c ON c.nombre = x.nombre
+ON CONFLICT DO NOTHING;
+
+-- capture_sales (captura de ventas) para quienes tienen el rol ADMIN: la matriz por rol lo incluye, pero los
+-- permisos efectivos de las cuentas demo se copiaron de una DB anterior a ese permiso.
+INSERT INTO app_user_permission (user_id, permission_id)
+SELECT ur.user_id, p.id
+FROM app_user_role ur
+JOIN app_role r ON r.id = ur.role_id AND r.code = 'ADMIN'
+JOIN app_permission p ON p.code = 'capture_sales'
 ON CONFLICT DO NOTHING;
 
 -- Permisos especiales (app_user_special_permission, DEV 3852101): los permisos efectivos de cada cuenta que

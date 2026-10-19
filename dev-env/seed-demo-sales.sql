@@ -3,10 +3,11 @@
 -- que el entorno local no tiene; este archivo siembra documentos con la misma forma que deja la captura, para
 -- probar el listado, sus filtros y la paginación del Resumen de venta.
 --
--- Determinista (sin random): 7 días (05 al 11-Oct-2026) × cada ubicación habilitada × 4 documentos. Uno de cada
+-- Determinista (sin random): 7 días (05 al 11-Oct-2026) × cada ubicación habilitada (16 tiendas reales de la
+-- V1) × 4 documentos = 448. Uno de cada
 -- 23 es nota crédito; uno de cada 7 tiene pago mixto (2 medios); el estado de conciliación rota entre los 3.
 -- Idempotente: los folios de prueba empiezan con "D" y la llave natural evita duplicados.
--- Se aplica después de seed-demo-users.sql (necesita las ubicaciones sembradas).
+-- Se aplica después de seed-demo-users.sql.
 BEGIN;
 
 -- Clientes: el consumidor final genérico (222222222222) y algunos con cédula/NIT.
