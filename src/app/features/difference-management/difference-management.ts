@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -90,16 +90,13 @@ export class DifferenceManagement {
   });
 
   constructor() {
-    // effect (no computed): setOrder tiene side-effects (reinicia selección,
-    // nota e importados) — mismo criterio que ReconciliationService, setters
-    // explícitos en vez de reactividad implícita.
-    effect(() => {
-      const tenderMedia = this.tenderMedia();
-      const orderId = this.orderId();
-      if (tenderMedia && VALID_TENDER_MEDIA.has(tenderMedia) && orderId) {
-        this.service.setOrder(tenderMedia as TenderMedia, orderId);
-      }
-    });
+    // La orden se deriva de la ruta: el servicio recibe los signals una vez y
+    // reinicia su estado al cambiar de orden (ADR-0002, punto 6: sin `effect`
+    // que copie parámetros de ruta).
+    this.service.bindOrder(
+      this.validTenderMedia,
+      computed(() => (this.validTenderMedia() ? (this.orderId() ?? null) : null)),
+    );
   }
 
   protected toggleCandidate(candidate: MatchCandidate): void {

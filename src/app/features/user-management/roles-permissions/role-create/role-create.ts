@@ -6,11 +6,12 @@ import {
   effect,
   inject,
   input,
+  linkedSignal,
   signal,
   untracked,
   viewChild,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { rxResource, toSignal } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormControl, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -94,10 +95,19 @@ export class RoleCreate {
   protected readonly maxLength = ROLE_NAME_MAX_LENGTH;
   protected readonly isEdit = computed(() => !!this.code());
 
-  // Estado del rol que se edita (lo que devolvió `GET /roles/{code}`).
-  protected readonly loadingRole = signal(false);
-  protected readonly roleNotFound = signal(false);
-  private readonly original = signal<{ name: string; permissions: ReadonlySet<PermissionKey> } | null>(null);
+  // Estado del rol que se edita: `GET /roles/{code}` como `rxResource` keyed en
+  // `:code` (ADR-0002, punto 3). Sin código (alta) el resource queda en reposo.
+  // 404 ROLE_NOT_FOUND: el aviso lo da `httpErrorAlertInterceptor`.
+  private readonly roleResource = rxResource({
+    params: () => this.code(),
+    stream: ({ params }) => this.rolesApi.getRole(params),
+  });
+  protected readonly loadingRole = this.roleResource.isLoading;
+  protected readonly roleNotFound = computed(() => !!this.roleResource.error());
+  private readonly original = computed<{ name: string; permissions: ReadonlySet<PermissionKey> } | null>(() => {
+    const role = this.roleResource.hasValue() ? this.roleResource.value() : undefined;
+    return role ? { name: role.name, permissions: new Set(role.defaultPermissions as PermissionKey[]) } : null;
+  });
 
   // Nombre: reglas reales (requerido, largo, no repetido) → Reactive Forms,
   // mismo criterio que nombre/correo en `user-detail`.
@@ -110,7 +120,9 @@ export class RoleCreate {
   // Código que tendrá el rol: el que ya tiene (edición) o el que derivará el back.
   protected readonly roleCode = computed(() => this.code() ?? (this.roleName() ? toRoleCode(this.roleName()) : ''));
 
-  protected readonly selected = signal<ReadonlySet<PermissionKey>>(new Set());
+  // Selección editable que se reinicia a los permisos del rol cada vez que llega
+  // uno (o a vacío en el alta) — `linkedSignal`, no un `effect` que copie.
+  protected readonly selected = linkedSignal<ReadonlySet<PermissionKey>>(() => new Set(this.original()?.permissions ?? []));
   protected readonly selectedCount = computed(() => this.selected().size);
   protected readonly totalPermissions = computed(() => this.catalog.permissions().length);
 
@@ -167,34 +179,11 @@ export class RoleCreate {
     // Los usuarios del rol (baja deshabilitada si tiene, impacto de la edición).
     this.users.syncFromBackend();
 
+    // Único efecto: sincronizar el `FormControl` del nombre con el rol cargado
+    // (ADR-0002, punto 6).
     effect(() => {
-      const code = this.code();
-      untracked(() => this.loadRole(code));
-    });
-  }
-
-  private loadRole(code: string | undefined): void {
-    this.original.set(null);
-    this.roleNotFound.set(false);
-    if (!code) {
-      this.nameControl.reset('');
-      this.selected.set(new Set());
-      return;
-    }
-    this.loadingRole.set(true);
-    this.rolesApi.getRole(code).subscribe({
-      next: (role) => {
-        const permissions = new Set(role.defaultPermissions as PermissionKey[]);
-        this.original.set({ name: role.name, permissions });
-        this.nameControl.reset(role.name);
-        this.selected.set(new Set(permissions));
-        this.loadingRole.set(false);
-      },
-      // 404 ROLE_NOT_FOUND: el aviso lo da `httpErrorAlertInterceptor`.
-      error: () => {
-        this.loadingRole.set(false);
-        this.roleNotFound.set(true);
-      },
+      const name = this.original()?.name ?? '';
+      untracked(() => this.nameControl.reset(name));
     });
   }
 

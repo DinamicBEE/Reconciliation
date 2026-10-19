@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
+import { rxResource, takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -142,18 +143,14 @@ export class UserDetail {
   // Ubicaciones a ofrecer: solo las de las subsidiarias elegidas (todas si no hay
   // ninguna elegida) — `GET /catalogs/ubicaciones` trae `subsidiariaId`.
   protected readonly createUbicacionOptions = computed(() => this.catalog.ubicacionesFor(this.createSubsidiariaIds()));
-  protected readonly editSubsidiariaIds = signal<number[]>([]);
+  // Se reinicia a lo guardado cada vez que cambia `user()` (linkedSignal, ADR-0002).
+  protected readonly editSubsidiariaIds = linkedSignal<number[]>(() => [...(this.user()?.subsidiariaIds ?? [])]);
   protected readonly editUbicacionOptions = computed(() =>
     this.orgOptions('ubicaciones', this.catalog.ubicacionesFor(this.editSubsidiariaIds())),
   );
 
   // Al quitar una subsidiaria se quitan también sus ubicaciones elegidas (solo
   // por acción del usuario, nunca al precargar el detalle).
-  protected onCreateSubsidiariasChange(ids: number[]): void {
-    this.createSubsidiariaIds.set(ids);
-    this.createUbicacionIds.set(this.catalog.pruneUbicaciones(this.createUbicacionIds(), ids));
-  }
-
   protected onEditSubsidiariasChange(ids: number[]): void {
     this.editSubsidiariaIds.set(ids);
     const ubicaciones = this.orgForm.controls.ubicacionIds;
@@ -168,7 +165,21 @@ export class UserDetail {
   // sobre la base del mock: es la fuente de verdad para TODO lo que el
   // backend SÍ modela (roles, permisos, estado, organización, teléfono...);
   // lo que no modela (avatarUrl, 2FA, sesiones activas) se queda del mock.
-  private readonly backendDetail = signal<UserDetailDto | null>(null);
+  //
+  // ADR-0002, punto 3: `rxResource` keyed en el `backendUserId` de la cuenta (no
+  // en `user()`, que se arma A PARTIR de este detalle: evita el ciclo). Sin
+  // `backendUserId` queda en reposo y `user()` cae al mock; si falla, también.
+  private readonly backendUserId = computed(() => {
+    const id = this.userId();
+    return id ? (this.service.findUser(id)?.backendUserId ?? null) : null;
+  });
+  private readonly detailResource = rxResource({
+    params: () => this.backendUserId() ?? undefined,
+    stream: ({ params }) => this.usersApi.getUserDetail(params),
+  });
+  private readonly backendDetail = computed<UserDetailDto | null>(() =>
+    this.detailResource.hasValue() ? (this.detailResource.value() ?? null) : null,
+  );
 
   protected readonly user = computed<AppUser | null>(() => {
     const id = this.userId();
@@ -245,40 +256,37 @@ export class UserDetail {
   // (no se pide, daría 403). Funciona aunque la cuenta ya esté dada de baja.
   protected readonly canViewAudit = computed(() => this.access.hasPermission('view_audit_log'));
   protected readonly auditPageSize = 10;
-  protected readonly auditEntries = signal<AuditLogEntry[]>([]);
-  protected readonly auditTotal = signal(0);
-  protected readonly auditPage = signal(1); // 1-based (nz-pagination); el backend usa 0-based
-  protected readonly auditLoading = signal(false);
-  protected readonly auditFailed = signal(false);
-  private auditSub: { unsubscribe(): void } | null = null;
-
-  // Una petición a la vez: una consulta nueva cancela la anterior (el usuario cambia
-  // de página rápido, o se guarda algo mientras carga).
-  private loadAudit(backendUserId: number, page = 1): void {
-    if (!this.canViewAudit()) return;
-    this.auditSub?.unsubscribe();
-    this.auditPage.set(page);
-    this.auditLoading.set(true);
-    this.auditFailed.set(false);
-    this.auditSub = this.auditLogService.listForUser(backendUserId, { page: page - 1, size: this.auditPageSize }).subscribe({
-      next: (result) => {
-        this.auditEntries.set(result.entries);
-        this.auditTotal.set(result.totalElements);
-        this.auditLoading.set(false);
-      },
-      // El aviso (403, 404...) lo da `httpErrorAlertInterceptor`.
-      error: () => {
-        this.auditEntries.set([]);
-        this.auditTotal.set(0);
-        this.auditLoading.set(false);
-        this.auditFailed.set(true);
-      },
-    });
-  }
+  // 1-based (nz-pagination); el backend usa 0-based. Vuelve a 1 al cambiar de cuenta.
+  protected readonly auditPage = linkedSignal(() => {
+    this.backendUserId();
+    return 1;
+  });
+  // `rxResource` (ADR-0002, punto 3): una consulta nueva cancela la anterior (el
+  // usuario cambia de página rápido, o se guarda algo mientras carga). Sin
+  // `view_audit_log` o sin `backendUserId` no se pide (daría 403/no aplica). El
+  // aviso de error (403, 404...) lo da `httpErrorAlertInterceptor`.
+  private readonly auditResource = rxResource({
+    params: () => {
+      const backendUserId = this.backendUserId();
+      return this.canViewAudit() && backendUserId !== null ? { backendUserId, page: this.auditPage() } : undefined;
+    },
+    stream: ({ params }) =>
+      this.auditLogService.listForUser(params.backendUserId, { page: params.page - 1, size: this.auditPageSize }),
+  });
+  private readonly auditResult = computed(() => (this.auditResource.hasValue() ? this.auditResource.value() : undefined));
+  protected readonly auditEntries = computed<AuditLogEntry[]>(() => this.auditResult()?.entries ?? []);
+  protected readonly auditTotal = computed(() => this.auditResult()?.totalElements ?? 0);
+  protected readonly auditLoading = this.auditResource.isLoading;
+  protected readonly auditFailed = computed(() => !!this.auditResource.error());
 
   protected onAuditPageChange(page: number): void {
-    const backendUserId = this.user()?.backendUserId;
-    if (backendUserId) this.loadAudit(backendUserId, page);
+    this.auditPage.set(page);
+  }
+
+  // Vuelve a la primera página del historial (o la recarga si ya está en ella).
+  private reloadAudit(): void {
+    if (this.auditPage() === 1) this.auditResource.reload();
+    else this.auditPage.set(1);
   }
 
   // Candidatos a "Administrador responsable" — cualquier admin/supervisor
@@ -351,35 +359,48 @@ export class UserDetail {
     ubicacionIds: this.fb.control<number[]>([]),
   });
 
-  // --- Estado local de creación (solo aplica cuando isCreate()) ---
-  protected readonly createRoleIds = signal<RoleId[]>([]);
-  protected readonly createActive = signal(true);
-  // A diferencia del resto de "Organización" (que solo se pide editando, ver
-  // orgForm/onSaveProfile), subsidiaria/ubicación SÍ se piden al crear — ver
-  // AppUser.subsidiariaIds/.ubicacionIds. El backend acepta varias de cada
-  // una (`CreateUserRequest.subsidiariaIds`/`.ubicacionIds`, N:M real).
-  protected readonly createSubsidiariaIds = signal<number[]>([]);
-  protected readonly createUbicacionIds = signal<number[]>([]);
-  // Supervisor — select SIMPLE (un solo responsable, a diferencia de
-  // roles/subsidiarias/ubicaciones que sí aceptan varias). `null` = sin
-  // asignar; se manda como `supervisorId` real en el alta (ver
-  // `CreateUserInput.managerId` / `UserManagementService.createUser`).
-  protected readonly createManagerId = signal<string | null>(null);
+  // --- Alta (solo aplica cuando isCreate()) ---
+  // ADR-0003, punto 1: lo que el alta pide además de `infoForm` es un FormGroup
+  // tipado (antes eran `ngModel` + signals sueltos con la regla "al menos un
+  // rol" validada a mano). `Validators.required` sobre un arreglo exige que no
+  // esté vacío.
+  // Subsidiaria/ubicación SÍ se piden al crear (a diferencia del resto de
+  // "Organización", que solo se edita después) — el backend acepta varias de
+  // cada una (`CreateUserRequest.subsidiariaIds`/`.ubicacionIds`, N:M real).
+  // Supervisor: un solo responsable; `null` = sin asignar, se manda como
+  // `supervisorId` real (ver `CreateUserInput.managerId`).
+  protected readonly createForm = this.fb.group({
+    roleIds: this.fb.control<RoleId[]>([], [Validators.required]),
+    subsidiariaIds: this.fb.control<number[]>([]),
+    ubicacionIds: this.fb.control<number[]>([]),
+    managerId: this.fb.control<string | null>(null),
+    active: this.fb.control(true),
+  });
+  // Lecturas de plantilla como signals (la app es zoneless: `control.value` no
+  // dispara detección de cambios por sí solo).
+  protected readonly createSubsidiariaIds = toSignal(this.createForm.controls.subsidiariaIds.valueChanges, {
+    initialValue: this.createForm.controls.subsidiariaIds.value,
+  });
+  protected readonly createActive = toSignal(this.createForm.controls.active.valueChanges, {
+    initialValue: this.createForm.controls.active.value,
+  });
   // `POST /users` es una llamada real — deshabilita el botón mientras está
   // en vuelo (mismo criterio que `Login.submitting`), no instantáneo como
   // antes cuando `createUser` solo tocaba el mock.
-  protected readonly submittingCreate = signal(false);
+  protected readonly submittingCreate = linkedSignal<boolean>(() => this.resetOnAccountChange(false));
 
   // --- Borrador de "Seguridad y acceso" (solo aplica editando un usuario existente) ---
-  protected readonly draftRoleIds = signal<RoleId[]>([]);
-  protected readonly draftPermissions = signal<Set<PermissionKey>>(new Set());
+  // Borradores de "Seguridad y acceso": se reinician a lo guardado cada vez que
+  // cambia `user()` (linkedSignal en vez de copiarlos en un effect, ADR-0002).
+  protected readonly draftRoleIds = linkedSignal<RoleId[]>(() => [...(this.user()?.roleIds ?? [])]);
+  protected readonly draftPermissions = linkedSignal<Set<PermissionKey>>(() => new Set(this.user()?.permissions ?? []));
 
   // --- Modo edición de "Información general" (datos personales +
   // organización) — de solo lectura por defecto; el botón "Editar" del
   // header lo activa para AMBAS sub-cards a la vez (ver user-detail.html).
   // No aplica a "Seguridad y acceso" (roles/permisos ya tienen su propio
   // flujo de edición directa, con su propio botón "Guardar permisos").
-  protected readonly isEditing = signal(false);
+  protected readonly isEditing = linkedSignal<boolean>(() => this.resetOnAccountChange(false));
   // `PATCH /users/{id}` es una llamada real — deshabilita "Guardar cambios"
   // mientras está en vuelo, mismo criterio que `submittingCreate`.
   protected readonly savingProfile = signal(false);
@@ -388,32 +409,13 @@ export class UserDetail {
     // Combos de "Organización" (alta y edición) — se piden una vez por sesión.
     this.catalog.ensureLoaded();
 
-    // Consulta el detalle REAL del backend (`GET /users/{id}`) solo cuando
-    // cambia la cuenta mostrada Y tiene `backendUserId` — keyed en el
-    // registro BASE del mock (`untracked`, no en `user()`) para no
-    // depender de su propia salida (`user()` se arma A PARTIR de
-    // `backendDetail`, ver el computed de arriba) y evitar así un ciclo.
-    // Si falla o la cuenta no tiene `backendUserId`, `user()` cae solo al
-    // mock — mismo criterio de siempre.
-    effect((onCleanup) => {
-      const id = this.userId();
-      this.backendDetail.set(null);
-      this.auditEntries.set([]);
-      this.auditTotal.set(0);
-      const backendUserId = id ? untracked(() => this.service.findUser(id)?.backendUserId ?? null) : null;
-      if (backendUserId === null) return;
-      const sub = this.usersApi.getUserDetail(backendUserId).subscribe({
-        next: (detail) => this.backendDetail.set(detail),
-        error: () => this.backendDetail.set(null),
-      });
-      untracked(() => this.loadAudit(backendUserId));
-      onCleanup(() => {
-        sub.unsubscribe();
-        this.auditSub?.unsubscribe();
-      });
+    // Alta: al quitar una subsidiaria se quitan sus ubicaciones elegidas.
+    this.createForm.controls.subsidiariaIds.valueChanges.pipe(takeUntilDestroyed()).subscribe((ids) => {
+      const ubicaciones = this.createForm.controls.ubicacionIds;
+      ubicaciones.setValue(this.catalog.pruneUbicaciones(ubicaciones.value, ids));
     });
 
-    // effect (no computed): reinicia formularios + borradores al entrar a un
+    // Único effect (ADR-0002, punto 6): sincroniza los FormGroup al entrar a un
     // usuario distinto, o cuando el detalle real del backend termina de
     // cargar para ESA misma cuenta (`user()` cambia de valor en ambos
     // casos, ver el computed de arriba) — tiene side-effects (patchValue,
@@ -451,9 +453,6 @@ export class UserDetail {
           subsidiariaIds: [...found.subsidiariaIds],
           ubicacionIds: [...found.ubicacionIds],
         });
-        this.editSubsidiariaIds.set([...found.subsidiariaIds]);
-        this.draftRoleIds.set([...found.roleIds]);
-        this.draftPermissions.set(new Set(found.permissions));
       } else {
         this.infoForm.reset({
           firstName: '',
@@ -477,20 +476,17 @@ export class UserDetail {
           subsidiariaIds: [],
           ubicacionIds: [],
         });
-        this.createRoleIds.set([]);
-        this.createActive.set(true);
-        this.createSubsidiariaIds.set([]);
-        this.createUbicacionIds.set([]);
-        this.createManagerId.set(null);
-        this.submittingCreate.set(false);
-        this.draftRoleIds.set([]);
-        this.draftPermissions.set(new Set());
+        this.createForm.reset();
       }
-      // Nunca entrar a un usuario (o volver a /usuarios/nuevo) ya en modo
-      // edición — es estado de ESTA visita a la pantalla, no debe sobrevivir
-      // a la navegación.
-      this.isEditing.set(false);
     });
+  }
+
+  // Valor inicial del estado de ESTA visita a la pantalla (alta, modo edición):
+  // al navegar a otra cuenta (o volver a /usuarios/nuevo) se reinicia — leer
+  // `userId()` aquí es lo que hace que los `linkedSignal` dependan de él.
+  private resetOnAccountChange<T>(initial: T): T {
+    this.userId();
+    return initial;
   }
 
   protected onEditClick(): void {
@@ -585,7 +581,7 @@ export class UserDetail {
           this.savingProfile.set(false);
           this.message.success('Datos actualizados.');
           this.isEditing.set(false);
-          if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+          if (updated.backendUserId) this.refreshBackendDetail();
         },
         error: (err: unknown) => {
           this.savingProfile.set(false);
@@ -620,7 +616,7 @@ export class UserDetail {
         this.draftPermissions.set(new Set(updated.permissions));
         this.message.success('Roles y permisos actualizados.');
         // El detalle real (`backendDetail`) se mezcla ENCIMA del registro local: se vuelve a pedir para que no muestre lo anterior.
-        if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+        if (updated.backendUserId) this.refreshBackendDetail();
       },
       error: (err: unknown) => {
         this.savingAccess.set(false);
@@ -654,7 +650,7 @@ export class UserDetail {
           this.service.setStatus(user.id, next).subscribe({
             next: (updated) => {
               this.message.success(`Estado actualizado a ${label}.`);
-              if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+              if (updated.backendUserId) this.refreshBackendDetail();
               resolve();
             },
             error: (err: unknown) => {
@@ -678,7 +674,7 @@ export class UserDetail {
     this.service.setEmailVerified(id).subscribe({
       next: (updated) => {
         this.message.success('Correo marcado como verificado.');
-        if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+        if (updated.backendUserId) this.refreshBackendDetail();
       },
       error: (err: unknown) => this.showMutationError(err),
     });
@@ -692,14 +688,11 @@ export class UserDetail {
   // guardar con los valores desactualizados. Best-effort y silencioso: si
   // falla, `user()` simplemente se queda con el detalle anterior (mismo
   // criterio que el effect del constructor).
-  private refreshBackendDetail(backendUserId: number): void {
-    this.usersApi.getUserDetail(backendUserId).subscribe({
-      next: (detail) => this.backendDetail.set(detail),
-      error: () => {},
-    });
+  private refreshBackendDetail(): void {
+    this.detailResource.reload();
     // El backend registra cada acción en su bitácora: se vuelve a pedir la
     // primera página para que "Historial" muestre lo que acaba de pasar.
-    this.loadAudit(backendUserId);
+    this.reloadAudit();
   }
 
   // Aviso para las mutaciones reales de este componente (`onSaveProfile`/
@@ -729,7 +722,7 @@ export class UserDetail {
       next: (updated) => {
         this.closingSessions.set(false);
         this.message.success('Sesiones activas cerradas.');
-        if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+        if (updated.backendUserId) this.refreshBackendDetail();
       },
       error: (err: unknown) => {
         this.closingSessions.set(false);
@@ -755,7 +748,7 @@ export class UserDetail {
           this.service.resetPassword(user.id).subscribe({
             next: (tempPassword) => {
               this.message.success(`Contraseña restablecida. Temporal: ${tempPassword}`, { nzDuration: 8000 });
-              if (user.backendUserId) this.refreshBackendDetail(user.backendUserId);
+              if (user.backendUserId) this.refreshBackendDetail();
               resolve();
             },
             error: (err: unknown) => {
@@ -827,7 +820,7 @@ export class UserDetail {
           this.service.unlockAccount(user.id).subscribe({
             next: (updated) => {
               this.message.success('Cuenta desbloqueada en el backend real.');
-              if (updated.backendUserId) this.refreshBackendDetail(updated.backendUserId);
+              if (updated.backendUserId) this.refreshBackendDetail();
               resolve();
             },
             error: (err: unknown) => {
@@ -852,15 +845,14 @@ export class UserDetail {
   }
 
   protected onCreateSubmit(): void {
-    if (this.infoForm.invalid || this.createRoleIds().length === 0) {
+    if (this.infoForm.invalid || this.createForm.invalid) {
       this.infoForm.markAllAsTouched();
-      if (this.createRoleIds().length === 0) {
-        this.message.error('Selecciona al menos un rol.');
-      }
+      this.createForm.markAllAsTouched();
       return;
     }
 
     const { firstName, lastName, email, phone } = this.infoForm.getRawValue();
+    const { roleIds, subsidiariaIds, ubicacionIds, managerId, active } = this.createForm.getRawValue();
     const normalizedEmail = email.trim().toLowerCase();
     const emailTaken = this.service.allUsers().some((u) => u.email.toLowerCase() === normalizedEmail);
     if (emailTaken) {
@@ -875,11 +867,11 @@ export class UserDetail {
         lastName,
         email,
         phone,
-        roleIds: this.createRoleIds(),
-        status: this.createActive() ? 'active' : 'inactive',
-        subsidiariaIds: this.createSubsidiariaIds(),
-        ubicacionIds: this.createUbicacionIds(),
-        managerId: this.createManagerId(),
+        roleIds,
+        status: active ? 'active' : 'inactive',
+        subsidiariaIds,
+        ubicacionIds,
+        managerId,
       })
       .subscribe({
         next: (user) => {

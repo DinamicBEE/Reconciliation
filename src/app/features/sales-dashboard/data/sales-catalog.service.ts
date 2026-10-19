@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, effect, inject, signal, untracked } from '@angular/core';
-import { finalize } from 'rxjs';
+import { Injectable, ResourceRef, computed, inject, signal } from '@angular/core';
+import { rxResource } from '@angular/core/rxjs-interop';
 import { environment } from '../../../../environments/environment';
 import { AccessControlService } from '../../../core/auth/access-control.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -44,35 +44,28 @@ export class SalesCatalogService {
   private readonly access = inject(AccessControlService);
   private readonly apiUrl = environment.apiUrl;
 
-  readonly tenderMedia = signal<readonly TenderMediaOption[]>([]);
-  readonly reconciliationStatuses = signal<readonly ReconciliationStatusOption[]>([]);
-  readonly loading = signal(false);
-  readonly loadFailed = signal(false);
+  // Se vuelve `true` la primera vez que `SalesDashboard` llama a `ensureLoaded`.
+  private readonly requested = signal(false);
 
-  private tenderMediaLoaded = false;
-  private statusesLoaded = false;
-  private pending = 0;
+  // ADR-0002, punto 3: un `rxResource` por catálogo. Piden una vez solicitados,
+  // con sesión y con `view_dashboard`; al cerrar sesión `params` es `undefined`
+  // y vuelven a vacío sin un `effect` que los limpie.
+  private readonly tenderMediaResource = this.catalogResource<TenderMediaOption>('tender-media');
+  private readonly statusesResource = this.catalogResource<ReconciliationStatusOption>('reconciliation-statuses');
 
-  constructor() {
-    effect(() => {
-      if (!this.auth.isAuthenticated()) untracked(() => this.clear());
-    });
-  }
+  readonly tenderMedia = computed(() => valueOrEmpty(this.tenderMediaResource));
+  readonly reconciliationStatuses = computed(() => valueOrEmpty(this.statusesResource));
+  readonly loading = computed(() => this.tenderMediaResource.isLoading() || this.statusesResource.isLoading());
+  readonly loadFailed = computed(() => !!this.tenderMediaResource.error() || !!this.statusesResource.error());
 
+  // Pide los catálogos la primera vez; después solo reintenta los que fallaron.
   ensureLoaded(): void {
-    if (!this.access.hasPermission('view_dashboard')) return;
-    if (!this.tenderMediaLoaded) {
-      this.fetch<TenderMediaOption>('tender-media', (list) => {
-        this.tenderMedia.set(list);
-        this.tenderMediaLoaded = true;
-      });
+    if (!this.requested()) {
+      this.requested.set(true);
+      return;
     }
-    if (!this.statusesLoaded) {
-      this.fetch<ReconciliationStatusOption>('reconciliation-statuses', (list) => {
-        this.reconciliationStatuses.set(list);
-        this.statusesLoaded = true;
-      });
-    }
+    if (this.tenderMediaResource.error()) this.tenderMediaResource.reload();
+    if (this.statusesResource.error()) this.statusesResource.reload();
   }
 
   findTenderMedia(id: number): TenderMediaOption | null {
@@ -83,29 +76,17 @@ export class SalesCatalogService {
     return this.reconciliationStatuses().find((option) => option.id === id) ?? null;
   }
 
-  private fetch<T>(path: string, apply: (list: T[]) => void): void {
-    this.pending++;
-    this.loading.set(true);
-    this.loadFailed.set(false);
-    this.http
-      .get<T[]>(`${this.apiUrl}/sales/catalogs/${path}`)
-      .pipe(finalize(() => this.settle()))
-      .subscribe({
-        next: (list) => apply(list),
-        error: () => this.loadFailed.set(true),
-      });
+  private catalogResource<T>(path: string): ResourceRef<readonly T[]> {
+    return rxResource<readonly T[], string | undefined>({
+      params: () =>
+        this.requested() && this.auth.isAuthenticated() && this.access.hasPermission('view_dashboard') ? path : undefined,
+      stream: ({ params }) => this.http.get<T[]>(`${this.apiUrl}/sales/catalogs/${params}`),
+      defaultValue: [],
+    });
   }
+}
 
-  private settle(): void {
-    this.pending = Math.max(0, this.pending - 1);
-    if (this.pending === 0) this.loading.set(false);
-  }
-
-  private clear(): void {
-    this.tenderMedia.set([]);
-    this.reconciliationStatuses.set([]);
-    this.tenderMediaLoaded = false;
-    this.statusesLoaded = false;
-    this.loadFailed.set(false);
-  }
+// Un resource en error lanza al leer `value()`: se usa `hasValue()`.
+function valueOrEmpty<T>(resource: ResourceRef<readonly T[]>): readonly T[] {
+  return resource.hasValue() ? resource.value() : [];
 }

@@ -7,8 +7,9 @@ Registro de decisiones **duraderas o discutibles** del front-end. Las reglas del
 | ADR | Título | Estado |
 |---|---|---|
 | [0001](0001-organizacion-por-feature-y-limites.md) | Organización por feature y límites entre `core`, `shared` y `features` | Aceptada (implementada) |
-| [0002](0002-estado-signals-en-servicios.md) | Estado con signals en servicios, RxJS para asincronía, sin store global | Propuesta |
-| [0003](0003-formularios.md) | Reactive Forms como default; Signal Forms en piloto | Propuesta |
+| [0002](0002-estado-signals-en-servicios.md) | Estado con signals en servicios, RxJS para asincronía, sin store global | Aceptada (implementada) |
+| [0003](0003-formularios.md) | Reactive Forms como default; Signal Forms en piloto | Aceptada (piloto pendiente de E2E) |
+| [0004](0004-sesion-y-tokens.md) | Modelo de sesión y almacenamiento de tokens | Propuesta |
 
 ## Cuándo crear una
 

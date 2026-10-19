@@ -139,9 +139,7 @@
             <nz-select
               class="summary-field__control"
               nzMode="multiple"
-              [ngModel]="createRoleIds()"
-              [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="createRoleIds.set($event)"
+              [formControl]="createForm.controls.roleIds"
               placeholder="Selecciona uno o más roles"
               [nzLoading]="catalogLoading()"
             >
@@ -149,6 +147,9 @@
                 <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
               }
             </nz-select>
+            @if (createForm.controls.roleIds.invalid && createForm.controls.roleIds.touched) {
+              <span class="summary-field__error">Selecciona al menos un rol.</span>
+            }
           </div>
 
           <div class="summary-field">
@@ -160,9 +161,7 @@
             <nz-select
               class="summary-field__control"
               nzMode="multiple"
-              [ngModel]="createSubsidiariaIds()"
-              [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="onCreateSubsidiariasChange($event)"
+              [formControl]="createForm.controls.subsidiariaIds"
               placeholder="Selecciona una o más subsidiarias"
               [nzLoading]="catalog.loading()"
             >
@@ -181,9 +180,7 @@
             <nz-select
               class="summary-field__control"
               nzMode="multiple"
-              [ngModel]="createUbicacionIds()"
-              [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="createUbicacionIds.set($event)"
+              [formControl]="createForm.controls.ubicacionIds"
               placeholder="Selecciona una o más ubicaciones"
               [nzLoading]="catalog.loading()"
             >
@@ -203,9 +200,7 @@
             <span class="summary-field__label">Supervisor:</span>
             <nz-select
               class="summary-field__control"
-              [ngModel]="createManagerId()"
-              [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="createManagerId.set($event)"
+              [formControl]="createForm.controls.managerId"
               nzAllowClear
               placeholder="Selecciona un responsable (opcional)"
             >
@@ -222,11 +217,7 @@
             </svg>
             <span class="summary-field__label">Estado inicial:</span>
             <label class="status-switch">
-              <nz-switch
-                [ngModel]="createActive()"
-                [ngModelOptions]="{ standalone: true }"
-                (ngModelChange)="createActive.set($event)"
-              />
+              <nz-switch [formControl]="createForm.controls.active" />
               <span>{{ createActive() ? 'Activo' : 'Inactivo' }}</span>
             </label>
           </div>

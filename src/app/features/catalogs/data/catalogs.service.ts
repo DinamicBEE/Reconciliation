@@ -9,7 +9,10 @@ import { filterCatalogRows, filterCatalogs } from './catalog-filter.util';
  * se canalizan por soporte (DED 2.2 y 7.17). Hoy lee de `MOCK_CATALOGS`; el
  * día que exista backend, las listas llegan del Core / Ventas Service.
  */
-@Injectable({ providedIn: 'root' })
+//
+// Estado de pantalla: `@Injectable()` provisto en `providers` de `Catalogs`
+// (ADR-0002, punto 4) — no sobrevive a salir de la pantalla, y no debe.
+@Injectable()
 export class CatalogsService {
   private readonly catalogs = signal<readonly Catalog[]>(MOCK_CATALOGS);
 

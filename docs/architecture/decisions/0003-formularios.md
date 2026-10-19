@@ -1,6 +1,6 @@
 # ADR-0003: Reactive Forms como default; Signal Forms en piloto
 
-- **Estado:** Propuesta
+- **Estado:** Aceptada — puntos 1, 2 y 4 aplicados; punto 3 pendiente de E2E (2026-10-16, rama `feature/agents`)
 - **Fecha:** 2026-10-15
 
 ## Contexto
@@ -29,6 +29,30 @@
    con `[formField]`; errores visibles y accesibles con el patrón de MASTER sin hacks; pruebas
    unitarias y E2E simples; no aumenta el código respecto de Reactive Forms.
 4. No convertir formularios existentes solo por migrar.
+
+## Implementación (2026-10-16)
+
+1. **Reactive Forms tipados:** login, cambio de contraseña, perfil, alta/edición de rol y los
+   formularios de información/organización de `UserDetail` ya usaban `NonNullableFormBuilder` o
+   `FormControl` con `nonNullable`. Única desviación corregida: el **alta de usuario** mezclaba
+   `infoForm` con `ngModel` + signals (roles, subsidiarias, ubicaciones, supervisor, estado) y
+   validaba "al menos un rol" a mano con un toast. Ahora es `createForm` tipado con
+   `Validators.required` en `roleIds`, error en línea con el patrón de MASTER, poda de ubicaciones
+   por `valueChanges` y lecturas de plantilla con `toSignal` (zoneless).
+2. **Filtros con `ngModel`:** todos están ligados a signals o setters de su servicio (resumen de
+   venta, conciliación, catálogos, usuarios, auditoría, referencia en gestión de diferencias); no
+   hay `FormGroup` creado solo para filtros. Sin cambios.
+3. **Piloto de Signal Forms:** no se inicia. Su condición previa —E2E del flujo— no existe: el repo
+   tiene el agente `angular-e2e`, pero no Playwright configurado ni pruebas E2E. Siguiente paso:
+   E2E de cambio de contraseña (cuenta demo con `mustChangePassword`) y después el piloto en esa
+   pantalla, con el resultado en una ADR nueva.
+4. **Sin migraciones por migrar:** no se convirtió ningún formulario a otro estilo. "Seguridad y
+   acceso" de `UserDetail` (ngModel sobre `linkedSignal` con su propio guardado) y la nota de
+   gestión de diferencias (un solo campo, regla en `canSave`) se quedan como están.
+
+Verificado: `pnpm build`, `pnpm test:ci` (120) y el alta en la app contra el back local (errores
+en línea, rol requerido, poda de ubicaciones, switch de estado y reinicio al volver a
+`/usuarios/nuevo`).
 
 ## Alternativas consideradas
 

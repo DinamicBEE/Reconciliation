@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
-import { forkJoin } from 'rxjs';
+import { Injectable, computed, inject } from '@angular/core';
+import { rxResource } from '@angular/core/rxjs-interop';
+import { forkJoin, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PermissionDef, PermissionKey, RoleDef, RoleId } from '../../shared/models/access.model';
 import { AuthService } from './auth.service';
@@ -25,6 +26,13 @@ export interface PermissionDto {
 // /permissions`: "manage_users o manage_roles", ver la guía de endpoints).
 const CATALOG_PERMISSIONS: PermissionKey[] = ['manage_users', 'manage_roles'];
 
+interface AccessCatalogs {
+  roles: readonly RoleDef[];
+  permissions: readonly PermissionDef[];
+}
+
+const EMPTY_CATALOGS: AccessCatalogs = { roles: [], permissions: [] };
+
 /**
  * Catálogos REALES de roles y permisos (`GET /roles`, `GET /permissions`).
  *
@@ -44,8 +52,8 @@ const CATALOG_PERMISSIONS: PermissionKey[] = ['manage_users', 'manage_roles'];
  * header) y varias features. Los dos GET de catálogo se piden aquí mismo; el
  * CRUD de roles es de `RolesApiService` (`user-management/data`).
  *
- * Se carga solo: un `effect` observa la sesión y pide ambos catálogos al iniciar
- * sesión (si hay permiso) y los limpia al cerrarla.
+ * Se carga solo: un `rxResource` observa la sesión y pide ambos catálogos al
+ * iniciar sesión (si hay permiso); al cerrarla vuelven a vacío.
  */
 @Injectable({ providedIn: 'root' })
 export class AccessCatalogService {
@@ -53,16 +61,33 @@ export class AccessCatalogService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = environment.apiUrl;
 
-  readonly roles = signal<readonly RoleDef[]>([]);
-  readonly permissions = signal<readonly PermissionDef[]>([]);
-  readonly loading = signal(false);
-  readonly loadFailed = signal(false);
-
   // ¿La sesión actual puede consultar los catálogos?
   readonly canLoad = computed(() => {
     const granted = this.auth.currentUser()?.permissions ?? [];
     return CATALOG_PERMISSIONS.some((p) => granted.includes(p));
   });
+
+  // ADR-0002, punto 3: un `rxResource` en vez de `effect` + `subscribe`. Pide al
+  // iniciar sesión con permiso; sin permiso (o sin sesión) `params` es
+  // `undefined`, el resource queda en reposo y el catálogo vuelve a vacío.
+  private readonly catalogs = rxResource<AccessCatalogs, true | undefined>({
+    params: () => (this.canLoad() ? true : undefined),
+    stream: () =>
+      forkJoin([
+        this.http.get<RoleDto[]>(`${this.apiUrl}/roles`),
+        this.http.get<PermissionDto[]>(`${this.apiUrl}/permissions`),
+      ]).pipe(map(([roles, permissions]) => ({ roles: roles.map(toRoleDef), permissions: permissions.map(toPermissionDef) }))),
+    defaultValue: EMPTY_CATALOGS,
+  });
+
+  // Un resource en error lanza al leer `value()`: se usa `hasValue()`. El aviso
+  // del error lo da `httpErrorAlertInterceptor`.
+  private readonly current = computed(() => (this.catalogs.hasValue() ? this.catalogs.value() : EMPTY_CATALOGS));
+
+  readonly roles = computed<readonly RoleDef[]>(() => this.current().roles);
+  readonly permissions = computed<readonly PermissionDef[]>(() => this.current().permissions);
+  readonly loading = this.catalogs.isLoading;
+  readonly loadFailed = computed(() => !!this.catalogs.error());
 
   readonly roleOptions = computed<{ value: RoleId; label: string }[]>(() =>
     this.roles().map((r) => ({ value: r.id, label: r.label })),
@@ -78,40 +103,10 @@ export class AccessCatalogService {
     return [...byGroup.entries()].map(([group, items]) => ({ group, items }));
   });
 
-  constructor() {
-    effect(() => {
-      const canLoad = this.canLoad();
-      untracked(() => (canLoad ? this.load() : this.clear()));
-    });
-  }
-
-  // Vuelve a pedir ambos catálogos (p. ej. tras un fallo de red).
+  // Vuelve a pedir ambos catálogos (p. ej. tras un fallo de red o tras crear,
+  // editar o dar de baja un rol).
   load(): void {
-    if (this.loading()) return;
-    this.loading.set(true);
-    this.loadFailed.set(false);
-    forkJoin([
-      this.http.get<RoleDto[]>(`${this.apiUrl}/roles`),
-      this.http.get<PermissionDto[]>(`${this.apiUrl}/permissions`),
-    ]).subscribe({
-      next: ([roles, permissions]) => {
-        this.roles.set(roles.map(toRoleDef));
-        this.permissions.set(permissions.map(toPermissionDef));
-        this.loading.set(false);
-      },
-      // El aviso al usuario lo da `httpErrorAlertInterceptor`.
-      error: () => {
-        this.loading.set(false);
-        this.loadFailed.set(true);
-      },
-    });
-  }
-
-  private clear(): void {
-    this.roles.set([]);
-    this.permissions.set([]);
-    this.loading.set(false);
-    this.loadFailed.set(false);
+    this.catalogs.reload();
   }
 
   // Nombre del rol según el catálogo; sin catálogo (sesión sin permiso para

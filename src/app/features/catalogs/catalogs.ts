@@ -40,6 +40,7 @@ type KindFilter = CatalogKind | 'all';
     NzTooltipModule,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [CatalogsService],
   templateUrl: './catalogs.html',
   styleUrl: './catalogs.scss',
 })

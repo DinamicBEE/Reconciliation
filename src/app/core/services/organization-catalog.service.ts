@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, WritableSignal, computed, effect, inject, signal, untracked } from '@angular/core';
-import { Observable, catchError, of, tap } from 'rxjs';
+import { Injectable, ResourceRef, computed, inject, signal } from '@angular/core';
+import { rxResource } from '@angular/core/rxjs-interop';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 import { CatalogEntry } from '../../shared/models/catalog-entry.model';
@@ -43,7 +43,7 @@ export const ORGANIZATION_CATALOG_KINDS: readonly OrganizationCatalogKind[] = [
  * cliente aún no entrega las listas reales — la UI debe tolerarlo.
  *
  * Carga perezosa (`ensureLoaded`, la llama la pantalla que los usa) y una sola vez
- * por sesión; cada catálogo se pide por separado para que la falla de uno no deje
+ * por sesión; cada catálogo se pide por separado (un `rxResource` cada uno) para que la falla de uno no deje
  * vacíos a los otros cinco (el aviso del error lo da `httpErrorAlertInterceptor`).
  * Se limpian al cerrar sesión.
  */
@@ -53,51 +53,58 @@ export class OrganizationCatalogService {
   private readonly auth = inject(AuthService);
   private readonly apiUrl = environment.apiUrl;
 
-  private readonly store: Record<OrganizationCatalogKind, WritableSignal<readonly CatalogEntry[]>> = {
-    subsidiarias: signal([]),
-    ubicaciones: signal([]),
-    cargos: signal([]),
-    puestos: signal([]),
-    departamentos: signal([]),
-    areas: signal([]),
-  };
+  // Se vuelve `true` la primera vez que una pantalla llama a `ensureLoaded`.
+  private readonly requested = signal(false);
 
-  readonly subsidiarias = this.store.subsidiarias.asReadonly();
-  readonly ubicaciones = computed(() => this.store.ubicaciones() as readonly UbicacionCatalogEntry[]);
-  readonly cargos = this.store.cargos.asReadonly();
-  readonly puestos = this.store.puestos.asReadonly();
-  readonly departamentos = this.store.departamentos.asReadonly();
-  readonly areas = this.store.areas.asReadonly();
+  // Un `rxResource` por catálogo (ADR-0002, punto 3): pide cuando ya se solicitó y
+  // hay sesión; al cerrar sesión `params` es `undefined`, el resource queda en
+  // reposo y su valor vuelve a `[]` — sin `effect` que limpie a mano.
+  private readonly resources = Object.fromEntries(
+    ORGANIZATION_CATALOG_KINDS.map((kind) => [
+      kind,
+      rxResource<readonly CatalogEntry[], OrganizationCatalogKind | undefined>({
+        params: () => (this.requested() && this.auth.isAuthenticated() ? kind : undefined),
+        stream: ({ params }) => this.http.get<CatalogEntry[]>(`${this.apiUrl}/catalogs/${params}`),
+        defaultValue: [],
+      }),
+    ]),
+  ) as Record<OrganizationCatalogKind, ResourceRef<readonly CatalogEntry[]>>;
 
-  // Catálogos con una petición en vuelo / que fallaron en el último intento.
-  private readonly pending = signal<ReadonlySet<OrganizationCatalogKind>>(new Set());
-  private readonly failed = signal<ReadonlySet<OrganizationCatalogKind>>(new Set());
-  private readonly loaded = new Set<OrganizationCatalogKind>();
+  readonly subsidiarias = computed(() => this.options('subsidiarias'));
+  readonly ubicaciones = computed(() => this.options('ubicaciones') as readonly UbicacionCatalogEntry[]);
+  readonly cargos = computed(() => this.options('cargos'));
+  readonly puestos = computed(() => this.options('puestos'));
+  readonly departamentos = computed(() => this.options('departamentos'));
+  readonly areas = computed(() => this.options('areas'));
 
-  readonly loading = computed(() => this.pending().size > 0);
-  readonly loadFailed = computed(() => this.failed().size > 0);
+  // Algún catálogo con una petición en vuelo / que falló en el último intento.
+  readonly loading = computed(() => ORGANIZATION_CATALOG_KINDS.some((kind) => this.resources[kind].isLoading()));
+  readonly loadFailed = computed(() => ORGANIZATION_CATALOG_KINDS.some((kind) => !!this.resources[kind].error()));
 
-  constructor() {
-    effect(() => {
-      if (!this.auth.isAuthenticated()) untracked(() => this.clear());
-    });
-  }
-
-  // Pide los catálogos que aún no se tienen (o que fallaron la vez anterior).
+  // Pide los catálogos la primera vez; después solo reintenta los que fallaron.
   ensureLoaded(): void {
+    if (!this.requested()) {
+      this.requested.set(true);
+      return;
+    }
     for (const kind of ORGANIZATION_CATALOG_KINDS) {
-      if (!this.loaded.has(kind) && !this.pending().has(kind)) this.fetch(kind);
+      if (this.resources[kind].error()) this.resources[kind].reload();
     }
   }
 
   // Vuelve a pedir los seis (p. ej. tras cargar datos nuevos en el backend).
   reload(): void {
-    this.loaded.clear();
-    this.ensureLoaded();
+    if (!this.requested()) {
+      this.requested.set(true);
+      return;
+    }
+    for (const kind of ORGANIZATION_CATALOG_KINDS) this.resources[kind].reload();
   }
 
+  // Un resource en error lanza al leer `value()`: se usa `hasValue()`.
   options(kind: OrganizationCatalogKind): readonly CatalogEntry[] {
-    return this.store[kind]();
+    const resource = this.resources[kind];
+    return resource.hasValue() ? resource.value() : [];
   }
 
   find(kind: OrganizationCatalogKind, id: number): CatalogEntry | null {
@@ -120,39 +127,4 @@ export class OrganizationCatalogService {
       return !ubicacion || subsidiariaIds.includes(ubicacion.subsidiariaId);
     });
   }
-
-  private fetch(kind: OrganizationCatalogKind): void {
-    this.pending.update((set) => new Set(set).add(kind));
-    this.request(kind)
-      .pipe(
-        tap((entries) => {
-          this.store[kind].set(entries);
-          this.loaded.add(kind);
-          this.failed.update((set) => without(set, kind));
-        }),
-        catchError(() => {
-          this.failed.update((set) => new Set(set).add(kind));
-          return of(null);
-        }),
-      )
-      .subscribe(() => this.pending.update((set) => without(set, kind)));
-  }
-
-  private request(kind: OrganizationCatalogKind): Observable<CatalogEntry[]> {
-    return this.http.get<CatalogEntry[]>(`${this.apiUrl}/catalogs/${kind}`);
-  }
-
-  private clear(): void {
-    for (const kind of ORGANIZATION_CATALOG_KINDS) {
-      this.store[kind].set([]);
-    }
-    this.loaded.clear();
-    this.failed.set(new Set());
-  }
-}
-
-function without<T>(set: ReadonlySet<T>, item: T): ReadonlySet<T> {
-  const next = new Set(set);
-  next.delete(item);
-  return next;
 }

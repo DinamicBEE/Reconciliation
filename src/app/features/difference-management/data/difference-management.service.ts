@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, Signal, computed, inject, linkedSignal, signal } from '@angular/core';
 import { SettlementTransaction, TenderMedia, TransactionMatch } from '../../../shared/models/reconciliation-item.model';
 import { MOCK_SALES, MOCK_SETTLEMENTS } from '../../../shared/mock-data/sales-settlements.mock-data';
 import { crossMatchTransactions } from '../../../shared/utils/cross-match.util';
@@ -21,15 +21,36 @@ function round2(value: number): number {
 export class DifferenceManagementService {
   private readonly resolvedMatches = inject(ResolvedMatchesStore);
 
-  private readonly tenderMediaSignal = signal<TenderMedia | null>(null);
-  private readonly orderIdSignal = signal<string | null>(null);
-  private readonly importedSettlements = signal<SettlementTransaction[]>([]);
+  // Orden en pantalla: signals de la ruta que entrega el componente una sola vez
+  // (`bindOrder`). Todo lo demás se deriva de ellos — sin `effect` que copie
+  // parámetros de ruta en el servicio (ADR-0002, punto 6).
+  private readonly source = signal<{ tenderMedia: Signal<TenderMedia | null>; orderId: Signal<string | null> } | null>(null);
+  private readonly tenderMediaSignal = computed(() => this.source()?.tenderMedia() ?? null);
+  private readonly orderIdSignal = computed(() => this.source()?.orderId() ?? null);
+  // Cambia solo al pasar a OTRA orden: reinicia la sesión de resolución.
+  private readonly orderKey = computed(() => `${this.tenderMediaSignal() ?? ''}|${this.orderIdSignal() ?? ''}`);
+
+  private readonly importedSettlements = linkedSignal<string, SettlementTransaction[]>({
+    source: this.orderKey,
+    computation: () => [],
+  });
 
   // settlement.id -> origen. Solo contiene entradas SELECCIONADAS — la
-  // ausencia de una liquidación aquí significa "no seleccionada".
-  private readonly selection = signal<Map<string, MatchOrigin>>(new Map());
+  // ausencia de una liquidación aquí significa "no seleccionada". Al entrar a
+  // una orden con `amount_mismatch` arranca con la liquidación sugerida.
+  private readonly selection = linkedSignal<string, Map<string, MatchOrigin>>({
+    source: this.orderKey,
+    computation: () => {
+      const tenderMedia = this.tenderMediaSignal();
+      const orderId = this.orderIdSignal();
+      const order = tenderMedia && orderId ? (this.crossMatchFor(tenderMedia).find((m) => m.orderId === orderId) ?? null) : null;
+      const suggestedId = order?.status === 'amount_mismatch' ? (order.settlement?.id ?? null) : null;
+      return suggestedId ? new Map([[suggestedId, 'backend']]) : new Map();
+    },
+  });
 
-  readonly note = signal('');
+  private readonly noteState = linkedSignal<string, string>({ source: this.orderKey, computation: () => '' });
+  readonly note = this.noteState.asReadonly();
 
   // La orden en cuestión, armada con el mismo motor de cruce que
   // "Detalle por tender media" (ver cross-match.util.ts) — una sola fuente
@@ -95,20 +116,11 @@ export class DifferenceManagementService {
     return crossMatchTransactions(MOCK_SALES[tenderMedia], MOCK_SETTLEMENTS[tenderMedia]);
   }
 
-  // Efecto de entrada a la pantalla (llamado desde el componente, no desde un
-  // `effect` interno del service — mismo patrón que
-  // ReconciliationService.setStatusFilter/etc: setters explícitos, no
-  // reactividad implícita). Reinicia todo el estado de la sesión de
-  // resolución: importados, nota y selección.
-  setOrder(tenderMedia: TenderMedia, orderId: string): void {
-    this.tenderMediaSignal.set(tenderMedia);
-    this.orderIdSignal.set(orderId);
-    this.importedSettlements.set([]);
-    this.note.set('');
-
-    const order = this.crossMatchFor(tenderMedia).find((m) => m.orderId === orderId) ?? null;
-    const suggestedId = order?.status === 'amount_mismatch' ? (order.settlement?.id ?? null) : null;
-    this.selection.set(suggestedId ? new Map([[suggestedId, 'backend']]) : new Map());
+  // Lo llama el componente UNA vez (constructor) con los signals de su ruta. Al
+  // cambiar de orden, importados, nota y selección se reinician solos
+  // (`linkedSignal` sobre `orderKey`).
+  bindOrder(tenderMedia: Signal<TenderMedia | null>, orderId: Signal<string | null>): void {
+    this.source.set({ tenderMedia, orderId });
   }
 
   importSettlements(rows: SettlementTransaction[]): void {
@@ -139,7 +151,7 @@ export class DifferenceManagementService {
   }
 
   setNote(value: string): void {
-    this.note.set(value);
+    this.noteState.set(value);
   }
 
   // No hay backend todavía — esto arma el payload que se enviaría Y deja

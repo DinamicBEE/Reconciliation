@@ -21,18 +21,20 @@ const NZ_STYLESHEET: Record<ThemeMode, string> = {
  */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
-  readonly mode = signal<ThemeMode>(this.resolveInitialMode());
+  // Escritura solo por métodos (ADR-0002, punto 4).
+  private readonly modeState = signal<ThemeMode>(this.resolveInitialMode());
+  readonly mode = this.modeState.asReadonly();
 
   constructor() {
     effect(() => this.applyMode(this.mode()));
   }
 
   toggle(): void {
-    this.mode.set(this.mode() === 'light' ? 'dark' : 'light');
+    this.modeState.set(this.mode() === 'light' ? 'dark' : 'light');
   }
 
   set(mode: ThemeMode): void {
-    this.mode.set(mode);
+    this.modeState.set(mode);
   }
 
   private resolveInitialMode(): ThemeMode {

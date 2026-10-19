@@ -10,14 +10,16 @@ const STORAGE_KEY = 'conciliation-menu-expanded';
  */
 @Injectable({ providedIn: 'root' })
 export class MenuService {
-  readonly expanded = signal<boolean>(this.resolveInitial());
+  // Escritura solo por métodos (ADR-0002, punto 4).
+  private readonly expandedState = signal<boolean>(this.resolveInitial());
+  readonly expanded = this.expandedState.asReadonly();
 
   constructor() {
     effect(() => localStorage.setItem(STORAGE_KEY, String(this.expanded())));
   }
 
   toggle(): void {
-    this.expanded.update((value) => !value);
+    this.expandedState.update((value) => !value);
   }
 
   private resolveInitial(): boolean {

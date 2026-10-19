@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, linkedSignal, untracked } from '@angular/core';
 import { DatePipe, NgStyle } from '@angular/common';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
@@ -70,7 +70,15 @@ export class Profile {
   // por defecto; el botón "Editar" del header lo activa para AMBAS
   // secciones a la vez (un único `infoForm`, un único "Guardar cambios"),
   // igual criterio que `UserDetail.isEditing` (ver user-detail.ts).
-  protected readonly isEditing = signal(false);
+  // Email de la sesión como `computed`: solo cambia si cambia la persona (no en
+  // cada refresh de token, que reemplaza el objeto `AuthUser`).
+  private readonly sessionEmail = computed(() => this.auth.currentUser()?.username ?? null);
+  // Modo edición: se reinicia al cambiar la persona de sesión (linkedSignal en
+  // vez de un `set` dentro del effect, ADR-0002 punto 6).
+  protected readonly isEditing = linkedSignal(() => {
+    this.sessionEmail();
+    return false;
+  });
 
   protected readonly infoForm = this.fb.group({
     firstName: this.fb.control('', [Validators.required, Validators.minLength(2)]),
@@ -92,16 +100,13 @@ export class Profile {
   });
 
   constructor() {
-    // effect (no computed): reinicia el form + sale de modo edición cada vez
-    // que cambia el usuario de sesión vinculado — mismo criterio que el
-    // effect de `UserDetail` (ver ese archivo). untracked() al leer el
-    // service evita que este effect se re-dispare por cualquier cambio en
-    // el registro de usuarios, solo por un cambio de sesión real.
+    // Único effect (ADR-0002, punto 6): sincroniza el FormGroup cuando cambia la
+    // persona de sesión. untracked() al leer el service evita re-dispararlo por
+    // cualquier cambio en el registro de usuarios.
     effect(() => {
-      const email = this.auth.currentUser()?.username;
+      const email = this.sessionEmail();
       const found = email ? untracked(() => this.userMgmt.findUserByEmail(email)) : null;
-      this.resetForm(found);
-      this.isEditing.set(false);
+      untracked(() => this.resetForm(found));
     });
   }
 

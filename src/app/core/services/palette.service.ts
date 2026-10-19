@@ -114,18 +114,20 @@ export class PaletteService {
   private readonly theme = inject(ThemeService);
 
   readonly options = PALETTE_OPTIONS;
-  readonly selected = signal<string | null>(localStorage.getItem(STORAGE_KEY));
+  // Escritura solo por métodos (ADR-0002, punto 4).
+  private readonly selectedState = signal<string | null>(localStorage.getItem(STORAGE_KEY));
+  readonly selected = this.selectedState.asReadonly();
 
   constructor() {
     effect(() => this.apply(this.selected(), this.theme.mode()));
   }
 
   select(hex: string): void {
-    this.selected.set(hex);
+    this.selectedState.set(hex);
   }
 
   reset(): void {
-    this.selected.set(null);
+    this.selectedState.set(null);
   }
 
   private apply(seedHex: string | null, mode: ThemeMode): void {

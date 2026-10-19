@@ -146,9 +146,13 @@ export class UserManagementService {
     return email ? this.findUserByEmail(email) : null;
   });
 
-  readonly search = signal('');
-  readonly roleFilter = signal<RoleFilter>('all');
-  readonly statusFilter = signal<StatusFilter>('all');
+  // Escritura solo por métodos (ADR-0002, punto 4).
+  private readonly searchState = signal('');
+  private readonly roleFilterState = signal<RoleFilter>('all');
+  private readonly statusFilterState = signal<StatusFilter>('all');
+  readonly search = this.searchState.asReadonly();
+  readonly roleFilter = this.roleFilterState.asReadonly();
+  readonly statusFilter = this.statusFilterState.asReadonly();
 
   readonly filteredUsers = computed(() => {
     const term = this.search().trim().toLowerCase();
@@ -199,15 +203,15 @@ export class UserManagementService {
   );
 
   setSearch(value: string): void {
-    this.search.set(value);
+    this.searchState.set(value);
   }
 
   setRoleFilter(value: RoleFilter): void {
-    this.roleFilter.set(value);
+    this.roleFilterState.set(value);
   }
 
   setStatusFilter(value: StatusFilter): void {
-    this.statusFilter.set(value);
+    this.statusFilterState.set(value);
   }
 
   isSelected(userId: string): boolean {

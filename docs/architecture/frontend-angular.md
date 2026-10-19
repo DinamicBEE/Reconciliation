@@ -130,7 +130,7 @@ Priorizados por impacto. Los de seguridad se detallan en §9.3.
 | H7 | Baja (arquitectura) | `shared/` importa de `features/sales-dashboard` (excepción a la "regla dura" de MASTER, documentada allí como fuente única del mock) | `src/app/shared/mock-data/sales-settlements.mock-data.ts:14-15` |
 | H8 | Baja (calidad) | Sin ESLint, sin script de formato, sin CI, sin E2E | `package.json` |
 | H9 | Baja (mantenibilidad) | Componentes/servicios muy grandes: `user-detail.ts` 899 líneas + `user-detail.html` 1228; `user-management.service.ts` 882. Budgets de estilos superados en 5 pantallas | `features/user-management/**`, `pnpm build` |
-| H10 | Baja (consistencia) | Formularios mezclados: `ngModel` (filtros y pantallas de consulta) y Reactive Forms (login, cambio de contraseña, perfil, roles, detalle de usuario). Es razonable, pero no estaba escrito | ver §7 |
+| H10 | Baja (consistencia) — **resuelto** (ADR-0003) | Formularios mezclados: `ngModel` (filtros y pantallas de consulta) y Reactive Forms (login, cambio de contraseña, perfil, roles, detalle de usuario). Es razonable, pero no estaba escrito | ver §7 |
 | H11 | Baja (accesibilidad) | Pocos atributos ARIA explícitos (49 en todas las plantillas) y sin pruebas automáticas de accesibilidad; header y menú sin breakpoint móvil (MASTER, deuda #3-4) | `src/app/**/*.html` |
 | H12 | Alta (seguridad, según entorno) | La pantalla de login muestra **5 cuentas con sus contraseñas** sin condición de entorno: se incluyen en el build de producción. Si alguna existe en un entorno desplegado, cualquiera puede entrar | `src/app/features/auth/login/login.html:160-187` |
 | H13 | Media (seguridad) | La exportación CSV escapa comillas/separadores pero no neutraliza celdas que empiezan con `=`, `+`, `-`, `@` (inyección de fórmulas al abrir en Excel; los textos vienen del backend/POS) | `src/app/features/sales-dashboard/data/sale-list-export.util.ts:12-15` |
@@ -274,15 +274,21 @@ Reglas:
   (backend); no se recalculan ni se copian. Los catálogos se piden una vez y se exponen como
   signals de solo lectura (`asReadonly()`).
 - **No propagar estado con `effect()`** (`effect(() => this.b.set(this.a()))`): usar `computed` o
-  `linkedSignal`. Hoy hay `effect` que disparan cargas por parámetro de ruta
-  (`role-create.ts`, `user-detail.ts`); en código nuevo, preferir `httpResource`/`rxResource`.
+  `linkedSignal`. Las cargas por parámetro o por sesión son `rxResource`/`httpResource`
+  (referencias reales: `role-create.ts` por `:code`, `user-detail.ts` por cuenta y página de
+  bitácora, `AccessCatalogService`, `SalesCatalogService`, `OrganizationCatalogService`).
   Resetear un `FormGroup` cuando cambia la entidad sí es un uso válido de `effect`.
+- **Leer un resource:** `value()` lanza si el resource está en error; leer con
+  `resource.hasValue() ? resource.value() : <vacío>` dentro de un `computed`. Un resource con
+  `params` que devuelve `undefined` queda en reposo y su valor vuelve al `defaultValue`: así se
+  limpian los catálogos al cerrar sesión sin `effect`.
 - **Suscripciones:** las de HTTP completan solas, pero si el callback toca estado del componente,
   cortar con `takeUntilDestroyed()` o usar `toSignal`/resources. Nunca `subscribe` anidados:
   componer con operadores.
-- Signals expuestos en servicios: lectura pública (`readonly x = this._x.asReadonly()` o `computed`),
-  escritura por métodos con intención (`setDateRange`, `markDesconciliado`). Los servicios actuales
-  exponen algunos `signal` escribibles; aceptado, corregir al tocarlos.
+- Signals expuestos en servicios `root`: lectura pública (`readonly x = this.xState.asReadonly()` o
+  `computed`), escritura por métodos con intención (`setDateRange`, `markDesconciliado`). Se cumple
+  desde ADR-0002 (tema, paleta, menú, filtros de usuarios, catálogos). Los servicios de pantalla
+  (provistos por el componente) pueden exponer signals escribibles a su propia plantilla.
 - **Inmutabilidad:** `update()` crea nuevos `Set`/`Map`/arrays (patrón actual de los stores).
 - **Sin store global** (NgRx u otro) mientras no exista un problema concreto que los servicios con
   signals no resuelvan (ver ADR-0002 para el disparador).
@@ -298,12 +304,19 @@ Decisión y evaluación de Signal Forms en [ADR-0003](decisions/0003-formularios
 
 - **Formularios de captura/edición (validación, envío, errores del backend):** Reactive Forms
   tipados (`FormBuilder.nonNullable`, `FormGroup<T>`), con `nz-form-item`/`nz-form-control` y
-  `nzErrorTip`. Es lo que ya usan login, cambio de contraseña, perfil, roles y detalle de usuario.
+  `nzErrorTip`. Es lo que ya usan login, cambio de contraseña, perfil, roles y detalle de usuario
+  (incluido el alta: `UserDetail.createForm`, ADR-0003). Un campo de un formulario reactivo que la
+  plantilla deba leer en una app zoneless se expone con `toSignal(control.valueChanges)`, no
+  leyendo `control.value` en la plantilla.
+- **Excepción aceptada:** "Seguridad y acceso" en `UserDetail` (roles + grid de permisos con su
+  propio botón "Guardar permisos") sigue con `ngModel` sobre `linkedSignal`: es un panel de edición
+  directa generado desde el catálogo, y ADR-0003 (punto 4) no pide migrarlo.
 - **Filtros de tabla y controles sueltos sin validación:** `[(ngModel)]` ligado a un signal o a un
   setter del servicio (patrón actual de las pantallas de consulta), o `model()`/eventos de ng-zorro.
 - **Signal Forms (`@angular/forms/signals`, públicos desde 22.0):** no se adoptan todavía como
   default; se habilita un piloto acotado (ADR-0003) para validar su integración con los controles
-  de ng-zorro (que se conectan como `ControlValueAccessor`).
+  de ng-zorro (que se conectan como `ControlValueAccessor`). **Pendiente:** su condición previa
+  (E2E del flujo) aún no se cumple — no hay Playwright configurado.
 - Validación: la del front es UX; **el backend valida siempre**. Errores 400 de validación se
   muestran en el campo o en una alerta del formulario (el interceptor global no los muestra, por
   diseño). Botón de envío deshabilitado mientras se guarda; nunca doble envío.
@@ -390,6 +403,8 @@ Toda vista que carga datos contempla: **cargando** (`nzLoading` en tabla o skele
   tabulador/retorno) para evitar inyección de fórmulas al abrirlos en Excel (hoy no se hace: H13/R7).
 
 ### 9.2 Sesión (estado actual)
+
+Decisión vigente y objetivo (cookie `HttpOnly`, CSP) en [ADR-0004](decisions/0004-sesion-y-tokens.md).
 
 Login → access + refresh token → sesión en `sessionStorage` (sobrevive F5, no otra pestaña) →
 refresco proactivo con refresh token de un solo uso → `GET /auth/me` revalida tras recargar →
@@ -518,7 +533,8 @@ export class SalesDashboardService {
 }
 ```
 
-Variante para lecturas sin debounce (ilustrativa, no existe aún en el repo):
+Variante para lecturas sin debounce (ilustrativa; el repo usa la forma `rxResource` equivalente en
+`role-create.ts`):
 
 ```ts
 // Detalle por id de ruta: el resource cancela la petición anterior al cambiar el id.
@@ -608,7 +624,7 @@ Cada paso es independiente y pequeño. No se reestructura todo el repositorio de
 |---|---|---|
 | D1 | Aceptar este documento y los ADR 0001-0003 como lineamientos | Aceptar; revisar en 3 meses |
 | D2 | Mover sesión y control de acceso a `core/auth/` (ADR-0001) | Hecho (2026-10-15, rama `feature/agents`) |
-| D3 | Modelo de tokens: ¿refresh token en cookie `HttpOnly` desde el backend? | Pedir al backend; mientras, `sessionStorage` + CSP |
+| D3 | Modelo de tokens: ¿refresh token en cookie `HttpOnly` desde el backend? | Pedir al backend; mientras, `sessionStorage` + CSP ([ADR-0004](decisions/0004-sesion-y-tokens.md)) |
 | D4 | Plataforma de CI (no hay `.github/`; el remoto no se verificó) | La del hosting del repo |
 | D5 | Versión de Node fijada en CI/Vercel | 24 LTS (`^24.15.0`) |
 | D6 | Herramienta de observabilidad de errores en producción | Ninguna hasta decidir; no agregar SDK sin ADR |
