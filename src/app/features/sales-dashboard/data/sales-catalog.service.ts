@@ -7,12 +7,16 @@ import { AuthService } from '../../../core/auth/auth.service';
 
 // `GET /sales/catalogs/tender-media` — medios de pago por código del POS.
 // `pendingReview = true`: el código llegó en una venta sin estar sembrado y el
-// equipo aún no lo revisa.
+// equipo aún no lo revisa. `dianCode` (DEV d9556b5): código del medio de pago en
+// el catálogo 12 de la DIAN (10 Efectivo, 48 Tarjeta Crédito, 49 Tarjeta Débito,
+// ZZZ Otro…), según la homologación Simphony → DIAN; `null` si el medio aún no
+// está homologado. Opcional: un backend anterior no lo manda.
 export interface TenderMediaOption {
   id: number;
   code: string;
   description: string;
   pendingReview: boolean;
+  dianCode?: string | null;
 }
 
 // `GET /sales/catalogs/reconciliation-statuses` — en el orden del catálogo.

@@ -80,7 +80,7 @@ export class RolesPermissions {
     if (role.users.length > 0) return;
     this.modal.confirm({
       nzTitle: '¿Eliminar este rol?',
-      nzContent: `Se dará de baja el rol <b>${escapeHtml(role.label)}</b> (${role.id}). Ya no se podrá asignar y su nombre quedará reservado: no podrás crear otro rol con el mismo nombre.`,
+      nzContent: `Se dará de baja el rol <b>${escapeHtml(role.label)}</b> (${role.id}). Ya no se podrá asignar a nadie. Su nombre queda libre: podrás crear otro rol con el mismo nombre.`,
       nzOkText: 'Eliminar',
       nzOkDanger: true,
       nzCancelText: 'Cancelar',

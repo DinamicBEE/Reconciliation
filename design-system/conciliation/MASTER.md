@@ -3115,6 +3115,29 @@ Backend `coctel_midd` DEV (rama `feature/catalogs`, Guia_Integracion_Frontend §
    especiales y **`seed-demo-sales.sql`**: 168 ventas de prueba deterministas (7 días × 6 tiendas × 4, notas
    crédito, pagos mixtos, los 3 estados), porque la captura real necesita credenciales de Facturiza.
 
+### Actualización: "Reprocesar" = `POST /sales/capture` + ajustes por DEV 541c538
+
+1. **"Reprocesar" conectado** a `POST /sales/capture` (Capture Service), con las mismas condiciones de siempre:
+   **un solo día y una tienda específica** (`reprocessTarget`). Body `{ ubicacionIds: [tienda], dateFrom: día }`.
+   Es síncrono: la confirmación queda en carga hasta que responde. El aviso sale de `capture-result.util.ts`
+   (`describeCaptureResult` / `describeCaptureError`, función pura con pruebas):
+   - 200 OK → éxito con conteos (recibidos, nuevos, ya existían); 207 parcial → advertencia con el detalle del día;
+   - **502 trae el mismo resultado** (Facturiza no respondió / sin credenciales) → error con su `errorMessage`;
+   - 409 (ya se está capturando) y 400/404 → el `detail` del `ProblemDetail`; 403 → falta `capture_sales`.
+   Si entraron documentos nuevos, la tabla se recarga (`SalesDashboardService.reload()`).
+2. **`SKIP_HTTP_ERROR_ALERT`** (`HttpContextToken` en `http-error-alert.interceptor.ts`): una llamada que muestra
+   sus propios errores lo activa y el interceptor no agrega su toast genérico (sí conserva la redirección por
+   contraseña pendiente). Lo usa `SalesApiService.capture`.
+3. **"Reprocesar" se decide por permiso:** `AccessControlService.canReprocessSales` = `capture_sales` (antes rol
+   ADMIN/CONTABILIDAD). Es el permiso que exige el endpoint; con la regla por rol, quien no lo tiene recibía 403.
+4. **Roles (DEV 95db1f3):** el nombre se valida como el backend: duplicado solo si otro rol **activo** tiene el
+   mismo nombre ignorando mayúsculas y espacios (los acentos cuentan); ya no se compara el código derivado. Al
+   crear se muestra "Código estimado" (el backend agrega `_2`, `_3`… si está ocupado). La confirmación de baja ya
+   no dice que el nombre queda reservado: queda libre.
+5. **Baja de roles con usuarios:** DEV sigue respondiendo **409 `ROLE_IN_USE`** si alguna persona habilitada
+   tiene el rol (verificado contra la pila local), así que el botón Eliminar sigue deshabilitado en ese caso.
+6. `TenderMediaOption.dianCode?` (código DIAN del medio de pago, `null` si no está homologado).
+
 ## Patrón: encabezado de página (`nz-page-header`) — regla general
 
 **Toda pantalla del shell pone su título con `nz-page-header`** (`NzPageHeaderModule`,

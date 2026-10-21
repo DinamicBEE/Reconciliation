@@ -71,10 +71,10 @@
 
       <span class="toolbar__spacer"></span>
 
-      <!-- "Reproceso de ventas" (matriz 7.16 del DED): Admin/Contabilidad
-           únicamente, sin permiso propio — ver
-           AccessControlService.canReprocessSales. Además solo se habilita
-           con un día específico + una tienda específica seleccionados
+      <!-- "Reprocesar" = `POST /sales/capture` (vuelve a traer de Facturiza las
+           ventas del día). Visible con el permiso `capture_sales` — ver
+           AccessControlService.canReprocessSales. Solo se habilita con un día
+           específico + una tienda específica seleccionados
            (`service.reprocessTarget()`, ver sales-dashboard.service.ts) — el
            <span> lleva el tooltip en vez del <button> porque un botón
            `disabled` no dispara eventos de hover en Ant Design; así el
@@ -84,7 +84,7 @@
           nz-tooltip
           [nzTooltipTitle]="
             service.reprocessTarget()
-              ? 'Reprocesar el día completo de la tienda seleccionada'
+              ? 'Volver a traer de Facturiza las ventas de ese día y esa tienda'
               : 'Selecciona una fecha específica (un solo día) y una tienda para habilitar el reproceso'
           "
         >

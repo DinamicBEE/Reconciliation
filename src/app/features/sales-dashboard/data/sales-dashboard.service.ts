@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { Observable, catchError, debounceTime, of, switchMap, tap } from 'rxjs';
 import { toIsoDate } from '../../../shared/utils/iso-date.util';
-import { SaleListItem, SalesApiService, SalesListParams } from './sales-api.service';
+import { CaptureBatchResult, SaleListItem, SalesApiService, SalesListParams } from './sales-api.service';
 
 // Medio de pago, estado y tienda: `id` REAL de los catálogos — el mismo valor
 // que recibe `GET /sales` (`tenderMedia`, `status`, `store`). La tienda sale de
@@ -77,10 +77,15 @@ export class SalesDashboardService {
     };
   });
 
-  private readonly query = computed<SalesListParams>(() => ({
-    ...this.filters(),
-    page: this.page(),
-    pageSize: this.pageSize(),
+  // Sube para volver a pedir la página actual con los mismos filtros (p. ej.
+  // después de reprocesar un día y que entren documentos nuevos).
+  private readonly refreshTick = signal(0);
+
+  // Lo que dispara una consulta: los parámetros de `GET /sales` y el contador de
+  // recarga (no viaja al backend; solo fuerza repetir la misma consulta).
+  private readonly query = computed<{ params: SalesListParams; tick: number }>(() => ({
+    params: { ...this.filters(), page: this.page(), pageSize: this.pageSize() },
+    tick: this.refreshTick(),
   }));
 
   constructor() {
@@ -94,7 +99,7 @@ export class SalesDashboardService {
           this.loadFailed.set(false);
         }),
         switchMap((query) =>
-          this.api.list(query).pipe(
+          this.api.list(query.params).pipe(
             // El aviso del error lo da `httpErrorAlertInterceptor`.
             catchError(() => {
               this.loadFailed.set(true);
@@ -175,11 +180,16 @@ export class SalesDashboardService {
     return { date: range[0], storeId: store };
   });
 
-  // Simula el reproceso (delay + éxito): `POST /sales/capture` aún no está
-  // conectado (ver docs/analisis-front-vs-back-dev).
-  reprocessDay(target: ReprocessTarget): Promise<void> {
-    void target;
-    return new Promise((resolve) => setTimeout(resolve, 1200));
+  // `POST /sales/capture` de UN día y UNA tienda (las condiciones del botón
+  // "Reprocesar"): vuelve a traer de Facturiza las ventas de ese día; es
+  // idempotente (lo que ya existía cuenta como omitido, no se duplica).
+  reprocessDay(target: ReprocessTarget): Observable<CaptureBatchResult> {
+    return this.api.capture({ ubicacionIds: [target.storeId], dateFrom: toIsoDate(target.date) });
+  }
+
+  // Vuelve a consultar la página actual con los filtros actuales.
+  reload(): void {
+    this.refreshTick.update((n) => n + 1);
   }
 
   openSale(sale: SaleListItem): void {

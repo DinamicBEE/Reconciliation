@@ -1,3 +1,4 @@
+import { firstValueFrom } from 'rxjs';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -31,6 +32,7 @@ import { SaleListItem } from './data/sales-api.service';
 import { buildSaleListCsv } from './data/sale-list-export.util';
 import { MoneyPipe } from '../../core/country/money.pipe';
 import { SalesCatalogService } from './data/sales-catalog.service';
+import { CaptureMessage, describeCaptureError, describeCaptureResult } from './data/capture-result.util';
 
 const RECONCILIATION_STATUSES = new Set<string>(['conciliado', 'desconciliado', 'por_conciliar']);
 
@@ -193,28 +195,39 @@ export class SalesDashboard {
     });
   }
 
-  // Botón "Reprocesar" del toolbar — solo llega a ejecutarse cuando
-  // `service.reprocessTarget()` no es null (un día y una tienda específicos).
-  // `nzOnOk` como Promise deja el botón "Confirmar" en carga hasta que resuelva.
+  // Botón "Reprocesar" del toolbar — `POST /sales/capture` de UN día y UNA tienda:
+  // solo llega a ejecutarse cuando `service.reprocessTarget()` no es null (mismas
+  // condiciones que `[disabled]` en la plantilla). `nzOnOk` como Promise deja el
+  // botón "Confirmar" en carga hasta que el backend responde (la captura es
+  // síncrona y puede tardar). El resultado se avisa con el detalle del backend
+  // (`describeCaptureResult`/`describeCaptureError`) y, si entraron documentos
+  // nuevos, se recarga la tabla.
   protected onReprocessClick(): void {
-    // Matriz 7.16 del DED: Admin/Contabilidad (ver
-    // AccessControlService.canReprocessSales); defensa en profundidad.
+    // Requiere `capture_sales` (AccessControlService.canReprocessSales); el botón
+    // ya se oculta sin él, este guard es defensa en profundidad.
     if (!this.access.canReprocessSales()) return;
     const target = this.service.reprocessTarget();
     if (!target) return;
 
     const dateLabel = this.formatDate(target.date);
     const storeLabel = this.catalog.findUbicacion(target.storeId)?.nombre ?? `#${target.storeId}`;
+    const place = `${storeLabel} del ${dateLabel}`;
 
     this.modal.confirm({
       nzTitle: 'Reprocesar día',
-      nzContent: `Estás a punto de reprocesar el día completo del <b>${dateLabel}</b> para <b>${storeLabel}</b>. Esto vuelve a ejecutar la conciliación de ese día para esa tienda.`,
-      nzOkText: 'Confirmar',
+      nzContent: `Se volverán a traer de Facturiza las ventas del <b>${dateLabel}</b> de <b>${storeLabel}</b>. Las que ya existen no se duplican. Puede tardar unos segundos.`,
+      nzOkText: 'Reprocesar',
       nzCancelText: 'Cancelar',
-      nzOnOk: () =>
-        this.service.reprocessDay(target).then(() => {
-          this.message.success(`${storeLabel} del ${dateLabel} se reprocesó correctamente.`);
-        }),
+      nzOnOk: async () => {
+        let result: CaptureMessage;
+        try {
+          result = describeCaptureResult(await firstValueFrom(this.service.reprocessDay(target)), place);
+        } catch (err) {
+          result = describeCaptureError(err, place);
+        }
+        this.message.create(result.level, result.text, { nzDuration: result.level === 'success' ? 4500 : 8000 });
+        if (result.reload) this.service.reload();
+      },
     });
   }
 

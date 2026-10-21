@@ -29,19 +29,12 @@ export class AccessControlService {
     return new Set<PermissionKey>(user?.permissions ?? []);
   });
 
-  // "Reproceso de ventas" (matriz 7.16 del DED): sin permiso propio — el DED
-  // lo limita a Admin/Contabilidad directamente por rol, un subconjunto MÁS
-  // ANGOSTO que `view_dashboard` (que desde esta actualización también
-  // incluye Tesorería y Costos, matriz 7.16) — por
-  // eso no puede expresarse con `hasPermission('view_dashboard')` sola. Vive
-  // aquí (no en sales-dashboard) por el mismo motivo que `hasPermission`: un
-  // solo lugar que sabe "quién puede qué". Por rol REAL del backend
-  // (`auth.currentUser()?.roles`), no por el registro mock editable —
-  // consistente con `permissions` arriba.
-  readonly canReprocessSales = computed(() => {
-    const roles = this.auth.currentUser()?.roles ?? [];
-    return roles.includes('ADMIN') || roles.includes('CONTABILIDAD');
-  });
+  // "Reprocesar" (Resumen de venta) = `POST /sales/capture`, que el backend
+  // protege con el permiso `capture_sales` (Guia_Integracion_Frontend §6.3). Antes
+  // era una regla por rol (ADMIN/CONTABILIDAD): con el endpoint conectado, mostrar
+  // el botón a quien no tiene el permiso solo produciría un 403, y en un DEV sin
+  // roles predefinidos nadie lo vería. Se decide por permiso, como el resto.
+  readonly canReprocessSales = computed(() => this.permissions().has('capture_sales'));
 
   // Leído por `authGuard` (fuerza a `/cambiar-password` antes que cualquier
   // otra ruta protegida) y por `mustChangePasswordGuard` (esa misma ruta,
@@ -57,8 +50,8 @@ export class AccessControlService {
     return this.permissions().has(key);
   }
 
-  // Por rol REAL del backend (`auth.currentUser()?.roles`), mismo criterio que
-  // `canReprocessSales` — para pantallas exclusivas de un rol que ningún
+  // Por rol REAL del backend (`auth.currentUser()?.roles`) — para pantallas
+  // exclusivas de un rol que ningún
   // permiso del catálogo expresa por sí solo (p. ej. "Roles y permisos", solo
   // ADMIN: `manage_roles` también lo tiene ALTAS).
   hasRole(role: RoleId): boolean {

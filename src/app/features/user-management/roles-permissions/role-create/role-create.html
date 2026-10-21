@@ -49,7 +49,12 @@
           (keydown.enter)="onSave()"
         />
         @if (roleCode()) {
-          <span class="role-create__code text-muted">Código: <span class="font-mono">{{ roleCode() }}</span></span>
+          <span class="role-create__code text-muted">
+            {{ isEdit() ? 'Código' : 'Código estimado' }}: <span class="font-mono">{{ roleCode() }}</span>
+            @if (!isEdit()) {
+              (si ya está en uso, el sistema le agrega un número)
+            }
+          </span>
         }
         @if (nameControl.touched && nameControl.errors; as errors) {
           <span class="role-create__error">

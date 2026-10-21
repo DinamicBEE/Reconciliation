@@ -1,4 +1,4 @@
-import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpContextToken, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { catchError, throwError } from 'rxjs';
@@ -28,6 +28,12 @@ import {
 const CODES_WITH_OWN_UI = new Set(['INVALID_CREDENTIALS', 'ACCOUNT_LOCKED', 'SESSION_IDLE_TIMEOUT']);
 
 const CHANGE_PASSWORD_URL = '/cambiar-password';
+
+// Para una llamada que muestra sus propios errores con el detalle del backend
+// (p. ej. `POST /sales/capture`, que responde 502 con un resultado válido y sus
+// 400/404/409 en formato `ProblemDetail`): el interceptor no agrega su toast
+// genérico. Uso: `http.post(url, body, { context: new HttpContext().set(SKIP_HTTP_ERROR_ALERT, true) })`.
+export const SKIP_HTTP_ERROR_ALERT = new HttpContextToken<boolean>(() => false);
 
 /**
  * Alerta genérica para errores de negocio del backend real (auth-service)
@@ -72,6 +78,8 @@ export const httpErrorAlertInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
+  const skipGenericAlert = req.context.get(SKIP_HTTP_ERROR_ALERT);
+
   return next(req).pipe(
     catchError((err: unknown) => {
       if (err instanceof HttpErrorResponse) {
@@ -83,6 +91,8 @@ export const httpErrorAlertInterceptor: HttpInterceptorFn = (req, next) => {
             message.warning(ERROR_CODE_MESSAGES[PASSWORD_CHANGE_REQUIRED_CODE]);
             void router.navigateByUrl(CHANGE_PASSWORD_URL);
           }
+        } else if (skipGenericAlert) {
+          // La llamada muestra su propio error (ver SKIP_HTTP_ERROR_ALERT).
         } else if (code) {
           if (!CODES_WITH_OWN_UI.has(code)) {
             message.error(backendErrorMessage(err) ?? `Ocurrió un error inesperado (${code}).`);

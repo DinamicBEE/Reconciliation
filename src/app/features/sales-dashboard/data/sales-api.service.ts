@@ -1,7 +1,8 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { EMPTY, Observable, expand, reduce } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { SKIP_HTTP_ERROR_ALERT } from '../../../core/interceptors/http-error-alert.interceptor';
 
 // Contrato de `GET /sales` (Core Service, Guia_Integracion_Frontend §8.1).
 // Una fila = un documento (factura o nota crédito). Los importes llegan tal como
@@ -47,6 +48,59 @@ export interface SalesListPage {
 
 export const SALES_MAX_PAGE_SIZE = 100;
 
+// --- `POST /sales/capture` (Capture Service, permiso `capture_sales`) ---
+// Captura SÍNCRONA desde Facturiza de una o varias tiendas y un día o rango
+// (hasta 31 tiendas × días). Idempotente: repetirla no duplica documentos. El
+// front la usa para UN día y UNA tienda (botón "Reprocesar").
+export interface CaptureRequest {
+  ubicacionIds: number[];
+  dateFrom: string; // yyyy-MM-dd
+  dateTo?: string; // inclusive; omitido = solo dateFrom
+}
+
+// OK = completo; INCOMPLETE = faltan o fallaron documentos, o conflicto de folio;
+// ERROR = Facturiza no respondió o se interrumpió; RUNNING = ya se estaba capturando.
+export type CaptureStatus = 'OK' | 'INCOMPLETE' | 'ERROR' | 'RUNNING';
+
+interface CaptureCounts {
+  status: CaptureStatus;
+  capturedCount: number; // documentos recibidos
+  insertedCount: number; // nuevos guardados
+  skippedCount: number; // ya existían
+  failedCount: number; // no se pudieron guardar
+  capturedAmount: number;
+}
+
+// Resultado de un día de una tienda (una corrida de la bitácora).
+export interface CaptureDayResult extends CaptureCounts {
+  captureLogId: number; // 0 si ya se estaba capturando (no se volvió a capturar)
+  ubicacionId: number;
+  businessDate: string;
+  declaredCount: number | null; // lo que Facturiza declara; null si no respondió
+  pages: number;
+  errorMessage: string | null;
+}
+
+export interface CaptureLocationResult extends CaptureCounts {
+  ubicacionId: number;
+  dateFrom: string;
+  dateTo: string;
+  daysRequested: number;
+  declaredCount: number;
+  days: CaptureDayResult[];
+}
+
+// Respuesta de `POST /sales/capture`: 200 si todo quedó OK, 207 si es mixto y
+// 502 (¡con este mismo cuerpo!) si Facturiza no respondió en ninguna captura.
+export interface CaptureBatchResult extends CaptureCounts {
+  dateFrom: string;
+  dateTo: string;
+  locationsRequested: number;
+  daysRequested: number;
+  declaredCount: number;
+  locations: CaptureLocationResult[];
+}
+
 /**
  * `GET /sales` — listado paginado de ventas del Core Service (permiso
  * `view_dashboard`). Solo lee lo ya capturado; traer ventas nuevas de Facturiza
@@ -56,6 +110,16 @@ export const SALES_MAX_PAGE_SIZE = 100;
 export class SalesApiService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = environment.apiUrl;
+
+  // `POST /sales/capture`. Los errores no pasan por la alerta genérica del
+  // interceptor (`SKIP_HTTP_ERROR_ALERT`): el 502 trae un `CaptureBatchResult`
+  // válido y los 400/404/409 llegan como `ProblemDetail` cuyo `detail` explica el
+  // motivo; quien llama los muestra con `describeCaptureResult`.
+  capture(request: CaptureRequest): Observable<CaptureBatchResult> {
+    return this.http.post<CaptureBatchResult>(`${this.apiUrl}/sales/capture`, request, {
+      context: new HttpContext().set(SKIP_HTTP_ERROR_ALERT, true),
+    });
+  }
 
   list(params: SalesListParams): Observable<SalesListPage> {
     return this.http.get<SalesListPage>(`${this.apiUrl}/sales`, { params: toHttpParams(params) });

@@ -49,9 +49,11 @@ interface PermissionModule {
  * /permissions`, vía `AccessCatalogService`; nunca una lista propia del front).
  * Exclusiva de ADMIN (`permissionGuard` con `data.role`).
  *
- * - `/gestion-de-roles/nuevo` → `POST /roles`. El backend deriva el `code` del
- *   nombre (`toRoleCode`); el nombre se valida contra los roles existentes por
- *   nombre Y por código derivado (el backend responde 409 `ROLE_ALREADY_EXISTS`).
+ * - `/gestion-de-roles/nuevo` → `POST /roles`. El nombre se valida como el
+ *   backend (DEV 95db1f3): no puede repetir el de otro rol ACTIVO, sin distinguir
+ *   mayúsculas (409 `ROLE_ALREADY_EXISTS`). El `code` lo deriva el backend del
+ *   nombre; si ya está ocupado le agrega `_2`, `_3`…, así que el que se muestra
+ *   al crear (`toRoleCode`) es orientativo: el definitivo llega en la respuesta.
  * - `/gestion-de-roles/:code` → precarga con `GET /roles/{code}`, guarda con
  *   `PATCH /roles/{code}` (solo lo que cambió) y da de baja con
  *   `DELETE /roles/{code}`. Editar los permisos se PROPAGA a las personas que
@@ -270,7 +272,7 @@ export class RoleCreate {
     if (!code || !original || !this.canDelete()) return;
     this.modal.confirm({
       nzTitle: '¿Eliminar este rol?',
-      nzContent: `Se dará de baja el rol <b>${escapeHtml(original.name)}</b> (${code}). Ya no se podrá asignar y su nombre quedará reservado: no podrás crear otro rol con el mismo nombre.`,
+      nzContent: `Se dará de baja el rol <b>${escapeHtml(original.name)}</b> (${code}). Ya no se podrá asignar a nadie. Su nombre queda libre: podrás crear otro rol con el mismo nombre.`,
       nzOkText: 'Eliminar',
       nzOkDanger: true,
       nzCancelText: 'Cancelar',
@@ -303,27 +305,26 @@ export class RoleCreate {
     void this.router.navigate(['/gestion-de-roles']);
   }
 
-  // Mismo nombre (sin distinguir mayúsculas/acentos) o mismo código derivado que
-  // otro rol del catálogo — en edición, sin contar el propio.
+  // Mismo nombre que otro rol activo (sin distinguir mayúsculas) — en edición,
+  // sin contar el propio.
   private duplicateName(control: AbstractControl<string>): ValidationErrors | null {
-    const name = normalize(control.value ?? '');
+    const name = normalizeName(control.value ?? '');
     if (!name) return null;
-    const code = toRoleCode(control.value ?? '');
     const own = this.code?.();
+    // El catálogo (`GET /roles`) solo trae roles activos: los dados de baja no
+    // reservan su nombre.
     const exists = this.catalog
       .roles()
       .filter((r) => r.id !== own)
-      .some((r) => normalize(r.label) === name || r.id === code);
+      .some((r) => normalizeName(r.label) === name);
     return exists ? { duplicate: true } : null;
   }
 }
 
-function normalize(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
+// Misma comparación que el backend (`existsByNameIgnoreCaseAndEnabledTrue`):
+// sin espacios sobrantes y sin distinguir mayúsculas. Los acentos SÍ cuentan.
+function normalizeName(text: string): string {
+  return text.trim().toLowerCase();
 }
 
 function escapeHtml(text: string): string {
