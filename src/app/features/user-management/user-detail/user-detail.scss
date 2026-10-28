@@ -2,10 +2,7 @@
 @use '../../../shared/styles/summary-columns';
 @use '../../../shared/styles/info-fields';
 
-// Sin max-width: las tabs y sus cards deben usar todo el ancho disponible
-// de la pantalla (a diferencia del formulario angosto de un solo campo que
-// tenía antes esta pantalla) — el ancho legible de cada CAMPO lo pone
-// .user-form (max-width: 420px) dentro de cada card, no el contenedor.
+// Sin max-width: el ancho legible de cada campo lo pone .user-form (420px).
 .user-detail {
   display: flex;
   flex-direction: column;
@@ -21,27 +18,20 @@
 }
 
 
-// nz-tabs debe ocupar todo el ancho de la pantalla (a diferencia del resto
-// de la app, que no necesitó forzar esto en ningún otro componente).
+// nz-tabs ocupa todo el ancho de la pantalla.
 nz-tabs,
 .user-detail__tabs {
   display: block;
   width: 100%;
 }
 
-// Card general de cada tab — toma todo el ancho de la pantalla, con las
-// sub-cards de esa sección DENTRO (ver MASTER.md "Patrón: card de tabla":
-// mismo radius de 12px que `.table-card`, aquí sin tabla — es el mismo
-// criterio de "contenedor general" aplicado a un tab en vez de a una tabla).
+// Card general de cada tab, con sus secciones dentro.
+// MASTER.md "Patrón: tab con card general + secciones + modo edición (`user-detail`)"
 .tab-card {
   border-radius: 12px !important;
 }
 
-// Las secciones de cada tab (antes lado a lado en un grid de 2 columnas, ver
-// `.tab-columns` — retirada) ahora van apiladas verticalmente. Cada
-// `.tab-card__section` es un `<div>` normal, NO un `<nz-card>` — sin borde
-// propio, así que un hairline (`border-bottom`) entre secciones reemplaza el
-// borde que antes daba cada card individual.
+// Secciones apiladas (`<div>`, no `nz-card`), separadas por un hairline.
 .tab-card__sections {
   display: flex;
   flex-direction: column;
@@ -72,13 +62,8 @@ nz-tabs,
   margin: 0 0 16px;
 }
 
-// Barra de guardado ÚNICA para "Información general" — un solo botón para
-// las 2 secciones editables (Información personal + Organización, ver
-// user-detail.ts `onSaveProfile()`), no un botón por sección. Vive FUERA de
-// `.tab-card__sections` (hermano, no hijo — ver .html) para no heredar el
-// padding vertical de `.tab-card__section`; el propio `border-top` marca la
-// separación con el contenido de arriba, igual criterio que el hairline
-// entre secciones.
+// Barra de guardado única de "Información general"; hermana de .tab-card__sections
+// para no heredar su padding.
 .tab-card__save-bar {
   margin-top: 20px;
   padding-top: 20px;
@@ -91,17 +76,12 @@ nz-tabs,
   max-width: 420px;
 }
 
-// "Nuevo usuario" (creación) y "Organización" son formularios de una sola
-// card, sin nada al lado (a diferencia de "Información general"/"Seguridad
-// y acceso", que sí usan todo el ancho vía .tab-columns) — se centran en la
-// pantalla en vez de estirarse de borde a borde.
+// Formularios de una sola card (alta): centrados en vez de estirarse.
 .card-centered {
   max-width: 560px;
   margin: 0 auto;
 
-  // El botón de guardar/crear queda centrado (no pegado a la izquierda como
-  // en el resto de las cards) — sigue siendo el último elemento del form,
-  // así que "abajo" ya lo resuelve el flujo normal del documento.
+  // Botón de guardar/crear centrado.
   .user-form__submit {
     align-self: center;
   }
@@ -131,19 +111,10 @@ nz-tabs,
   font-weight: 600;
 }
 
-// Estructura vertical "icono + etiqueta / valor" (`.info-field`/
-// `.info-fields`, incluida la variante de 4 columnas y el encabezado de
-// sub-sección) — promovida a `shared/styles/_info-fields.scss` al aparecer
-// un segundo consumidor (el resumen de venta de `sales-dashboard`, de solo
-// lectura); ver ese partial y MASTER.md. Lo que sigue siendo local a esta
-// pantalla es el layout del AVATAR junto al grid, no la estructura de campo
-// en sí.
+// La estructura .info-field/.info-fields vive en shared/styles/_info-fields.scss;
+// aquí solo el layout del avatar junto al grid.
 
-// Avatar + grid de 7 campos lado a lado — el avatar SALIÓ del grid (antes
-// ocupaba 1 columna × 2 filas dentro de él, `grid-row: span 2`) para poder
-// reducir su tamaño sin heredar el alto de 2 filas de campos; ahora es un
-// tamaño fijo propio y el grid de campos ocupa el resto del ancho
-// (`flex: 1`), sin huecos que acomodar en el auto-placement.
+// Avatar de tamaño fijo junto al grid de campos (flex: 1), fuera del grid.
 .info-personal {
   display: flex;
   align-items: flex-start;
@@ -165,10 +136,7 @@ nz-tabs,
   height: 125px;
   border-radius: 8px;
 
-  // El host de nz-avatar ya trae la clase `.ant-avatar` — se sobreescribe
-  // aquí en vez de con `::ng-deep` porque es el propio elemento, no uno
-  // interno. La imagen SÍ es un nodo interno (`<img>`, ver avatar.component
-  // de ng-zorro) — ese sí necesita `::ng-deep`.
+  // El host de nz-avatar es .ant-avatar (sin ::ng-deep); el <img> interno sí lo necesita.
   &.ant-avatar {
     width: 125px;
     height: 125px;
@@ -203,11 +171,8 @@ nz-tabs,
   margin: 0;
 }
 
-// 4 columnas fijas — cada grupo (Consulta/Operación/Administración/...) en
-// su propia columna con sus permisos debajo, no apilados en una sola lista
-// vertical larga. Si hay menos de 4 grupos (hoy 3), las columnas sobrantes
-// simplemente quedan vacías — sin acomodar el conteo real de grupos a
-// propósito, para no tener que tocar este grid el día que se agregue un 4°.
+// 4 columnas fijas, un grupo de permisos por columna; las sobrantes quedan vacías
+// a propósito para no tocar el grid al agregar un grupo.
 .permission-groups {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -223,8 +188,7 @@ nz-tabs,
   }
 }
 
-// `grid-column: 1 / -1`: ocupa la fila completa arriba de las 4 columnas de
-// grupos (ver `.permission-groups`), en vez de colarse dentro de la primera.
+// Ocupa la fila completa sobre las columnas de grupos.
 .permission-groups__label {
   grid-column: 1 / -1;
   font-size: 13px;
@@ -241,10 +205,7 @@ nz-tabs,
   margin: 0 0 8px;
 }
 
-// Checkbox + su label alineados horizontalmente y centrados entre sí — por
-// defecto nz-checkbox ya los pone lado a lado, pero display:flex +
-// align-items:center asegura el centrado vertical incluso si el texto del
-// label ocupa más de una línea.
+// Centrado vertical aunque el label ocupe más de una línea.
 .permission-item {
   display: flex;
   align-items: center;
@@ -260,8 +221,7 @@ nz-tabs,
   font-size: 12px;
 }
 
-// "Contraseña temporal" (Organización) — botón de copiar pegado al valor,
-// color de marca como el resto de botones-icono (`.row-actions`).
+// "Contraseña temporal": botón de copiar junto al valor, color de marca.
 .temp-password__copy {
   color: var(--color-primary) !important;
 }
@@ -283,10 +243,7 @@ nz-tabs,
   th {
     text-align: left;
     padding: 10px 16px;
-    // Sin fondo — igual que el header de cualquier `nz-table` dentro de
-    // `.table-card` (ver shared/styles/_data-table.scss y MASTER.md,
-    // "Patrón: card de tabla"); esta tabla es HTML plano, no `nz-table`, así
-    // que ese bridge no la toca sola y hay que igualarlo a mano aquí.
+    // Sin fondo, como el header de nz-table en .table-card: esta tabla es HTML plano.
     background: transparent;
     color: var(--color-foreground);
     font-size: 11px;

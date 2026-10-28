@@ -78,7 +78,7 @@
       </svg>
     </button>
 
-    @if (currentAppUser(); as user) {
+    @if (auth.currentUser()) {
       <div class="app-header__avatar-menu" #avatarMenuRoot>
         <button
           type="button"
@@ -88,7 +88,7 @@
           aria-haspopup="menu"
           [attr.aria-expanded]="avatarMenuOpen() ? 'true' : 'false'"
         >
-          <nz-avatar class="user-card__avatar" [nzSrc]="avatarUrl()" [nzText]="initials()" [ngStyle]="avatarStyle()" />
+          <nz-avatar class="user-card__avatar" [nzText]="initials()" [ngStyle]="avatarStyle()" />
         </button>
 
         @if (avatarMenuOpen()) {

@@ -1,11 +1,8 @@
 import { Component, effect, inject } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
-import { AuthService } from './features/auth/data/auth.service';
+import { AuthService } from './core/auth/auth.service';
 
-// Root sin chrome propio: `login` y lo protegido por Shell (dashboard, etc.)
-// se resuelven como rutas hijas (ver app.routes.ts) — antes app-shell vivía
-// aquí siempre montado, lo que habría envuelto también a login en el header
-// del dashboard.
+// Root sin chrome propio: `login` y `Shell` son rutas hijas (ver app.routes.ts).
 @Component({
   imports: [RouterOutlet],
   selector: 'app-root',
@@ -17,14 +14,8 @@ export class App {
   private readonly router = inject(Router);
 
   constructor() {
-    // Sesión cerrada sin que el usuario lo pidiera — por inactividad (el
-    // refresh respondió SESSION_IDLE_TIMEOUT, ver
-    // AuthService.refreshAccessToken) o por un access token invalidado fuera
-    // de esa ventana (cualquier otro 401, ver `AuthService.request` /
-    // AuthService.invalidateSession): los guards solo actúan al navegar, así
-    // que sin esto la pantalla actual se quedaría abierta sin sesión. Vive
-    // aquí y no en Shell para cubrir también /cambiar-password, que está
-    // fuera de Shell. `Login` muestra el aviso al llegar.
+    // Lleva a /login tras un cierre no pedido; los guards solo actúan al navegar.
+    // Ver docs/codigo/sesion-y-acceso.md#cierre-de-sesion
     effect(() => {
       const reason = this.auth.sessionEndReason();
       if (reason !== null && !this.router.url.startsWith('/login')) {

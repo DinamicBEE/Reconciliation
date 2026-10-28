@@ -1,0 +1,42 @@
+@use '../../../../shared/styles/import-dropzone';
+
+:host {
+  display: block;
+}
+
+.text-success {
+  color: var(--color-success);
+}
+
+// Archivo seleccionado: check de éxito y nombre, debajo del dropzone.
+.file-loaded {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.file-loaded__check {
+  flex-shrink: 0;
+  color: var(--color-success);
+}
+
+.file-loaded__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.file-loaded__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.file-loaded__meta {
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+}

@@ -62,11 +62,7 @@
   font-size: 15px;
 }
 
-// "Descuentos y propinas" + "Impuestos" en la misma fila, como si fueran 2
-// columnas de un solo bloque — mismo criterio de colapso que
-// `.summary-columns` (1 columna en móvil), pero sin el divisor central: son
-// 2 secciones independientes (cada una con su propio heading) compartiendo
-// fila, no una sola lista de campos partida en 2.
+// MASTER.md "`.sale-drawer__row`: 2 secciones en la misma fila"
 .sale-drawer__row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -92,10 +88,8 @@
     padding: 0 0 6px;
     border-bottom: 1px solid var(--color-border);
 
-    // `.sale-drawer__items th` tiene más especificidad que la utilidad
-    // compartida `.text-right` sola — sin este override, los headers
-    // numéricos se quedaban a la izquierda mientras sus valores ya estaban
-    // a la derecha, y la columna parecía "correrse" una posición.
+    // `.sale-drawer__items th` gana por especificidad a `.text-right`; ver
+    // MASTER.md "Gotcha de CSS: una utilidad compartida puede perder contra un selector".
     &.text-right {
       text-align: right;
     }
@@ -119,10 +113,9 @@
   }
 }
 
-// Resumen de la venta: usa `.info-fields`/`.info-field`
-// (`shared/styles/_info-fields.scss`, @use arriba) — la MISMA estructura
-// vertical "icono+etiqueta arriba, valor abajo" que Administración de
-// usuarios, a pedido explícito. `.summary-columns`/`.summary-field`
-// (`_summary-columns.scss`) ya NO es consumida por esta pantalla — sigue
-// viva solo para el form de creación de usuario en `user-detail`, ver
-// MASTER.md "Patrón: Drawer de detalle...".
+// Resumen de la venta con `.info-fields`: MASTER.md "Patrón: Drawer de detalle al hacer click en una fila (sin navegar)".
+
+.sale-drawer__note {
+  font-size: 12px;
+  margin: 12px 0 0;
+}

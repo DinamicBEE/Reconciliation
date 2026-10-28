@@ -14,9 +14,9 @@ Once the server is running, open your browser and navigate to `http://localhost:
 
 ## Datos locales (sin backend)
 
-Esta rama trabaja **solo con data local**: no hace peticiones HTTP. El login, la administración de usuarios,
-roles/permisos y la bitácora usan un backend simulado en memoria (`src/app/features/auth/data/auth-mock-backend.ts`)
-con el mismo contrato que el auth-service real. Cuentas de demo: ver la pantalla de login.
+Esta rama trabaja **solo con data local**: no habla con ningún backend. Un interceptor (`mockBackendInterceptor`,
+ver `docs/codigo/mock-backend.md`) responde las peticiones HTTP del portal con el mismo contrato del Gateway:
+login, usuarios, roles/permisos, bitácora, catálogos y ventas. Cuentas de demo: ver la pantalla de login.
 
 ## País (México / Colombia)
 

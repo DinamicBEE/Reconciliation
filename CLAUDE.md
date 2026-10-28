@@ -20,7 +20,8 @@ manda sobre cualquier sugerencia genérica de la skill.
 
 ## Regla: actualizar documentos (docs/)
 
-Cada vez que se **actualice un documento** de `docs/` (PDF, Excel, etc.):
+Cada vez que se **actualice un documento** de `docs/` (PDF, Excel, etc.; los `.md` de
+`docs/architecture/` y `docs/codigo/` se versionan con git y no llevan respaldo `_vN`):
 
 1. **Respaldo primero.** Copiar la versión vigente a una carpeta de respaldo,
    agregando la versión al nombre (`<nombre>_v<versión>.<ext>`, p. ej.
@@ -60,3 +61,28 @@ Toda tabla nueva va en `<nz-card class="table-card" [nzBodyStyle]="{ padding: '2
 `nzSize="middle"`, celda principal título + subtítulo, listas en columna (dos columnas si
 crecen), indicadores en su propia celda centrada como `.chip` de solo lectura. Detalle en
 `design-system/conciliation/MASTER.md`, "Regla general: tablas".
+
+## Regla: comentarios cortos
+
+Nada de comentarios largos en `src/`: `//` de 2 líneas como máximo, TSDoc de 4 líneas de
+descripción como máximo (más tags) para la API exportada, y en HTML solo marcas de sección de una
+línea. Sin historia ("antes era…"): vive en git y en MASTER.md. El porqué extenso, los contratos y
+las invariantes van a `docs/codigo/<area>.md` y se enlazan con `@see docs/codigo/<area>.md#<ancla>`.
+Convención: [`docs/codigo/README.md`](docs/codigo/README.md); revisión: `pnpm lint:comments`.
+
+## Agentes de pruebas
+
+- Usa `angular-unit-tests` para configurar Vitest o trabajar en pruebas unitarias de Angular.
+- Usa `angular-e2e` para configurar Playwright o trabajar en flujos E2E.
+- Antes de delegar, indica cuál es la aplicación o funcionalidad objetivo.
+- Sigue las reglas generales del repositorio y conserva las herramientas de pruebas existentes, salvo que se pida migrarlas.
+
+## Arquitectura Front-end
+
+- El baseline arquitectónico del front-end Angular está documentado en `docs/architecture/frontend-angular.md`. Al iniciar el proyecto, si el documento no existe o está vacío, usa `angular-architect` para inspeccionar el repositorio y crearlo con contexto real.
+- Usa `angular-architect` para definir o revisar estructura de features, límites entre capas, routing, estado, DI, formularios, API, estilos, accesibilidad, testing y dependencias.
+- El agente debe descubrir primero el dominio y los requisitos en la documentación del proyecto; no debe asumir roles, entidades, backend, librerías o estructura que no estén confirmados.
+- La versión y configuración instaladas definen el estado actual. Para un proyecto greenfield, Angular 22 es la versión objetivo. Verifica APIs y compatibilidad con fuentes oficiales antes de establecer reglas.
+- Trata las recomendaciones del agente como lineamientos del proyecto una vez aceptados. Mantén `CLAUDE.md` conciso y apunta a la guía de arquitectura; no copies el documento completo en ambos sitios.
+- No hagas migraciones o upgrades amplios solo para ajustarte a la arquitectura objetivo. En proyectos existentes, registra la diferencia entre estado actual y objetivo, y recomienda una ruta incremental.
+- El agente de arquitectura define estándares y revisa decisiones; los agentes de implementación y pruebas desarrollan features y cobertura de acuerdo con esos estándares.

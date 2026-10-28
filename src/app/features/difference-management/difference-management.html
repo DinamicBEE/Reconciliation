@@ -22,8 +22,7 @@
       </svg>
     </ng-template>
 
-    <!-- Info general de la orden — patrón "resumen global" de MASTER.md,
-         pero de identidad de un registro puntual, no sumas de un conjunto. -->
+    <!-- Info general de la orden -->
     <nz-card class="summary-card order-summary-card" [nzBodyStyle]="{ padding: '14px 16px' }">
       <div class="summary-strip">
         <div class="summary-strip__item">
@@ -67,113 +66,11 @@
       </div>
     </nz-card>
 
-    <!-- Grid de 5 columnas: 3 para la lista de candidatos + nota, 2 para la
-         alerta del motor + importación + resumen de selección. -->
+    <!-- Grid: candidatos + nota | alerta + importación + resumen -->
     <div class="diff-grid">
       <div class="diff-grid__col diff-grid__col--candidates">
         <section class="candidates-section">
-          <nz-card class="candidates-card" [nzBodyStyle]="{ padding: '16px' }">
-            <div class="candidates-card__header">
-              <h2 class="candidates-section__title">Transacciones bancarias candidatas</h2>
-              <input
-                nz-input
-                type="text"
-                class="candidates-card__filter"
-                placeholder="Filtrar por referencia"
-                [ngModel]="referenceFilter()"
-                (ngModelChange)="onReferenceFilterChange($event)"
-              />
-            </div>
-
-            @if (csvErrors().length > 0) {
-              <ul class="csv-errors">
-                @for (err of csvErrors(); track err) {
-                  <li>{{ err }}</li>
-                }
-              </ul>
-            }
-
-            @if (service.candidates().length === 0) {
-              <p class="text-muted">No se encontraron transacciones candidatas. Importa un CSV para agregar más.</p>
-            } @else if (filteredCandidates().length === 0) {
-              <p class="text-muted">Ninguna transacción coincide con la referencia buscada.</p>
-            } @else {
-              <!-- Máximo 5 filas visibles — el resto se alcanza con scroll
-                   interno, ver .candidate-list en el scss. -->
-              <div class="candidate-list">
-                @for (c of filteredCandidates(); track c.settlement.id) {
-                  <nz-card
-                    class="candidate-card"
-                    [class.candidate-card--selected]="service.isSelected(c.settlement.id)"
-                    [nzBodyStyle]="{ padding: '12px 16px' }"
-                    role="checkbox"
-                    tabindex="0"
-                    [attr.aria-checked]="service.isSelected(c.settlement.id)"
-                    [attr.aria-label]="'Seleccionar transacción ' + c.settlement.orderId"
-                    (click)="toggleCandidate(c)"
-                    (keydown.enter)="toggleCandidate(c)"
-                    (keydown.space)="toggleCandidate(c); $event.preventDefault()"
-                  >
-                    <div class="candidate-card__body">
-                      <input type="checkbox" class="candidate-card__checkbox" tabindex="-1" [checked]="service.isSelected(c.settlement.id)" />
-
-                      <div class="candidate-card__field candidate-card__field--ref">
-                        <span class="candidate-card__label">Referencia</span>
-                        <span class="candidate-card__value font-mono" [attr.title]="c.settlement.orderId">
-                          {{ c.settlement.orderId }}
-                        </span>
-                      </div>
-
-                      <div class="candidate-card__field candidate-card__field--desc">
-                        <span class="candidate-card__label">Concepto</span>
-                        <span class="candidate-card__value" [attr.title]="c.settlement.concept">
-                          {{ c.settlement.concept }}
-                        </span>
-                        <span class="candidate-card__meta">
-                          {{ c.settlement.date | date: 'dd/MM/yyyy' }} · Lote {{ c.settlement.batchId }}
-                        </span>
-                      </div>
-
-                      @if (service.originOf(c.settlement.id); as origin) {
-                        <div class="candidate-card__field candidate-card__field--origin">
-                          <span class="candidate-card__label">Origen</span>
-                          <nz-tag [nzColor]="origin === 'backend' ? 'blue' : 'purple'">
-                            {{ origin === 'backend' ? 'Motor de cálculo' : 'Match manual' }}
-                          </nz-tag>
-                        </div>
-                      }
-
-                      <!-- Movimiento normalizado (DED, CU5 paso 3): bruto, comisiones,
-                           retenciones y neto abonado. El bruto es el que se cruza
-                           contra la venta (ver "Monto liquidado" arriba). -->
-                      <div class="candidate-card__amounts">
-                        <div class="candidate-card__field candidate-card__field--amount">
-                          <span class="candidate-card__label">Bruto</span>
-                          <span class="candidate-card__value font-mono">{{ c.settlement.grossAmount | money }}</span>
-                        </div>
-                        <div class="candidate-card__field candidate-card__field--amount">
-                          <span class="candidate-card__label">Comisiones</span>
-                          <span class="candidate-card__value candidate-card__value--deduction font-mono">
-                            {{ c.settlement.commission > 0 ? '−' : '' }}{{ c.settlement.commission | money }}
-                          </span>
-                        </div>
-                        <div class="candidate-card__field candidate-card__field--amount">
-                          <span class="candidate-card__label">Retenciones</span>
-                          <span class="candidate-card__value candidate-card__value--deduction font-mono">
-                            {{ c.settlement.withholdings > 0 ? '−' : '' }}{{ c.settlement.withholdings | money }}
-                          </span>
-                        </div>
-                        <div class="candidate-card__field candidate-card__field--amount">
-                          <span class="candidate-card__label">Neto</span>
-                          <span class="candidate-card__value font-mono">{{ c.settlement.netAmount | money }}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </nz-card>
-                }
-              </div>
-            }
-          </nz-card>
+          <app-candidate-list />
         </section>
 
         <section class="note-section">
@@ -203,22 +100,7 @@
           nzMessage="El motor de cálculo detectó estas transacciones como posibles coincidencias con el monto de la venta. Selecciona una o más para registrar el match manual."
         />
 
-        <section class="import-dropzone-row">
-          <input
-            #csvInput
-            type="file"
-            accept=".csv,text/csv"
-            hidden
-            (change)="onCsvSelected($event)"
-          />
-          <button type="button" class="import-dropzone" (click)="csvInput.click()">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-            </svg>
-            <span>Importar CSV</span>
-          </button>
-        </section>
+        <app-settlements-import [tenderMedia]="validTenderMedia()" />
 
         <div class="selected-indicator">
           <span class="selected-indicator__count">{{ service.selectedCount() }}</span>

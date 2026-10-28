@@ -4,18 +4,10 @@ import { NzMenuModule } from 'ng-zorro-antd/menu';
 import { STATUS_META, STATUS_OPTIONS, UserStatus } from '../data/user-management.model';
 
 /**
- * Chip de estado (Activo/Inactivo/Bloqueado) — fondo por estado + menú para
- * cambiarlo. Usado en `user-list` (columna Estado) y `user-detail`
- * ("Información general") — los dos únicos lugares donde se edita el
- * estado de una cuenta, de ahí que viva como componente propio en vez de
- * duplicar el trigger + dropdown + estilos dos veces (ver MASTER.md,
- * "Estructura de carpetas": feature-local, no shared/, porque ambos
- * consumidores son de ESTE feature).
+ * Chip de estado de cuenta con menú para cambiarlo.
  *
- * No aplica el cambio por sí solo — emite `statusChange` y deja que el
- * consumidor decida (en ambos casos hoy: mostrar una confirmación antes de
- * llamar a `UserManagementService.setStatus`). Volver a elegir el estado
- * YA activo no emite nada (no hay nada que confirmar).
+ * @remarks No aplica el cambio: emite `statusChange` y el consumidor confirma; elegir el estado actual no emite.
+ * @see docs/codigo/usuarios.md#estados-de-cuenta
  */
 @Component({
   selector: 'app-status-chip',

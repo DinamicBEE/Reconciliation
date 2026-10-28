@@ -1,11 +1,8 @@
 @use '../../shared/styles/summary-strip';
 @use '../../shared/styles/import-dropzone';
 
-// Solo 2 utilidades de shared/styles/_data-table.scss hacen falta aquí — se
-// duplican en vez de @use-ar el partial completo (que trae .table-card,
-// .clickable-row, .col-truncate, etc., innecesario para esta pantalla y
-// pesado para el budget de esta hoja de estilos). Mismo criterio que
-// .icon-button en login.scss.
+// Copia 2 utilidades de _data-table.scss para no cargar el partial (budget de estilos).
+// Ver docs/codigo/diferencias.md#estilos
 .text-muted {
   color: var(--color-muted-foreground);
 }
@@ -23,15 +20,12 @@
 
 
 
-// Info de identidad de la orden (no sumas) — mismo grid que .summary-strip,
-// pero 4 columnas (7 campos = 4+3) en vez de las 5 del resumen del día.
+// Identidad de la orden con el grid de .summary-strip a 4 columnas (7 campos = 4+3).
 .order-summary-card {
   border-radius: 8px;
   --summary-strip-cols: 4;
 
-  // 7 campos en una grilla de 4 columnas envuelven a una 2da fila en el 5to
-  // item (Monto vendido) — :first-child de _summary-strip.scss no lo cubre,
-  // así que se quita el separador izquierdo también en cada inicio de fila.
+  // Quita el separador al inicio de cada fila; :first-child del partial solo cubre la primera.
   .summary-strip__item:nth-child(4n + 1) {
     padding-left: 0;
     border-left: none;
@@ -39,8 +33,7 @@
 }
 
 // --- Grid principal -------------------------------------------------------
-// 5 columnas: candidatos + nota ocupan 3, alerta + importación + resumen de
-// selección ocupan las 2 restantes, apiladas verticalmente en su columna.
+// 5 columnas: candidatos + nota en 3; alerta, importación y resumen apilados en 2.
 .diff-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -69,181 +62,7 @@
   border-radius: 8px;
 }
 
-// --- Candidatos ---------------------------------------------------------
-.candidates-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.candidates-card {
-  border-radius: 8px;
-}
-
-.candidates-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.candidates-card__filter {
-  width: 220px;
-  flex-shrink: 0;
-}
-
-.candidates-section__title {
-  font-family: var(--font-heading);
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  margin: 0;
-}
-
-.csv-errors {
-  margin: 0;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--color-destructive) 10%, transparent);
-  color: var(--color-destructive);
-  font-size: 12px;
-  list-style: disc;
-  padding-left: 28px;
-  max-height: 250px;
-  overflow-y: auto;
-  margin-bottom: 10px;
-}
-
-.candidate-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  // Máximo 5 transacciones visibles a la vez (~72px cada una + gap de 8px)
-  // — con más candidatos (p.ej. tras importar un CSV) se scrollea en vez de
-  // alargar la pantalla indefinidamente.
-  max-height: calc(5 * 72px + 4 * 8px);
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.candidate-card {
-  border-radius: 8px;
-  cursor: pointer;
-
-  &:hover {
-    background-color: var(--color-muted);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-ring);
-  }
-}
-
-.candidate-card--selected {
-  border-color: var(--color-primary);
-  background-color: color-mix(in srgb, var(--color-primary) 6%, var(--color-card));
-}
-
-.candidate-card__body {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
-
-.candidate-card__checkbox {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--color-primary);
-}
-
-.candidate-card__field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.candidate-card__field--ref {
-  flex: 0 0 140px;
-}
-
-.candidate-card__field--desc {
-  flex: 1 1 auto;
-  min-width: 160px;
-}
-
-// Fila de importes del movimiento normalizado (bruto, comisiones,
-// retenciones, neto) — ocupa el ancho completo del card, debajo de
-// referencia/concepto, alineada con ellos (sangría = checkbox + gap). Grid
-// de 4 columnas iguales; en la columna angosta de 3/5 cae a 2×2.
-.candidate-card__amounts {
-  flex: 1 0 100%;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px 16px;
-  padding: 8px 0 0 32px;
-  border-top: 1px dashed var(--color-border);
-
-  @media (max-width: 1200px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.candidate-card__field--amount {
-  align-items: flex-end;
-  text-align: right;
-}
-
-// Comisiones y retenciones se RESTAN del bruto — color atenuado para que el
-// bruto y el neto (los dos importes que se comparan) destaquen.
-.candidate-card__value--deduction {
-  color: var(--color-muted-foreground);
-}
-
-.candidate-card__label {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--color-muted-foreground);
-}
-
-.candidate-card__value {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.candidate-card__meta {
-  font-size: 11px;
-  color: var(--color-muted-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-// Label arriba, tag abajo — mismo patrón de columna que el resto de los
-// campos (.candidate-card__field), en vez del tag suelto de antes: con la
-// nz-tag en fila junto a ref/desc/monto, "Motor de cálculo" se salía del
-// ancho del card en la columna angosta de 3/5 (.diff-grid__col--candidates).
-// Con flex-basis propio, si no cabe en la fila cae en su propia línea
-// (.candidate-card__body ya tiene flex-wrap) en vez de desbordar o cortarse.
-.candidate-card__field--origin {
-  flex: 0 1 130px;
-  align-items: flex-start;
-}
-
-// `.import-dropzone`/`.import-dropzone-row` (dropzone de importación, dentro
-// de .diff-grid__col--side, debajo de la alerta del motor de cálculo) se
-// promovieron a shared/styles/_import-dropzone.scss al aparecer un segundo
-// consumidor (reconciliation-dashboard) — ver MASTER.md.
+// Dropzone de importación: shared/styles/_import-dropzone.scss.
 
 // --- Nota obligatoria -----------------------------------------------------
 .note-section {
@@ -267,8 +86,6 @@
 }
 
 // --- Resumen de selección + guardado --------------------------------------
-// Columna lateral: indicador de transacciones seleccionadas apilado sobre el
-// botón de guardar (ver .diff-grid__col--side).
 .selected-indicator {
   display: flex;
   flex-direction: column;

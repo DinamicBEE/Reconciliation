@@ -10,6 +10,8 @@ let nextId = 0;
  * Gráfica de área estilizada (línea delgada + relleno degradado bajo la
  * curva) que llena el 100% de su contenedor — el tamaño real lo decide quien
  * lo use vía CSS en el contenedor padre.
+ *
+ * @see docs/codigo/componentes-y-utilidades.md#sparkline
  */
 @Component({
   selector: 'app-sparkline',

@@ -26,14 +26,15 @@
 
 ```
 src/app/
-├── core/              # singletons, se instancian una sola vez
+├── core/              # singletons, se instancian una sola vez — NUNCA depende de features/
+│   ├── auth/            # sesión (AuthService), AccessControlService, AccessCatalogService, auth-errors, guards
 │   ├── layout/shell/    # Grid de <app-menu> + <app-header> + <router-outlet>
 │   ├── layout/menu/     # nav lateral colapsable (iconos + etiquetas)
 │   ├── layout/header/   # toggle de tema, selector de paleta, card de usuario logeado
 │   └── services/        # ThemeService, PaletteService, MenuService, color-utils
 ├── shared/            # reutilizable entre features — NUNCA depende de features/
 │   ├── components/      # match-status-tag, sale-status-tag, sparkline, radial-progress
-│   ├── models/           # tipos de dominio compartidos (TransactionMatch, Sale, etc.)
+│   ├── models/           # tipos de dominio compartidos (TransactionMatch, Sale, RoleId/PermissionKey, etc.)
 │   ├── mock-data/        # datasets mock usados por 2+ features (ver abajo)
 │   ├── utils/            # funciones puras usadas por 2+ features (cross-match.util.ts)
 │   └── styles/           # partials SCSS (@use) — ver "Patrón de layout" abajo
@@ -59,6 +60,22 @@ Una función de derivación pura y testeable (sin estado, sin DI) que un
 específica de ESE feature (`data/<algo>.util.ts`), o en `shared/utils/` si un
 segundo feature la necesita (así terminó `cross-match.util.ts`). Nunca inline
 en el service ni en el componente.
+
+**Actualización (ADR-0001, 2026-10-15):** la sesión y el control de acceso se
+movieron de `features/auth/data/` a `core/auth/` (`auth.service.ts`,
+`access-control.service.ts`, `access-catalog.service.ts`, `auth-errors.ts`,
+`*.guard.ts`); `features/auth/` conserva solo las pantallas de login y cambio de
+contraseña. `AuthService` ya no es cliente de `/users`, `/roles` ni
+`/audit-log`: esos viven en `UsersApiService`/`AuditLogService`
+(`user-management/data`) y `RolesApiService` (`user-management/data`).
+Las pantallas de Perfil y Roles y permisos se integraron al feature
+`user-management` (`profile/`, `roles-permissions/`) porque dependen de su
+estado; las rutas no cambian.
+`AuthUser.appUserId` desapareció: el `AppUser` de la sesión lo resuelve
+`UserManagementService.currentAppUser` por email, y el header muestra solo datos
+de `AuthUser`. Las menciones a `features/auth/data/*`, `appUserId` y
+`AccessControlService.currentAppUser` en secciones posteriores son históricas.
+Detalle en `docs/architecture/decisions/0001-organizacion-por-feature-y-limites.md`.
 
 ## Tokens de color
 
@@ -127,7 +144,7 @@ patrón que el resto del puente ng-zorro↔tokens. Fijos, no siguen la paleta.
 - 6 acentos base: Azul `#2563eb`, Índigo `#4f46e5`, Violeta `#7c3aed`, Rosa
   `#db2777`, Cian `#0891b2`, Dorado `#eab308` — deliberadamente distintos de
   verde/ámbar/rojo semánticos.
-- Al elegir uno, se deriva una paleta COMPLETA (14 tokens: primary, secondary,
+- Al elegir uno, se deriva una paleta COMPLETA (15 tokens, ver `TOKEN_NAMES` en `palette.service.ts`: primary, secondary,
   accent, background, foreground, card, muted, border, ring, chart-donut +
   sus "on-*") a partir del **matiz (hue)** de ese color, con fórmulas HSL
   distintas para claro/oscuro — no son 6×2 paletas hardcodeadas.
@@ -220,6 +237,22 @@ o una tabla. Dentro de `.card-centered`, el botón de guardar
 horizontalmente en vez de pegarse a la izquierda — sigue siendo el último
 elemento del formulario, así que "abajo de la card" ya lo resuelve el flujo
 normal del documento, sin necesitar un spacer ni una card de altura fija.
+
+### Patrón: card de indicador con semáforo (`.status-card`)
+
+`shared/styles/_status-card.scss` — KPI sobre una `nz-card` rectangular con las 3 variantes de
+color de los tags (`.status-card-success|warning|error`, tokens `--color-tag-*`; el fondo y el borde
+llevan `!important` porque el puente de `.ant-card` también lo usa). Interior: `.status-card__body`
+(icono + columna de dos filas: `__label` y `__value`, con `__percentage` junto al valor). Primer
+consumidor: el resultado de `reconciliation-process`.
+
+### Patrón: leyenda de resultado "icono + texto" (`.status-legend`)
+
+`shared/styles/_status-legend.scss` — pieza para el RESULTADO de una revisión (p. ej. "Archivo
+válido"), distinta del `nz-tag` de estado de una fila: `.status-legend` (pastilla inline-flex,
+icono SVG + texto, 12px/600, gap 6px) + una variante `.status-legend-success|warning|error` que usa
+los mismos tokens `--color-tag-*` que `.ant-tag-success|warning|error`. Se compone con la clase
+estática más el `[class]` de la variante. Primer consumidor: `reconciliation-process`.
 
 ### Patrón: botones — radius uniforme + color atado a la paleta
 
@@ -571,8 +604,8 @@ mismo patrón que `ThemeService`).
   vista. Cambio de comportamiento respecto al layout anterior (que sí
   scrolleaba la página completa), necesario para que el menú mida siempre
   el alto real de la pantalla.
-- **Despegado de los bordes**: `.app-menu` lleva `margin: 4px 0 4px 4px` y
-  `height: calc(100% - 8px)` — **restar los 8px es obligatorio**, si el
+- **Despegado de los bordes**: `.app-menu` lleva `margin: 8px 0 8px 8px` y
+  `height: calc(100% - 16px)` — **restar los 16px es obligatorio**, si el
   alto se deja en `100%` la caja excede el alto de `.shell` y el margen
   inferior queda recortado por su `overflow: hidden` en vez de verse como
   espacio real (bug real encontrado al implementar esto).
@@ -1484,6 +1517,14 @@ bordes). En ambos casos, `.table-card` solo se aplica como clase en el
 
 ## Patrón: conciliación por tender media y fecha (base POS)
 
+> **Supersedido en la TABLA de `/conciliacion`** por "Patrón: conciliaciones
+> (tabla de corridas…)" (más abajo): la tabla ya no lista totales por día +
+> medio de pago. Lo de esta sección que sigue vivo: `sales-settlements.mock-data.ts`,
+> `cross-match.util.ts`, `ResolvedMatchesStore` y `difference-management`
+> (hoy sin entrada desde la tabla). `group-by-tender-day.util.ts`,
+> `ReconciliationOverridesStore` y el modal "Ver detalles" quedaron sin uso en
+> la pantalla (candidatos a la futura comparativa POS vs. banco).
+
 `reconciliation-dashboard` ("Conciliación") dejó de mostrar UNA fila por
 orden — ahora muestra TOTALES agrupados por `tender media + fecha` (un
 banco liquida por lote diario, no orden por orden; comparar sumas de un día
@@ -1766,6 +1807,13 @@ patrón cierra ese hueco.
    cerca de los datos".
 
 ## Patrón: importar movimientos bancarios (carga masiva, no por orden)
+
+> **Retirado de `/conciliacion`**: el botón "Importar" y su modal se
+> reemplazaron por "Nueva conciliación" (ver "Patrón: conciliaciones…"). Siguen
+> en el repo, sin referencias desde la pantalla, `bank-import.util.ts` (parser
+> y simulación de rechazo) y `bank-accounts.mock-data.ts` (cuentas
+> colombianas), por si la importación de archivos bancarios vuelve en la
+> comparativa; `_import-dropzone.scss` sigue en uso por `difference-management`.
 
 Botón "Importar" en `reconciliation-dashboard`, arriba de la tabla y
 alineado a la derecha (`.dashboard__actions`) — icono + label centrados
@@ -2144,6 +2192,14 @@ resto de esta sección siguen vigentes tal cual.
    filas sembradas en ningún backend probado hasta ahora, así que esa lista
    siempre llega vacía. `UserSummaryDto.roles` SÍ se usa — ver siguiente
    actualización.
+6. **`UserSummaryDto.permissions` del backend real NO se usa (actualizado
+   más abajo)** — en su momento el catálogo de permisos
+   (`app_permission`/`app_role_permission`) no tenía filas sembradas en
+   ningún backend probado, así que esa lista siempre llegaba vacía.
+   `UserSummaryDto.roles` SÍ se usa — ver siguiente actualización. **Esto
+   cambió**: coctel_midd sembró ese catálogo citando el PDF de permisos de
+   este mismo frontend — ver "Actualización: endpoints de administración de
+   usuarios + manejo de errores" más abajo, punto sobre `UserSummaryDto`.
 
 ### Actualización: unificación de roles con el backend real
 
@@ -2321,6 +2377,26 @@ null`. El frontend nunca la genera: en esta rama la simula el mock de
 `UserManagementService` — `createUser` y `resetPassword` generan una (la de
 reset reemplaza a la anterior) y `clearMustChangePassword` la vacía. La cuenta
 demo `u0018` (Contabilidad, pendiente de cambio) trae la suya.
+4. **Sin simulación en esta rama**: la actividad la registra el propio
+   auth-service con cada petición autenticada; el frontend solo reacciona al
+   401 de `/auth/refresh`. `expireSession` NO llama a `/auth/logout` (el
+   backend ya invalidó ese refresh token). Pendiente del lado del backend:
+   devolver ese 401 con `code`.
+
+**Contraseña inicial generada por el backend** (DED 7.3 paso 2). El detalle
+del usuario (`GET /users/{id}`) trae la key `temporaryPassword`; si llega y no
+está vacía, se muestra en la sección "Organización" de `user-detail` (solo
+lectura también en modo edición, con botón de copiar).
+
+1. **Cuentas del backend** (`AppUser.backendUserId`): `user-detail` llama a
+   `AuthService.getUserDetail(backendUserId)` cada vez que cambia la cuenta
+   mostrada y toma `temporaryPassword` de la respuesta. Si la petición falla
+   o la key no viene, no se muestra nada. Pendiente del lado del backend:
+   agregar la key a la respuesta.
+2. **Cuentas que solo existen en el mock** (el alta todavía no llama a
+   `POST /users`): `AppUser.temporaryPassword` la simula —
+   `createUser`/`resetPassword` generan una y `clearMustChangePassword` la
+   vacía.
 
 ## Patrón: país de trabajo (`environment.country`)
 
@@ -2511,6 +2587,463 @@ desbloqueo contra el backend y la cuenta demo de login real.
    importes — bruto, comisiones, retenciones y neto (`.candidate-card__amounts`,
    grid de 4 columnas que cae a 2×2 por debajo de 1200 px). El modal "Ver
    detalles" de conciliación muestra "Concepto", "Bruto" y "Neto".
+   orden que el menú). **Actualizado**: esta rama SÍ tiene ya una cuenta demo
+   de Costos (`u0027`, Laura Pineda, sembrada también en el backend real —
+   ver "Actualización: endpoints de administración de usuarios + manejo de
+   errores" más abajo); una cuenta real del backend con rol `COSTOS` y sin
+   `AppUser` vinculado sigue recibiendo `view_catalogs` vía
+   `defaultPermissionsForRoles` igual que antes. La consulta/exportación de
+   ventas que la matriz también da a Costos y Tesorería sigue pendiente.
+
+### Actualización: endpoints de administración de usuarios + manejo de errores
+
+Tras el pull de `coctel_midd` `feature/login` (commits "add feature login
+users lists" / "add close session feature, view first pwd..."): el backend
+implementó CU3 completo (alta/lista/edición/estado/verificación de correo de
+usuarios) y expandió el contrato de errores. Ver también el mensaje de chat
+donde se listaron los endpoints nuevos — este bloque documenta lo que
+CAMBIÓ en el frontend a partir de ahí.
+
+1. **`UserSummaryDto` (interface local, `auth.service.ts`) actualizada** a
+   la forma real que ahora devuelven `/auth/login`, `/auth/me` y los nuevos
+   endpoints de `/users` — agrega `phone`, `status`, `lastLoginAt`,
+   `emailVerified`. Se corrigió la FORMA del DTO porque ahora es correcta;
+   no se propagaron esos 4 campos a `AuthUser`/`LoginResult` (nadie los
+   consume todavía) — agregarlos sin un consumidor real sería especular.
+2. **`permissions` del login real DEJÓ de llegar vacío** — coctel_midd
+   sembró `app_permission`/`app_role_permission` citando el PDF de permisos
+   de este frontend (ver la actualización anterior sobre `UserSummaryDto`,
+   punto 6, ahora corregido). Aun así, `AccessControlService.permissions`
+   SIGUE calculando con `defaultPermissionsForRoles(roles)` en vez de leer
+   `UserSummaryDto.permissions` directo — mismo resultado hoy, pero son dos
+   fuentes independientes; no se cambió la arquitectura porque no se pidió y
+   el backend todavía no conoce `view_catalogs` (ver punto 4).
+3. **Catálogo de error `{error, code}` expandido** (`auth-errors.ts`,
+   `ERROR_CODE_MESSAGES`) con los 13 códigos que expone
+   `GlobalExceptionHandler`/`InvalidTokenException` del backend real:
+   `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `PASSWORD_CHANGE_REQUIRED`,
+   `USER_NOT_FOUND`, `EMAIL_ALREADY_REGISTERED`, `INVALID_ROLE`,
+   `INVALID_USER_STATUS`, `ROLE_ASSIGNMENT_FORBIDDEN`,
+   `INVALID_REFRESH_TOKEN`, `REFRESH_TOKEN_REUSED`, `REFRESH_TOKEN_EXPIRED`,
+   `SESSION_IDLE_TIMEOUT`, `USER_LOCKED_OR_INACTIVE`.
+4. **Nuevo `httpErrorAlertInterceptor`** (`core/interceptors/`, registrado en
+   `app.config.ts` vía `provideHttpClient(withInterceptors([...]))`) —
+   intercepta CUALQUIER llamada al backend real y muestra un toast
+   (`NzMessageService.error`) para cualquier código del catálogo de arriba
+   que NO tenga ya su propia UI dedicada (`CODES_WITH_OWN_UI`:
+   `INVALID_CREDENTIALS`/`ACCOUNT_LOCKED` → alerta inline de `Login`;
+   `SESSION_IDLE_TIMEOUT` → aviso inline vía `sessionEndReason`) — evita
+   avisar DOS veces el mismo error. Un código que el backend agregue mañana
+   y que `ERROR_CODE_MESSAGES` todavía no liste cae a un mensaje genérico
+   (`Ocurrió un error inesperado (CODE)`), no desaparece sin avisar nada.
+   Siempre re-lanza el error después de mostrar el toast — el
+   `.subscribe({ error })` de quien hizo la llamada sigue corriendo igual.
+5. **Se sembró la 5ª cuenta demo (Costos) en el backend real** — mismo
+   patrón de SQL directo contra el contenedor (nunca migración en el repo
+   del backend) que las otras 4: `laura.pineda@conciliacion.mx` /
+   `Costos2026`, rol `COSTOS`. También se agregó `view_catalogs` a
+   `app_permission`/`app_role_permission` (ADMIN/CONTABILIDAD/TESORERIA/
+   COSTOS) porque el backend todavía no lo conocía — sin esto, las 5 cuentas
+   demo real tendrían menos permisos de los que su rol otorga en
+   `user-management.model.ts`. Se hizo backfill de `app_user_permission`
+   para las 5 (efectivo = default de su rol): las 4 anteriores se habían
+   sembrado ANTES de que `app_role_permission` existiera, así que
+   `permissions` les llegaba vacío pese a tener rol asignado — verificado
+   con las 5 vía `/auth/login` real, cada una devuelve exactamente los
+   permisos que su rol otorga en `ROLES` (`user-management.model.ts`).
+   **Nota operativa**: el volumen de Postgres tuvo que reconstruirse desde
+   cero en este pase — `V1__init_schema.sql` del backend se había EDITADO in
+   place (no un squash a un archivo nuevo) entre dos pulls de esta rama, y
+   Flyway ya la tenía marcada como aplicada con el checksum VIEJO; el
+   contenedor de `auth-service` además seguía corriendo la imagen vieja
+   (nunca se reconstruyó tras el `git merge` de esta sesión) — dos causas
+   independientes que hicieron parecer que `/users` devolvía datos
+   incompletos cuando en realidad el backend ni siquiera había arrancado con
+   el código nuevo. Si esto vuelve a pasar: reconstruir la imagen
+   (`docker compose build`) es obligatorio después de CUALQUIER `git pull`/
+   `merge` en `coctel_midd`, `docker start` sobre un contenedor existente
+   NO recoge cambios de código.
+6. **Se eliminó la opción "Eliminar usuario" del frontend** (botón en
+   `user-detail` y en cada fila de `user-list`, más
+   `UserManagementService.deleteUser()`) — el backend real no tiene
+   `DELETE /users/{id}` (ver la lista de endpoints en el chat), así que la
+   opción prometía algo que ningún backend real puede cumplir. El
+   `AuditAction` `'deleted'` y la entrada histórica de auditoría que lo
+   ejemplifica (`'u0009'`, ver `user-management-mock.data.ts`) se
+   conservaron — son historial, no la funcionalidad viva que se quitó.
+
+### Actualización: `POST /users`, `GET /users`, `GET /users/{id}` conectados al backend real
+
+Petición: "Implementa los endpoints 1) POST /users — expande el select para
+soportar multi subsidiaria y multi ubicación como lo tiene el back; 2) GET
+/users — agrega a la DB los usuarios que se tienen en el mock, respetando
+las estructuras actuales de la DB y el back-end; 3) GET /users/{id}". Ningún
+archivo ni migración de `coctel_midd` se tocó — todo lo de abajo es
+seed/lectura en tiempo de ejecución.
+
+1. **Discrepancia de conteo con lo pedido**: el mock tiene **26** usuarios
+   (`user-management-mock.data.ts`), no 59 como se mencionó en la petición
+   — verificado contando los registros del archivo. Se sembraron los 26
+   reales en vez de inventar usuarios ficticios para llegar a 59.
+2. **`AppUser.subsidiariaId`/`ubicacionId` (single) → `subsidiariaIds`/
+   `ubicacionIds: number[]`** en todo el frontend (`user-management.model.ts`
+   y cada call site) — el backend modela `empleado_subsidiaria`/
+   `empleado_ubicacion` como relación N:M desde siempre
+   (`CreateUserRequest.subsidiariaIds/ubicacionIds: List<Long>`,
+   `UserDetailDto.subsidiarias/ubicaciones: List<...>`); el frontend
+   simplificaba a un solo valor y ahora deja de hacerlo. Los `nz-select` de
+   Subsidiaria/Ubicación (creación y edición, `user-detail.html`) son ahora
+   `nzMode="multiple"`; la vista de solo lectura une los nombres con `, `
+   (`UserDetail.subsidiariaNames()`/`ubicacionNames()`, vía
+   `CatalogService.findSubsidiaria/findUbicacion` por id).
+3. **`UserManagementService.createUser()` reescrito para llamar al backend
+   real** (`POST /users` vía `AuthService.createUser()`) en vez de solo
+   empujar al signal local — construye el `AppUser` resultante con el `id`
+   real como `backendUserId`, los roles/permisos que confirma el backend y
+   la `temporaryPassword` que devuelve. Errores (`EMAIL_ALREADY_REGISTERED`,
+   `INVALID_ROLE`, `ROLE_ASSIGNMENT_FORBIDDEN`, etc.) los maneja el
+   `httpErrorAlertInterceptor` ya existente — `onCreateSubmit()` no duplica
+   ese manejo, solo apaga el spinner del botón (`submittingCreate`) si falla.
+4. **`UserManagementService.syncFromBackend()` (nuevo)** — llama
+   `AuthService.listUsers({ size: 100 })` (`GET /users`) y reconcilia cada
+   usuario local que ya tiene `backendUserId` con los datos reales
+   (roles, permisos, estado, `emailVerified`, último acceso,
+   `mustChangePassword`, subsidiarias/ubicaciones). Best-effort
+   (`error: () => {}`, nunca bloquea la lista si el backend no responde). Se
+   invoca desde el constructor de `UserList` — cada vez que se entra a
+   `/usuarios` se reconcilia contra el backend real.
+5. **`UserDetail` ahora pide `GET /users/{id}`** para cualquier usuario con
+   `backendUserId` y hace merge campo por campo sobre el registro mock base
+   (`mergeBackendDetail()`) — incluye resolver el `manager` real
+   (`UserDetailDto.manager.id` → `UserManagementService.findByBackendUserId()`
+   → `managerId` local) y aplanar `AddressDto` (`postalCode` del backend →
+   `zipCode` local). Arquitectura de signals: `backendDetail` se obtiene con
+   un `effect` que lee el `backendUserId` vía `untracked()` (evita el ciclo
+   `user() computed` → `effect` → `backendDetail` → `user()`); el `computed
+   user()` hace el merge; el `effect` que puebla los formularios de
+   edición/creación lee `user()` SIN `untracked` a propósito, para que los
+   forms se refresquen solos en cuanto el detalle real llega de forma
+   asíncrona.
+6. **Se sembraron 21 usuarios adicionales en el backend real** (sumados a
+   los 5 ya sembrados en la actualización anterior = 26 de 26 del mock
+   bridged), mismo patrón de SQL directo contra el contenedor de Postgres
+   (nunca un archivo/migración en `coctel_midd`): `empleado` + `app_user` +
+   `app_user_role` por usuario, `empleado_subsidiaria`/`empleado_ubicacion`
+   (una subsidiaria y una de 4 ubicaciones round-robin, igual que el mock),
+   un segundo pase de `UPDATE empleado SET supervisor_id = ...` resuelto por
+   email del manager (evita el problema de referencias hacia adelante —
+   varios managers aparecen DESPUÉS que sus reportes en el array del mock),
+   y un backfill de `app_user_permission` a partir de `app_role_permission`
+   (igual que en la actualización anterior — un INSERT directo NO dispara la
+   lógica de Java que copia permisos default al crear por `POST /users`).
+   Password placeholder para estos 21 (no pensados para login individual):
+   `Demo2026!`. `BACKEND_USER_ID` (`user-management-mock.data.ts`) mapea los
+   26 emails a sus ids reales (2–27; el id 1 es la cuenta bootstrap del
+   backend, fuera del mock).
+7. **Verificado end-to-end en navegador** (login real como
+   `admin@conciliacion.mx`): alta de usuario de prueba con 1 subsidiaria + 2
+   ubicaciones vía el form multi-select → `POST /users` 201 → detalle
+   `GET /users/{id}` 200 mostrando "Sucursal Polanco, Sucursal Condesa"
+   correctamente unidas; lista `/usuarios` dispara `GET /users?page=0&size=100`
+   al entrar; detalle de un usuario bridged preexistente (Daniela Torres)
+   muestra el manager resuelto ("Administrador Principal") y sus
+   subsidiaria/ubicación reales. El usuario de prueba se borró de la DB
+   (SQL directo) tras la verificación para no dejar basura en el dataset
+   real.
+
+### Actualización: `PATCH /users/{id}`, `PATCH /users/{id}/status`, `POST /users/{id}/verify-email` conectados al backend real
+
+Petición: "Implementa los endpoints 1) PATCH /users/{id}; 2) PATCH
+/users/{id}/status; 3) POST /users/{id}/verify-email". Los 3 ya tenían
+equivalente LOCAL en `UserManagementService` (`updateUserProfile`,
+`setStatus`, `setEmailVerified`) desde antes de conectar ningún backend
+real — esta actualización los reescribe para llamar al backend real
+conservando la misma firma de uso desde los componentes en la medida de lo
+posible (ahora devuelven `Observable<AppUser>` en vez de `void`). Ningún
+archivo ni migración de `coctel_midd` se tocó.
+
+1. **`PATCH /users/{id}` (`AuthService.updateUser`) NO modela
+   subsidiarias/ubicaciones** (ver `UpdateUserRequest.java`, mismo comentario
+   que ya cubre roles/estado: "se manejan en sus propios endpoints, no
+   aqui") — a diferencia de `POST /users` (alta), que sí las acepta. Por
+   eso `UserManagementService.updateUserProfile()` construye el `AppUser`
+   resultante con `subsidiariaIds`/`ubicacionIds` de la RESPUESTA
+   (`UserSummaryDto.subsidiarias`/`.ubicaciones`, sin cambios reales),
+   ignorando lo que el form de edición pudiera haber traído — y
+   **`user-detail.html` ya NO ofrece un `nz-select` editable para esos 2
+   campos ni siquiera en modo edición** (antes de este cambio sí lo hacía,
+   ver la actualización anterior): mostrar un multi-select que el guardado
+   descarta en silencio habría sido un bug de UX, no una mejora. Quedan de
+   solo lectura siempre (igual que en modo NO edición), con una nota en el
+   HTML explicando por qué. Si el backend agrega algún día un endpoint para
+   editarlas post-alta, ahí se vuelve a habilitar el select.
+2. **La respuesta de `PATCH /users/{id}` es `UserSummaryDto`, NO
+   `UserDetailDto`** — no repite los campos que se acaban de mandar (nombre,
+   dirección, organización...), solo el estado compartido con el resto de
+   `/users` (roles, permisos, estado, subsidiarias/ubicaciones,
+   mustChangePassword, emailVerified). `updateUserProfile()` combina AMBAS
+   fuentes: lo que el `input` acaba de guardar (eco local, confiado porque
+   el backend no lo rechazó) + lo que la respuesta SÍ trae (autoritativo).
+3. **`UserDetail.refreshBackendDetail()` (nuevo, privado)** — tras las 3
+   mutaciones, re-pide `GET /users/{id}` y reemplaza `backendDetail`. Sin
+   esto, `user()` seguiría fusionando el `UserDetailDto` VIEJO (cargado al
+   entrar a la pantalla) sobre el `usersSignal` recién actualizado, y el
+   merge pisaría justo los campos que la mutación acaba de guardar con los
+   valores desactualizados — un bug sutil que solo se nota si se guarda dos
+   veces seguidas sin recargar la página.
+4. **403 de `/users/**` sin rol suficiente (ADMIN/ALTAS) no trae `code`**
+   — lo bloquea `SecurityConfig` antes de llegar al controller/
+   `GlobalExceptionHandler` (a diferencia de `ROLE_ASSIGNMENT_FORBIDDEN` al
+   crear, que sí es una excepción de negocio con código), así que
+   `httpErrorAlertInterceptor` no muestra nada para ese caso — mismo gap que
+   ya tenía `UserDetail.onUnlockBackendClick`. Se agregó
+   `forbiddenRoleMessage(status)` (`user-management.service.ts`, exportado)
+   como el único mensaje manual que faltaba; cualquier otro código (404
+   `USER_NOT_FOUND`, 400 `INVALID_USER_STATUS`, etc.) ya lo cubre el
+   interceptor sin duplicar el aviso.
+5. **`onStatusChangeRequest` (en `user-detail.ts` Y `user-list.ts`,
+   `onVerifyEmailClick`, `onSaveProfile`)** ahora son asíncronos — el modal
+   de confirmación se queda abierto/girando (`nzOnOk` devuelve una Promise)
+   hasta que el backend responde, mismo patrón que ya usaba
+   `onUnlockBackendClick`; "Guardar cambios" (perfil) tiene su propio
+   `savingProfile` signal para el loading del botón, igual que
+   `submittingCreate` en la creación.
+6. **Verificado end-to-end en navegador** (login real como
+   `admin@conciliacion.mx`): cambio de "Cargo o puesto" de Ana Martínez →
+   `PATCH /users/7` 200 → persiste tras una recarga dura (no solo en el
+   signal local) → revertido; cambio de estado de Ana Martínez a Inactivo
+   y de vuelta a Activo desde la LISTA → `PATCH /users/7/status` 200 en
+   ambos sentidos, chip actualizado en tiempo real; verificación manual de
+   correo de Paola Aguilar (antes `email_verified=false` en la DB real) →
+   `POST /users/23/verify-email` → confirmado `email_verified=true`
+   directamente en la DB tras la llamada.
+
+### Actualización: matriz de roles y permisos (7.16) completa + interceptor de token automático
+
+Petición: "Termina de implementar la 'Matriz de roles y permisos' del lado
+del front, ignora la desviación existente en 'Asignación y cambio de rol'.
+Crea el interceptor HTTP para cubrir el punto 'Token validado en cada
+petición (API Gateway)'." Ambos puntos vienen de
+`docs/avances/comparativa-DED-vs-portal-conciliacion_v2.pdf` (secciones 5 y
+6) — ver también la v3 de ese documento, que refleja este mismo cambio.
+
+**Matriz de roles y permisos (7.16):**
+
+1. **`ROLES.defaultPermissions` (user-management.model.ts) ampliado** —
+   Tesorería y Costos ahora también tienen `view_dashboard` (consultan
+   ventas); Contabilidad y Costos también tienen `export_reports` (exportan
+   el listado). Población resultante por función, calcada del DED: Consulta
+   de ventas = Admin/Contab/Tesor/Costos; Exportación = los mismos 4;
+   Reproceso = Admin/Contab únicamente (ver punto 3); el resto sin cambio.
+   **A propósito NO se tocó "Asignación y cambio de rol"** (Altas conserva
+   `manage_roles`, sigue sin evaluarse en ningún guard, y el modelo sigue
+   permitiendo varios roles por usuario) — es la desviación que esta tarea
+   pidió explícitamente ignorar.
+2. **`AccessControlService.permissions` deja de ignorar el arreglo real del
+   backend** — antes SIEMPRE se recalculaba con `defaultPermissionsForRoles`
+   a partir de `AppUser.permissions` (el registro mock, editable a mano en
+   "Seguridad y acceso" sin persistir en ningún backend real — ver
+   `UserManagementService.changeRoles`, sigue siendo local-only, no es parte
+   de esta tarea) o de `auth.currentUser()?.roles`. Ahora la fuente ÚNICA es
+   `AuthUser.permissions` (`UserSummaryDto.permissions`, lo que el login/
+   `GET /auth/me` real devuelve), con `defaultPermissionsForRoles` solo como
+   fallback si llegara vacío. Esto cierra la desviación "el arreglo
+   `permissions` que devuelve el backend en el login se ignora" — la otra
+   mitad de la matriz, junto con el punto 1.
+3. **"Reproceso de ventas" sigue sin permiso propio, a propósito** — el DED
+   lo limita a Admin/Contabilidad, un subconjunto MÁS ANGOSTO que
+   `view_dashboard` ahora que este también incluye Tesorería/Costos: no se
+   puede expresar con un solo `hasPermission(...)`. Se agregó
+   `AccessControlService.canReprocessSales` (por rol REAL del backend, no el
+   mock) y se gatea el botón "Reprocesar" en `sales-dashboard.html`/`.ts`
+   con él — antes "coincidía por accidente" (compartía guard con la vista de
+   ventas, que solo veían Admin/Contab); ahora es una regla explícita e
+   independiente que sigue dando el mismo resultado aunque la población de
+   `view_dashboard` haya crecido.
+4. **`export_reports`, `import_settlements` y `manage_differences` pasan de
+   "definidos pero nunca evaluados" a evaluados de verdad**:
+   - `export_reports` → botón "Exportar" en `sales-dashboard` (antes
+     exportaba cualquiera que pudiera VER la pantalla).
+   - `import_settlements` → botón "Importar movimientos bancarios" en
+     `reconciliation-dashboard` (antes solo dependía de `view_reconciliation`
+     a nivel de ruta).
+   - `manage_differences` → botón "Guardar match" en `difference-management`
+     (antes solo `service.canSave()`, una regla de negocio sin relación con
+     permisos).
+   En los 3 casos la POBLACIÓN accesible no cambia (Tesorería ya tenía los
+   3, Admin también) — lo que cambia es que ahora un usuario CON el permiso
+   "padre" (`view_reconciliation`) pero SIN el permiso específico ya no
+   tendría acceso, algo que antes era imposible de lograr.
+5. **`view_audit_log` pasa a gatear `/usuarios/auditoria`** (antes
+   colapsaba en `manage_users`, igual que el resto de `/usuarios/*`) — ver
+   `app.routes.ts` y `header-search.util.ts`. Admin/Altas tienen ambos
+   permisos, así que la población no cambió, solo qué permiso se evalúa.
+6. **Backfill en la DB real** (SQL directo contra el contenedor, nunca
+   migración en `coctel_midd`): `app_role_permission` ganó
+   (TESORERIA, view_dashboard), (COSTOS, view_dashboard), (COSTOS,
+   export_reports), (CONTABILIDAD, export_reports); `app_user_permission` se
+   respobló para todos los usuarios YA sembrados con esos 3 roles (21 filas)
+   — sin este paso, `AccessControlService.permissions` (que desde el punto 2
+   prefiere el arreglo REAL del backend) habría seguido mostrando la matriz
+   VIEJA para las cuentas demo ya creadas, aunque el modelo del frontend ya
+   dijera otra cosa.
+7. **Verificado en navegador**: login real como Tesorería
+   (`roberto.sanchez@conciliacion.mx`) aterriza en `/dashboard` con
+   "Exportar" visible y SIN "Reprocesar"; Costos
+   (`laura.pineda@conciliacion.mx`) igual, y `/conciliacion` por URL directa
+   rebota a `/dashboard` (`permissionGuard` + `homeRoute()`); Admin conserva
+   "Reprocesar" + "Exportar" + acceso a `/usuarios/auditoria` y a
+   "Importar" en conciliación.
+
+**Interceptor HTTP — "Token validado en cada petición (API Gateway)":**
+
+8. **`authTokenInterceptor` (nuevo, `core/interceptors/auth-token.interceptor.ts`,
+   registrado en `app.config.ts` ANTES que `httpErrorAlertInterceptor`)** —
+   agrega `Authorization: Bearer <token>` automáticamente a CUALQUIER
+   petición a `environment.apiUrl`, salvo `/auth/login`, `/auth/refresh` y
+   `/auth/logout` (`permitAll()` en `SecurityConfig.java` — no necesitan uno,
+   o no lo requieren). Antes cada método de `AuthService` lo armaba a mano
+   (`headers: { Authorization: ... }` + un guard `if (!accessToken)
+   return throwError(...)` repetido 8 veces) — ahora ESE código desapareció
+   de `changePassword`, `unlockUser`, `getUserDetail`, `createUser`,
+   `listUsers`, `updateUser`, `changeStatus` y `verifyEmail`: todos quedaron
+   en una sola línea (`this.http.xxx(url, body)`), el interceptor es la
+   única fuente de verdad.
+9. **Manejo global de 401** — el mismo interceptor invalida la sesión
+   (`AuthService.invalidateSession('invalid_token')`) ante un 401 en
+   CUALQUIER llamada autenticada que no sea `/auth/refresh` (ese 401 ya lo
+   maneja `refreshAccessToken` aparte, distinguiendo `SESSION_IDLE_TIMEOUT`
+   de cualquier otro rechazo — manejarlo también aquí duplicaría el cierre
+   de sesión). El interceptor NO navega: solo limpia la sesión;
+   `App`'s `effect()` que ya observaba `sessionEndReason` para
+   `idle_timeout` ahora reacciona a CUALQUIER motivo no nulo — un solo lugar
+   que decide cuándo redirigir a `/login`, no dos. `SessionEndReason` ganó el
+   valor `'invalid_token'` (`auth-errors.ts`) y `Login.sessionNotice` su
+   propio texto para ese caso.
+10. **`GET /auth/me` deja de estar sin usar** — `AuthService` lo expone
+    (`me()`) y lo llama al arrancar SI hay una sesión restaurada de
+    `sessionStorage` (`validateResumedSession()`, constructor): de paso
+    refresca `roles`/`permissions`/`subsidiarias`/`ubicaciones` por si
+    cambiaron desde el último login (p. ej. un admin le quitó un rol a esa
+    misma cuenta mientras la pestaña seguía abierta). Best-effort: un error
+    que no sea 401 deja la sesión como estaba; un 401 real de todas formas
+    lo cierra el mismo `authTokenInterceptor` en la primera petición
+    protegida que seguiría al fallo de `/auth/me`.
+11. **`AuthUser`/`LoginResult` ganan `permissions: PermissionKey[]`** —
+    mapeado desde `UserSummaryDto.permissions` en `login()` y en
+    `validateResumedSession()`; `resolveInitialSession()` ahora exige este
+    campo para aceptar una sesión vieja de `sessionStorage` (mismo criterio
+    que los campos añadidos en actualizaciones anteriores — una sesión sin
+    él se considera de forma antigua, de vuelta a login).
+12. **[`docs/avances/comparativa-DED-vs-portal-conciliacion_v3.pdf`](../../docs/avances/comparativa-DED-vs-portal-conciliacion_v3.pdf)**
+    (copia también en `docs/comparativa-DED-vs-portal-conciliacion.pdf`,
+    la "última versión") — actualiza la v2.0 con los cambios de este
+    bloque: 18 implementados/21 parciales/1 desviación/23 faltantes sobre
+    63 requisitos (antes 13/25/1/23 sobre 62 — la fila de edición de
+    usuarios se dividió en dos, ver su sección 2). Generada con HTML/CSS
+    propio impreso a PDF vía Edge headless (`msedge --headless
+    --print-to-pdf`) — no existía ningún generador de las versiones
+    anteriores en ningún repo del proyecto (verificado); la fuente HTML de
+    esta versión no se versiona, solo el PDF resultante, igual que v1/v2.
+
+### Actualización: supervisor en el alta, filtro "Empresa" en ventas, referencias NetSuite/conciliación
+
+1. **Alta de usuario: campo "Supervisor" (select simple)** — `UserDetail`
+   ganó `createManagerId` (signal, único valor, a diferencia de
+   roles/subsidiarias/ubicaciones que sí aceptan varias) y un
+   `<nz-select>` en el form de creación que reusa `managerOptions()` (el
+   mismo cómputo que ya alimentaba "Administrador responsable" en modo
+   edición — en modo creación `userId()` es `undefined`, así que el
+   filtro `m.id !== id` no excluye a nadie, funciona sin ajustes).
+   `CreateUserInput` ganó `managerId: string | null`;
+   `UserManagementService.createUser()` ya NO manda `supervisorId: null`
+   fijo — lo resuelve al `backendUserId` real (mismo bridge que
+   `updateUserProfile`) antes de mandarlo a `POST /users`. Verificado en
+   navegador: alta con supervisor → `empleado.supervisor_id` correcto en
+   la DB real.
+2. **Ventas: filtro "Empresa" (subsidiaria)** — `Sale` ganó
+   `subsidiariaId: number | null` (todas las ventas del mock apuntan a la
+   única subsidiaria real sembrada, id 1 — `DEFAULT_SUBSIDIARIA_ID` en
+   `sales-mock.data.ts`). Nuevo `SubsidiariaFilter`/`subsidiariaFilter` en
+   `SalesDashboardService` (mismo patrón que `StoreFilter`/`storeFilter`,
+   pero SIN la indirección por nombre que usa `storeOptions` — aquí hay
+   id real que comparar 1:1). El select nuevo y el de "Ubicación"
+   (ya existente) se llenan ambos desde `CatalogService.subsidiarias()`/
+   `.ubicaciones()` — que YA son, desde que existen, una lectura directa
+   de `AuthUser.subsidiarias`/`.ubicaciones` (el arreglo que llega en el
+   login), confirmado al leer `CatalogService` — no fue necesario
+   bypasearlo. Etiqueta "Empresa" hardcodeada (no vive en
+   `CountryProfile.vocabulary`): es un término neutro que no cambia entre
+   México y Colombia, a diferencia de "Sucursal"/"Ubicación".
+3. **Ventas: referencia NetSuite y conciliación relacionada** — `Sale`
+   ganó `netsuite: NetSuiteReference | null` (`entryId`, `postedAt`) y
+   `reconciliation: SaleReconciliationReference | null` (`id`, `date`),
+   mismo patrón que `ElectronicInvoice` (objeto nombrado, no campos
+   sueltos). Valores reales solo en las primeras 3 ventas del mock
+   (V-2001/2/3, `sales-mock.data.ts`) — el resto (generadas por
+   `buildDay()` o las demás `TODAY_SALES`) se queda en `null`. Decisión
+   deliberada: V-2002 (`reconciliationStatus: 'sale_only'`) recibió
+   `netsuite` pero NO `reconciliation` — darle una referencia de
+   conciliación a una venta marcada explícitamente como "aún no
+   conciliada" habría sido una inconsistencia visible en el mismo Drawer
+   (su propio tag de estado diría lo contrario). Renderizado en el Drawer
+   con el mismo patrón `@if (sale.X; as y) {...} @else {muted}` que el
+   resto de campos opcionales ahí.
+4. **Vercel + país**: sin cambios de código — `environment.country` se
+   resuelve en BUILD TIME vía `fileReplacements` de Angular (ver
+   `angular.json`, configuración `co`), no en runtime, así que una
+   variable de entorno de Vercel por sí sola no cambia el país. El
+   proyecto ya tiene `build:co` listo (`ng build --configuration
+   production,co`) — para CO en Vercel, la vía más simple es importar el
+   mismo repo como un SEGUNDO proyecto de Vercel y, en ESE proyecto,
+   sobreescribir el Build Command a `pnpm run build:co` (Settings →
+   General → Build & Development Settings). El proyecto MX existente no
+   se toca.
+
+### Actualización: fix — `GET /users` no mostraba cuentas creadas fuera de esta sesión + `createdAt` real en el detalle
+
+**Bug reportado**: dos usuarios dados de alta contra el backend real
+(`CPrueb@gamil.com`, `test@user.com`) no aparecían en "Administración de
+usuarios" pese a que `GET /users` sí los devolvía.
+
+1. **Causa raíz**: `usersSignal` arranca SIEMPRE desde `MOCK_USERS` (26
+   cuentas fijas) en cada bootstrap de la app — no persiste entre recargas
+   (ver el punto de "Pendientes" de más abajo, "Ningún estado de
+   `UserManagementService` sobrevive una recarga dura"). `syncFromBackend()`
+   solo RECONCILIABA filas del mock que YA tenían `backendUserId` — una
+   cuenta creada en una sesión anterior (el alta de create sí la agrega al
+   signal al instante, pero eso no sobrevive la siguiente recarga) o desde
+   fuera de este frontend nunca tenía con qué hacer match, así que el
+   `.map()` la descartaba en silencio para siempre, aunque `GET /users` la
+   siguiera devolviendo.
+2. **Fix**: `syncFromBackend()` ahora, además de reconciliar lo que ya
+   conoce, detecta los `id` del backend que NO tienen ningún
+   `backendUserId` local y los inserta como `AppUser` nuevos — vía
+   `fetchAndInsertUser()`/`buildUserFromDetail()` (nuevos, privados), que
+   piden el detalle COMPLETO (`GET /users/{id}`, no solo `UserSummaryDto` de
+   la lista — ahí no vienen `firstName`/`lastName`/`createdAt`/organización)
+   y arman el registro igual que `UserDetail.mergeBackendDetail`. Guard de
+   carrera: si para cuando responde esa llamada la cuenta ya tiene registro
+   local, no duplica.
+3. **Segundo bug encontrado al auditar el detalle contra `GET
+   /users/{id}`** (pedido explícito: "lista de los campos que no se están
+   llenando con la info que regresa el endpoint") — comparé cada campo de
+   `UserDetailDto` contra `UserDetail.mergeBackendDetail` y cada binding
+   `u.*` de `user-detail.html`. Único campo que el endpoint SÍ devuelve y
+   el merge descartaba: **`createdAt`** — `mergeBackendDetail` nunca lo
+   sobreescribía, así que "Fecha de creación" se quedaba con la fecha
+   FABRICADA del mock para cualquier cuenta ya sembrada, en vez de la real.
+   Corregido (una línea). El resto de campos que siguen en su default del
+   mock (`avatarUrl`, `activeSessions`, `failedLoginAttempts`,
+   `lastActivityAt`, `twoFactorEnabled`) NO son un bug — el backend
+   simplemente no los modela todavía en este endpoint, no hay nada que
+   `mergeBackendDetail` pueda leer de ahí.
+4. **Verificado en navegador**: sembré una cuenta directo en la DB real
+   (sin pasar por el frontend, replicando el reporte) → apareció en la
+   lista tras recargar. Abrí el detalle de una cuenta YA sembrada
+   (`analista@conciliacion.mx`, `created_at` real 30-Sep-2026 en la DB) →
+   "Fecha de creación" ahora muestra 30/09/2026 (antes mostraba la fecha
+   fija del mock).
 
 ### Actualización: ajustes a login, cambio de contraseña, `GET /users`, `GET /users/{id}` y `PATCH /users/{id}` + catálogo completo de códigos de error
 
@@ -2705,6 +3238,102 @@ permisos", login, cambio de contraseña), pero **sin HttpClient, interceptores, 
    `AppUser` ya no fuerza `mustChangePassword`; antes revivía el cambio obligatorio tras un F5.
 4. **No se trajo**: `proxy.conf.js`, `scripts/set-api-url.mjs`, `src/environments/api-url.ts`, `dev-env/`,
    `core/interceptors/` ni `provideHttpClient`. Despliegue (Vercel, incluido Colombia): ver README.
+### Actualización: catálogos organizacionales del Core Service (`GET /catalogs/...`)
+
+Backend `coctel_midd` DEV (rama `feature/catalogs`, Guia_Integracion_Frontend §5.2, §5.4 y §7.1):
+
+1. **`OrganizationCatalogService`** (`core/services/`) pide `GET /catalogs/subsidiarias`, `/ubicaciones`,
+   `/cargos`, `/puestos`, `/departamentos` y `/areas` (Core Service; basta una sesión válida). Carga
+   perezosa (`ensureLoaded()`, la llama `UserDetail`), una vez por sesión, cada catálogo por separado (la
+   falla de uno no vacía los demás); se limpian al cerrar sesión. `ubicaciones` trae `subsidiariaId`:
+   `ubicacionesFor()` filtra por las subsidiarias elegidas y `pruneUbicaciones()` quita las ubicaciones de
+   una subsidiaria que se deselecciona (solo por acción del usuario, nunca al precargar).
+2. **Alta y "Organización" usan el catálogo GLOBAL**, ya no `CatalogService` (que sigue siendo lo que la
+   sesión puede ver, para filtros de pantallas operativas): antes un admin solo podía asignar las
+   subsidiarias/ubicaciones a las que él mismo tenía acceso.
+3. **`department`/`area`/`jobTitle` (texto libre) se retiraron** — el backend ya no los devuelve y los
+   ignora en silencio si llegan. `AppUser` guarda `cargoIds`/`puestoIds`/`departamentoIds`/`areaIds`;
+   `GET /users/{id}` trae `cargos`/`puestos`/`departamentos`/`areas` como `{ id, nombre }`
+   (`organizationIdsFromDetail`) y `PATCH /users/{id}` manda siempre el conjunto completo de las seis
+   listas. "Cargo o puesto" se separa en **Cargos** y **Puestos**; los cuatro son multi-select. Se eliminó
+   `user-management/data/organization-catalog.ts` (listas fijas del front).
+4. **Nombres en modo lectura:** del catálogo y, si un id no está ahí (dado de baja: el catálogo solo trae
+   habilitados), del `{ id, nombre }` que trajo el detalle; los multi-select también agregan esas opciones
+   para no mostrar ids sueltos.
+5. Error nuevo `INVALID_CATALOG_ITEM` (400) en `ERROR_CODE_MESSAGES`; `/catalogs` agregado a
+   `proxy.conf.js` (no choca con la ruta `/catalogos` del portal). En una base nueva cargos, puestos,
+   departamentos y áreas llegan vacíos hasta que el cliente entregue las listas: el select muestra "Sin
+   opciones en el catálogo".
+
+### Actualización: fechas de calendario en hora local + pila DEV v2 con catálogos sembrados
+
+1. **Fechas sin hora (`yyyy-MM-dd`) ↔ `nz-date-picker`: siempre en hora LOCAL** —
+   `shared/utils/iso-date.util.ts` (`parseIsoDate`, `toIsoDate`, `toIsoDateOrNull`), compartido por
+   `UserDetail` y `Profile`. Antes `new Date('2025-01-10')` se leía como medianoche UTC y en México/Colombia el
+   selector mostraba el día anterior (09/01/2025). Todo campo de fecha de calendario nuevo debe usar estas
+   funciones, nunca `new Date(iso)` ni `toISOString().slice(0, 10)`.
+2. **Sin mock de organización:** `MOCK_USERS` ya no siembra subsidiarias/ubicaciones (ni cargo, puesto,
+   departamento, área): llegan del backend (`GET /users` y `GET /users/{id}`).
+3. **`dev-env/levantar-backend.ps1`** levanta la pila DEV actual (auth, capture, core, gateway) en el proyecto
+   de compose `coctel_dev_v2` (base nueva: DEV reescribió la migración V1). Quita contenedores de pilas anteriores
+   con el mismo nombre, pero no sus volúmenes. **`seed-demo-users.sql`** siembra además los 5 roles de la matriz
+   7.16 (DEV ya no los trae), `capture_sales` para ADMIN, la subsidiaria Hipermar Fish con sus 2 tiendas de
+   Facturiza y los catálogos de cargo/puesto/departamento/área con su asignación por empleado.
+
+### Actualización: `GET /sales` (Resumen de venta) y CRUD de roles (`/roles`)
+
+1. **Resumen de venta sobre `GET /sales`** (Core Service). `SalesApiService` (`sales-dashboard/data`) y
+   `SalesDashboardService` traducen los filtros a la query (`dateFrom`/`dateTo` en hora local, `store` = id de
+   las ubicaciones del LOGIN, `tenderMedia`/`status` = ids de `SalesCatalogService`, `search` con 300 ms de
+   espera) y la tabla **pagina en el servidor** (`nzFrontPagination` apagado, `page` base 1, 10/20/50/100 por
+   página). Un cambio de filtro vuelve a la página 1; una consulta nueva cancela la anterior. Se retiraron el
+   mock de la pantalla (`MOCK_SALES` sigue solo para la conciliación simulada), el puente por nombre de tiendas
+   (`LABEL_TO_STORE`), el puente de filtros y `sale-export.util.ts`.
+   - **Exportar** recorre todas las páginas de los filtros actuales (de 100 en 100; no existe
+     `GET /sales/export`) y arma el CSV con `sale-list-export.util.ts`.
+   - **Drawer:** muestra lo que trae la fila (folio, tipo, fecha y hora, tienda, cliente, medio con pago mixto,
+     estado, importes). El detalle completo espera `GET /sales/{id}`.
+   - **Empresa (subsidiaria):** select deshabilitado con tooltip: `GET /sales` no filtra por subsidiaria y las
+     ubicaciones del login no traen la suya.
+   - **Reprocesar:** sigue simulado (`POST /sales/capture` pendiente); su objetivo ya usa el id de la tienda.
+2. **CRUD de roles.** `AuthService.createRole/getRole/updateRole/deleteRole`. `RoleCreate` sirve para el alta
+   (`/gestion-de-roles/nuevo`, `POST`) y la edición (`/gestion-de-roles/:code`, precarga con `GET`, guarda con
+   `PATCH` solo lo que cambió, confirmación con permisos agregados/quitados y a cuántas personas afecta).
+   - El nombre se valida contra los roles existentes por nombre y por **código derivado**
+     (`user-management/data/role-code.util.ts`, réplica de `toCode` del back); máximo 80 caracteres. La
+     pantalla muestra el código que tendrá el rol.
+   - Tras editar permisos: recarga del catálogo, `syncFromBackend()` y `renewSession()` si la sesión propia
+     tiene el rol (el back propaga el cambio a sus personas).
+   - **Baja** (`DELETE`, con confirmación) desde la columna **Acciones** de "Roles y permisos" y desde el
+     encabezado de la edición ("Eliminar rol"). Se deshabilita con tooltip mientras el rol tenga personas
+     asignadas (el back respondería 409 `ROLE_IN_USE`). La fila completa abre la edición.
+   - Códigos nuevos: `ROLE_NOT_FOUND`, `ROLE_ALREADY_EXISTS`, `ROLE_IN_USE`.
+3. **`dev-env`:** proyecto `coctel_dev_v3` (la V1 agregó `app_user_special_permission`), siembra de permisos
+   especiales y **`seed-demo-sales.sql`**: 168 ventas de prueba deterministas (7 días × 6 tiendas × 4, notas
+   crédito, pagos mixtos, los 3 estados), porque la captura real necesita credenciales de Facturiza.
+
+### Actualización: "Reprocesar" = `POST /sales/capture` + ajustes por DEV 541c538
+
+1. **"Reprocesar" conectado** a `POST /sales/capture` (Capture Service), con las mismas condiciones de siempre:
+   **un solo día y una tienda específica** (`reprocessTarget`). Body `{ ubicacionIds: [tienda], dateFrom: día }`.
+   Es síncrono: la confirmación queda en carga hasta que responde. El aviso sale de `capture-result.util.ts`
+   (`describeCaptureResult` / `describeCaptureError`, función pura con pruebas):
+   - 200 OK → éxito con conteos (recibidos, nuevos, ya existían); 207 parcial → advertencia con el detalle del día;
+   - **502 trae el mismo resultado** (Facturiza no respondió / sin credenciales) → error con su `errorMessage`;
+   - 409 (ya se está capturando) y 400/404 → el `detail` del `ProblemDetail`; 403 → falta `capture_sales`.
+   Si entraron documentos nuevos, la tabla se recarga (`SalesDashboardService.reload()`).
+2. **`SKIP_HTTP_ERROR_ALERT`** (`HttpContextToken` en `http-error-alert.interceptor.ts`): una llamada que muestra
+   sus propios errores lo activa y el interceptor no agrega su toast genérico (sí conserva la redirección por
+   contraseña pendiente). Lo usa `SalesApiService.capture`.
+3. **"Reprocesar" se decide por permiso:** `AccessControlService.canReprocessSales` = `capture_sales` (antes rol
+   ADMIN/CONTABILIDAD). Es el permiso que exige el endpoint; con la regla por rol, quien no lo tiene recibía 403.
+4. **Roles (DEV 95db1f3):** el nombre se valida como el backend: duplicado solo si otro rol **activo** tiene el
+   mismo nombre ignorando mayúsculas y espacios (los acentos cuentan); ya no se compara el código derivado. Al
+   crear se muestra "Código estimado" (el backend agrega `_2`, `_3`… si está ocupado). La confirmación de baja ya
+   no dice que el nombre queda reservado: queda libre.
+5. **Baja de roles con usuarios:** DEV sigue respondiendo **409 `ROLE_IN_USE`** si alguna persona habilitada
+   tiene el rol (verificado contra la pila local), así que el botón Eliminar sigue deshabilitado en ese caso.
+6. `TenderMediaOption.dianCode?` (código DIAN del medio de pago, `null` si no está homologado).
 
 ## Patrón: encabezado de página (`nz-page-header`) — regla general
 
@@ -2754,6 +3383,7 @@ flecha del page-header. `/login` y `/cambiar-password` (fuera del shell) quedan 
 ## Patrón: creación de roles (`/gestion-de-roles/nuevo`) + `nz-collapse` estándar
 
 `features/roles-permissions/role-create/` ("Nuevo rol", pantalla hija de
+`features/user-management/roles-permissions/role-create/` ("Nuevo rol", pantalla hija de
 "Roles y permisos" — flecha de volver + breadcrumb). Misma protección que su
 padre (`manage_roles` + rol ADMIN, ver la sección siguiente); el botón "Nuevo
 rol" vive en el encabezado de "Roles y permisos" (ya no en `user-list`).
@@ -2794,6 +3424,7 @@ rol" vive en el encabezado de "Roles y permisos" (ya no en `user-list`).
 ## Patrón: "Roles y permisos" (`/gestion-de-roles`) — pantalla exclusiva de un rol
 
 `features/roles-permissions/` — entrada propia en el menú lateral (escudo con
+`features/user-management/roles-permissions/` — entrada propia en el menú lateral (escudo con
 check, después de "Usuarios") y en el buscador del Header.
 
 1. **Solo ADMIN, no solo un permiso.** `manage_roles` también lo tiene ALTAS,
@@ -2827,6 +3458,7 @@ check, después de "Usuarios") y en el buscador del Header.
 
 Toda tabla nueva sigue estas características — se derivan de la tabla de
 `features/roles-permissions/` y complementan "Patrón: card de tabla". Las clases
+`features/user-management/roles-permissions/` y complementan "Patrón: card de tabla". Las clases
 de celda viven en `shared/styles/_data-table.scss` y el chip en
 `shared/styles/_chip.scss` (`@use` de ambos en el `.scss` de la pantalla).
 
@@ -2865,6 +3497,150 @@ de celda viven en `shared/styles/_data-table.scss` y el chip en
    `avatarTokensFor`) + nombre como enlace a su detalle, con ellipsis y
    `[attr.title]`.
 8. **Números** siempre `.font-mono`; colores solo con tokens (`var(--color-*)`).
+
+## Patrón: conciliaciones (tabla de corridas + modal "Nueva conciliación" + comparativa)
+
+`/conciliacion` (`features/reconciliation-dashboard/`) lista **conciliaciones** (corridas), no
+totales por día. Una conciliación (`ReconciliationRun`, `data/reconciliation-run.model.ts`) es
+**empresa + restaurante (tienda) + periodo** con su fecha de creación y un estatus.
+
+1. **Tabla** (sigue "Regla general: tablas": `.table-card` con padding 24px, `.toolbar` +
+   `.table-bleed`, `nzSize="middle"`, `.col-truncate` + `title`, indicador en su propia celda
+   `.cell-indicator`). Columnas: **Fecha** (de CREACIÓN, no del periodo), **Empresa**,
+   **Restaurante**, **Periodo** (`dd/MM/yyyy – dd/MM/yyyy`), **Estatus**, **Comentarios** (`ReconciliationRun.comments`, `.col-truncate` + `title`, "—" si está vacío) y **Acciones**. Sin KPIs arriba de la tabla (se retiraron: `ReconciliationService` ya no tiene `tenderMediaStatuses`/tendencias y el `.scss` ya no hace `@use` de `kpi-card`/`status-dot`). Filtros:
+   estatus y rango de la fecha de creación (el placeholder lo dice: "Creada desde/hasta"). La fila
+   entera lleva a la comparativa, igual que "Ver" (la celda de acciones corta la propagación).
+2. **Estatus: `ReconciliationRunStatus` = `conciliado | pendiente | desconciliado`** y su propio
+   tag (`run-status-tag`, success/warning/error). Es DISTINTO de `ReconciliationStatus`
+   (`conciliado | desconciliado | por_conciliar`, el estado por día + medio de pago que pinta
+   `sales-dashboard`): aquí el tercer valor es "Pendiente" y el estado es de la corrida completa.
+3. **Acciones** (iconos + tooltip, `.row-actions`; reglas en `reconciliation-run.util.ts`):
+   **Ver** siempre (→ `/conciliacion/:runId`); **Desconciliar** solo `conciliado`
+   (`canDesconciliar`, confirmación con `NzModalService.confirm()` → `desconciliado`);
+   **Descargar** solo con la conciliación **completada** (`canDownload`: conciliado o
+   desconciliado, NUNCA pendiente) y además con el permiso `export_reports` (como "Exportar" en
+   Resumen de venta). Hoy baja un CSV con los datos generales de la conciliación
+   (`buildRunCsv`) — el detalle de movimientos entra con la comparativa. "Completado" no es un
+   estatus del producto; se interpretó como "ya terminó" = no pendiente.
+4. **Botón "Nueva conciliación"** (`nzType="primary"`, icono de banco + label, regla de botones "icono + label"), en
+   el `.toolbar` a la derecha tras `.toolbar__spacer`. Reemplaza a "Importar" y conserva su
+   permiso (`import_settlements`: no hay uno propio para iniciar conciliaciones).
+5. **Modal "Nueva conciliación"** en dos secciones (`.new-reco`, grid de 2 columnas; 1 en
+   ≤ 640px): **izquierda**, en columna, "Empresa" y "Tienda" (selects) y "Periodo"
+   (`nz-range-picker`) + el botón primario "Iniciar conciliación" (deshabilitado hasta tener los
+   tres); **derecha**, una `nz-card` (`.new-reco__hero`) con borde SÓLIDO `2px
+   var(--color-primary)` — lleva su propio `!important` porque el puente de `.ant-card` también
+   lo usa (mismo gotcha de "Patrón: card base") — y, centrado y en columna, el icono de banco
+   sobre un recuadro `--color-secondary` (trazo `--color-on-secondary`), el título en negritas
+   "Conciliación Bancaria y de ingresos" y el subtítulo "Compara ventas de sistemas POS con
+   archivos bancarios". La separación con el borde del modal es el padding de 24px del propio
+   `.ant-modal-body`. Empresa/Tienda salen de `CatalogService.subsidiarias()/ubicaciones()` (los
+   catálogos reales del login, regla de "Catálogos reales"), con la tienda filtrada por la empresa elegida (la
+   subsidiaria de cada ubicación sale de `OrganizationCatalogService`) y deshabilitada sin empresa. Iniciar crea la conciliación en `pendiente` con
+   `createdAt` = hoy real (local, `toIsoDate`), cierra el modal y navega a `/conciliacion/:runId/proceso` (punto 9). El icono de banco es `.bank-badge` (`shared/styles/_bank-badge.scss`, 64px, radius 16px, `--color-secondary`), compartido con la pantalla de proceso.
+6. **`ReconciliationRunsStore`** (`root`, en memoria, semilla `MOCK_RECONCILIATION_RUNS`): lo leen
+   la tabla y la comparativa, que son rutas con servicios distintos. Sin endpoint todavía.
+7. **Comparativa** (`reconciliation-compare/`, `/conciliacion/:runId`, permiso
+   `view_reconciliation`): pantalla hija (flecha + breadcrumb "Conciliación bancaria › Comparativa
+   POS vs. banco") con el resumen de la conciliación (`.summary-strip`) y un espacio reservado:
+   **la comparativa de movimientos POS vs. banco está pendiente por definir**. Id inexistente →
+   mensaje + enlace de vuelta. La ruta no choca con `/conciliacion/:tenderMedia/diferencias/:orderId`
+   (distinta cantidad de segmentos).
+8. **Fuera de la pantalla desde este cambio**: ya no hay entrada UI a "Gestión de diferencias"
+   (su ruta sigue viva) ni a "Ver detalles" por día.
+9. **Proceso paso a paso** (`reconciliation-process/`, `/conciliacion/:runId/proceso`, permiso
+   `import_settlements`): pantalla hija (flecha + breadcrumb "Conciliación bancaria › Nueva
+   conciliación"; la flecha sale del proceso a la tabla, no es un "Anterior") con `nz-steps` de **3 pasos**, cada uno con título, icono (SVG en `ng-template`) y descripción. Reglas: **solo se
+   cambia de paso con "Siguiente"** (los steps NO son clicables: sin `(nzIndexChange)` ng-zorro no
+   los vuelve botones) y **no hay "Anterior"**; en el paso 3 el botón es "Finalizar" y vuelve a la
+   tabla. La conciliación ya existe (`pendiente`) desde el modal.
+   - **Paso 1 · "Carga de archivos"**: grid de 2 columnas (1 en ≤ 768px), una `nz-card` por archivo
+     (padding 24px, borde/radio/sombra del puente global).
+     - **Card 1 "Archivo Bancario"**: `.bank-badge` + a su derecha "Archivo Bancario" / "Extracto
+       bancario"; debajo, el botón `.import-dropzone` de "Gestión de diferencias" con el label en dos
+       filas (`.import-dropzone__label`: "Arrastra tu archivo aquí" / "o selecciona un archivo" en
+       `--color-primary`, `.import-dropzone__hint`) que acepta arrastrar y soltar (`dragover`/`drop`
+       en `.import-dropzone-row`, realce `.import-dropzone--over`) o elegir con el selector; **solo
+       `.xlsx`** (lo que se suelta se valida igual); debajo, el nombre del archivo con un check verde y
+       "Archivo cargado correctamente".
+     - **Card 2 "Banco (extracto bancario)"**: `.bank-badge` + esa leyenda, fijos desde que aparece
+       el paso. Al cargar el archivo: `nz-spin` ("Revisando el archivo…") mientras se lee; luego, en
+       columna, "Total de registros" (líneas de movimientos, sin el encabezado), "Total de
+       movimientos" (suma de la columna N "VALOR TOTAL", `money`) y "Rango de fechas" (menor–mayor
+       "FECHA DE CANJE"), y debajo la **leyenda del resultado** (icono + texto): "Archivo válido"
+       (`.status-legend-success`); "Archivo inválido" (`-error`: faltan columnas, que se listan
+       TODAS en una lista con scroll, o no hay movimientos); "Campos faltantes" (`-warning`: lista con
+       scroll de TODAS las filas con un campo ilegible, "Fila N: CAMPO") o "Error en el archivo"
+       (`-error`: no se pudo leer). Las filas de resumen solo salen con un archivo válido. Botón de
+       carga y resultado son los componentes `BankFileDropzone` y `StatementResult`
+       (`reconciliation-dashboard/components/`), reutilizados por "Reconciliar".
+     - **Formato por ahora**: el "Reporte Conciliar" de Bancolombia
+       (`bancolombia_Reporte_Conciliar_<AAAAMMDD>_<AAAAMMDD>.xlsx`, 27 columnas A–AA con encabezado,
+       un movimiento por fila). `data/bank-statement.util.ts` (`analyzeBancolombiaReport`, puro) lo
+       revisa; `BankStatementReader` lo lee con `read-excel-file` (import dinámico: fuera del bundle
+       inicial) y es el punto a sustituir cuando haya otro banco/formato. El periodo del archivo es el
+       de la FECHA DE CANJE (coincide con el del nombre), no el de la transacción.
+     - **"Siguiente"** queda deshabilitado hasta que el extracto sea `valid`.
+   - **Paso 2 · "Validación"**: al pulsar "Siguiente" en el paso 1 se "envía" el extracto al back
+     (`ReconciliationProcessApi.submitBankStatement`, SIMULADO con `timer(10 s)`; sin endpoint
+     todavía — reemplazar el cuerpo por el HTTP real). Mientras espera: engranes SVG girando en
+     sentidos opuestos (`.gears`, se detienen con `prefers-reduced-motion` y al terminar), título
+     en negritas "Procesando información...", dos subtítulos en gris ("Estamos unificando los datos
+     del Punto de venta y el banco." / "Esto puede tomar unos segundos.") y un `nz-progress` que
+     sube 10% por segundo hasta el 80%; el resto llega con la respuesta (100%). "Siguiente" queda
+     deshabilitado hasta esa respuesta. `nz-progress` no usa `nzStatus="success"` (pintaría un
+     `nz-icon`, y el proyecto no registra iconos de ng-zorro).
+   - **Resultado (mismo paso, al responder el back)**: la animación de espera se REEMPLAZA por el
+     resultado POS vs. banco, que la respuesta trae YA ARMADO (`SubmitBankStatementResponse.result`,
+     `ReconciliationResult`: conteos, porcentajes y estado de cada línea — el front solo pinta; la
+     simulación vive en `data/reconciliation-result.mock-data.ts` y usa las ventas/liquidaciones
+     compartidas del POS, así cada referencia existe también en "Gestión de diferencias"):
+     - **3 KPI** en fila (1 columna ≤ 768px): `nz-card.status-card` + `.status-card-success|warning|error`
+       (`shared/styles/_status-card.scss`: fondo/borde con los tokens `--color-tag-*`, con `!important`
+       por el puente de `.ant-card`). Interior "icono + columna de dos filas": etiqueta
+       (Coincidencias / Diferencias / Sin coincidencias, en ese orden de semáforo) y `1,120 (90.1%)`.
+     - **Tabla** (regla general de tablas: `.table-card` 24px, `nzSize="middle"`, 10 por página):
+       checkbox (todos / indeterminado / por fila), Fecha, Referencias (referencia + medio de pago como
+       subtítulo), POS y Banco (`money`, "—" si ese lado no existe) y Estado (`ResultStatusTag`:
+       Coincide / Diferencia / Sin coincidencia = success / warning / error). Mapeo de estados:
+       `matched`→coincide, `amount_mismatch`→diferencia, `sale_only`/`settlement_only`→sin coincidencia.
+     - **Marcado de líneas**: las `coincide` se marcan con su checkbox; las `diferencia` y
+       `sin_coincidencia` tienen el checkbox deshabilitado hasta que se registre una acción en su
+       detalle (que además las marca). El checkbox de cabecera marca solo las marcables. **"Siguiente"
+       exige la respuesta del back y TODAS las líneas marcadas**; el pie muestra "N de M líneas
+       marcadas".
+     - **Indicador "Por gestionar"**: cuarta card neutra (`.status-card-neutral`) en la fila de KPI
+       con las líneas cuyo checkbox sigue bloqueado.
+     - **Click en una línea** abre un `nz-drawer` (80%) con `LineDetail`: dos `nz-card` (POS | Banco
+       (Movimientos)) con `.bank-badge` y, en columna, Referencia, Monto, Concepto y Método de pago
+       (los entrega el back por lado). Debajo, en la misma fila, la **diferencia** (un tercio: card de
+       semáforo con el valor grande y la etiqueta "Diferencia" debajo) y **"Notas"** (dos tercios), y
+       bajo ellas los botones. `coincide`: sin acciones y notas de solo lectura. `diferencia`/
+       `sin_coincidencia`: "Marcar pendiente" (registra y cierra), "Ajustar monto" (muestra
+       "Transacciones bancarias candidatas"; con candidatos seleccionados el Monto del banco y la
+       Diferencia pasan a ser su suma, y "Confirmar ajuste") y "Reconciliar" (botón de carga igual al del
+       paso 1, mismo `.xlsx` y misma revisión, y "Confirmar reconciliación"). En los dos últimos las
+       notas se activan y deben ser un motivo real (`validateNote`: mínimo 10 caracteres y dos
+       palabras; un "." o una letra no habilitan el botón). Exigen `manage_differences`. Con la acción
+       ya registrada el detalle es de solo lectura.
+     - **"Descargar"** (pie, antes de "Siguiente", solo con resultado): CSV con BOM de TODAS las
+       líneas de la tabla (`buildResultCsv`: Fecha, Referencia, Medio de pago, POS, Banco, Estado),
+       `conciliacion_<runId>_resultados.csv`.
+   - **Salir con cambios**: `confirmLeaveGuard` (`canDeactivate` de la ruta) pide confirmación
+     (`NzModalService.confirm`, "¿Salir de la conciliación?" — "Los cambios realizados se perderán
+     si regresas a la página de conciliación") cuando hay un archivo cargado, salga por donde
+     salga (flecha, breadcrumb, menú lateral, "atrás" del navegador; el texto dice "sales de esta
+     pantalla" si el destino no es `/conciliacion`). "Finalizar" sale sin preguntar. La conciliación
+     ya creada (`pendiente`) NO se elimina al salir. El componente necesita `NzModalModule` en sus
+     imports para inyectar `NzModalService`.
+   - **Botones "Siguiente"** (todos los pasos) y "Nueva conciliación": `nzType="primary"`, icono
+     antes del label, igual que "Iniciar conciliación".
+   - **Paso 3 · "Resultado"** (al pulsar "Siguiente" con todas las líneas marcadas): un banner
+     de éxito de ancho completo (icono + "¡Conciliación completada!" / "Todos los movimientos han sido
+     conciliados correctamente"), un divisor tenue y 4 métricas en columna (nombre en gris arriba, valor
+     grande en negritas debajo): Total POS, Total banco (vienen del back), Diferencias resueltas y
+     Conciliados con su porcentaje entre paréntesis. "Finalizar" vuelve a la tabla.
+   - El archivo solo se lee en el navegador (vive en un signal del componente); aún no se envía a ningún lado.
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

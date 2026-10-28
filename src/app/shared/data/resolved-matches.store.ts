@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { TenderMedia } from '../models/reconciliation-item.model';
 
+/** Match manual confirmado en "Gestión de diferencias" para una orden. */
 export interface ResolvedMatch {
   settledAmount: number; // suma de los montos de las transacciones elegidas al guardar
   matchedSettlementIds: string[];
@@ -13,12 +14,10 @@ function keyFor(tenderMedia: TenderMedia, orderId: string): string {
 }
 
 /**
- * Matches manuales confirmados en "Gestión de diferencias". No hay backend
- * todavía — `DifferenceManagementService` y `ReconciliationService` son
- * provistos por ruta (una instancia nueva cada vez que se entra al feature),
- * así que sin este store `root` la tabla de "Conciliación" no tendría forma
- * de enterarse de un match recién guardado al volver a `/conciliacion` sin
- * recargar la página.
+ * Matches manuales confirmados en "Gestión de diferencias", por medio de pago + orden.
+ *
+ * @remarks Es `root` porque los servicios de ambas pantallas son por ruta; no hay backend.
+ * @see docs/codigo/conciliacion.md#stores-compartidos
  */
 @Injectable({ providedIn: 'root' })
 export class ResolvedMatchesStore {

@@ -4,52 +4,16 @@ import { CountryProfile } from '../../../core/country/country.model';
 import { ElectronicInvoice, Sale, SaleCustomer, Store } from '../../../shared/models/sale.model';
 import { saleTotal } from './sale.util';
 
-// Única subsidiaria del catálogo de la sesión (id 1, "Conciliación
-// Bancaria" — `MOCK_SUBSIDIARIAS` en auth-mock.data.ts; el mismo id que la
-// sembrada en el backend real) — TODA venta del mock le pertenece, a falta
-// de un backend de ventas que traiga su propio id. Con más de una
-// subsidiaria en el catálogo, el mock seguiría funcionando (el filtro
-// "Empresa" del toolbar simplemente tendría más opciones).
+// Id 1: única subsidiaria sembrada en el backend; todas las ventas del mock le pertenecen.
 const DEFAULT_SUBSIDIARIA_ID = 1;
 
-// Ventas "en bruto" — `payments` es opcional aquí: si no se especifica,
-// `withPayment()` deriva DOS pagos (método principal + secundario) a partir
-// del total ya calculado (subtotal - descuento + impuestos + propina), para
-// que el pago registrado siempre cuadre con el total real en vez de
-// mantener números a mano por separado. Una venta puede declarar `payments`
-// explícito cuando el reparto entre métodos es una decisión propia de esa
-// venta y no un simple split derivado — ver V-2007 (tarjeta cubre cuenta+IVA,
-// efectivo cubre la propina). `invoice` tampoco se declara a mano: la arma
-// `withFiscalData()` (abajo) para TODA venta, a mano o generada — ver ese
-// helper.
-//
-// El cliente "en bruto" tampoco trae su identificación fiscal ya resuelta:
-// solo `vatResponsible` (¿causa IVA?), que `withFiscalData()` traduce al
-// régimen y al RFC/NIT del país activo (`environment.country`).
+// Venta "en bruto": `withFiscalData()` completa comprobante e identificación fiscal
+// (desde `vatResponsible`) y `withPayment()` deriva los pagos si no vienen.
 type MockCustomer = Omit<SaleCustomer, 'taxId' | 'taxRegime'> & { vatResponsible?: boolean };
 type RawSale = Omit<Sale, 'payments' | 'invoice' | 'customer'> & { customer: MockCustomer; payments?: Sale['payments'] };
 
-// Invariantes de negocio de TODA venta del mock (a mano o generada, ver
-// `buildDay` abajo) — pedidas explícitamente para la demo del Drawer de
-// detalle: total > $1,000 MXN, al menos 2 métodos de pago y al menos 5
-// productos. Antes de esta iteración solo V-2007 tenía pago mixto y el resto
-// de las ventas de "hoy" (`TODAY_SALES`) eran tickets chicos de 1-3
-// productos con un solo método — ya no: `withPayment()` (abajo) ahora
-// separa el total en 2 métodos para CUALQUIER venta sin `payments` explícito,
-// y tanto `TODAY_SALES` como `buildDay()` arman siempre 5-6 líneas de
-// producto con un subtotal que deja el total muy por encima de $1,000 tras
-// el IVA del país. Una 4ª invariante: TODA venta trae su comprobante fiscal
-// (`ElectronicInvoice` — CFDI o factura electrónica según el país, ver
-// `withFiscalData()` abajo) — a diferencia del tipo de persona y el régimen
-// del cliente (opcionales), el comprobante es obligatorio sin importar quién
-// compre.
-//
-// 7 ventas de "hoy" (27 ago) con detalle a mano — ricas a propósito, para la
-// demo del Drawer (cliente con contacto + identificación fiscal, descuento,
-// pago mixto en V-2007). El resto del mes (`buildDay`, abajo) es generado:
-// existe para tener volumen real con el que probar paginación y los filtros
-// de fecha/cliente/medio de pago, no para ver el detalle de cada una en el
-// Drawer.
+// 7 ventas de "hoy" (27 ago) a mano para la demo del Drawer; invariantes en
+// MASTER.md "Invariantes del mock de ventas (`sales-mock.data.ts`)".
 const TODAY_SALES: RawSale[] = [
   {
     id: 'V-2001',
@@ -61,9 +25,7 @@ const TODAY_SALES: RawSale[] = [
     subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
     tenderMedia: 'efectivo',
     reconciliationStatus: 'matched',
-    // Ya contabilizada en NetSuite Y conciliada (coherente con
-    // reconciliationStatus: 'matched') — ver NetSuiteReference/
-    // SaleReconciliationReference en sale.model.ts.
+    // Contabilizada y conciliada, coherente con `matched`.
     netsuite: { entryId: 'JE-2026-08-27-0041', postedAt: '2026-08-27T18:30:00-06:00' },
     reconciliation: { id: 'CONC-2026-08-27-EFECTIVO', date: '2026-08-27' },
     customer: { name: 'Cliente mostrador' },
@@ -90,10 +52,8 @@ const TODAY_SALES: RawSale[] = [
     subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
     tenderMedia: 'rappi',
     reconciliationStatus: 'sale_only',
-    // Ya contabilizada en NetSuite (la contabilización puede correr
-    // independiente de la conciliación bancaria) pero AÚN sin conciliar
-    // (reconciliationStatus: 'sale_only') — a propósito sin `reconciliation`,
-    // para no contradecir ese estado.
+    // Contabilizada pero sin conciliar (`sale_only`): la contabilización es
+    // independiente de la conciliación, por eso no lleva `reconciliation`.
     netsuite: { entryId: 'JE-2026-08-27-0042', postedAt: '2026-08-27T18:30:00-06:00' },
     reconciliation: null,
     customer: {
@@ -271,21 +231,8 @@ const TODAY_SALES: RawSale[] = [
   },
 ];
 
-// --- Generador de días previos --------------------------------------------
-// Catálogo/pool chicos, cicla por índice (no Math.random()) para que la
-// data sea determinística entre builds — no importa reproducir un total
-// exacto por día (a diferencia de la versión anterior de este generador),
-// lo que importa ahora es variedad real de cliente/producto/medio de pago
-// para poder probar los 3 filtros nuevos con resultados distintos, MÁS las
-// 3 invariantes de arriba (total > $1,000, ≥2 métodos, ≥5 productos).
-//
-// Este bloque (pools + `buildDay`) va ANTES de `RAW_SALES`: `RAW_SALES` llama
-// a `buildDay(...)` en su propio inicializador, que se ejecuta de inmediato
-// al evaluar el módulo — si los pools de abajo estuvieran declarados después
-// (como estaban antes), `buildDay` los leería antes de que existieran
-// (`const` no se hoistea con su valor) y `TENDER_CYCLE`/etc. llegarían como
-// `undefined`, exactamente el bug que causaba
-// "Cannot read properties of undefined (reading 'length')" al cargar la app.
+// --- Generador de días previos (determinístico por índice) -----------------
+// Debe declararse antes de `RAW_SALES`, que llama a `buildDay` al evaluar el módulo.
 const PRODUCT_CATALOG: { name: string; price: number }[] = [
   { name: 'Café americano', price: 45 },
   { name: 'Croissant', price: 38 },
@@ -299,9 +246,7 @@ const PRODUCT_CATALOG: { name: string; price: number }[] = [
   { name: 'Té helado', price: 38 },
   { name: 'Muffin de arándano', price: 40 },
   { name: 'Jugo de naranja', price: 35 },
-  // 3 productos de ticket más alto — sin ellos, alcanzar >$1,000 con solo
-  // 5-6 líneas de producto habría necesitado cantidades poco realistas de
-  // los productos de cafetería de arriba.
+  // Ticket alto: permiten superar $1,000 con cantidades realistas.
   { name: 'Plato del día', price: 145 },
   { name: 'Copa de vino', price: 120 },
   { name: 'Postre de la casa', price: 65 },
@@ -326,17 +271,10 @@ const CUSTOMER_POOL: string[] = [
 
 const TENDER_CYCLE: TenderMedia[] = ['bbva', 'rappi', 'efectivo', 'didi_food'];
 
-// Ciclo de sucursales para las ventas generadas — mismo criterio que
-// TENDER_CYCLE (índice, no random) para que el filtro "Tienda" tenga
-// variedad real y determinística entre builds.
 const STORE_CYCLE: Store[] = ['polanco', 'condesa', 'roma', 'centro'];
 
-// Método de pago SECUNDARIO por cada método principal — usado por
-// `withPayment()` para separar el total en 2 métodos cuando la venta no trae
-// `payments` explícito (ver invariante "≥2 métodos de pago" arriba). Efectivo
-// es el secundario natural para los 3 medios electrónicos (representa la
-// propina cobrada aparte, en mano); para una venta ya cobrada en efectivo, el
-// secundario es BBVA (representa la parte de la cuenta cobrada con tarjeta).
+// Método secundario de `withPayment()`: efectivo (propina en mano) para los
+// electrónicos; BBVA (parte con tarjeta) para efectivo.
 const SECONDARY_TENDER: Record<TenderMedia, TenderMedia> = {
   bbva: 'efectivo',
   rappi: 'efectivo',
@@ -344,9 +282,7 @@ const SECONDARY_TENDER: Record<TenderMedia, TenderMedia> = {
   efectivo: 'bbva',
 };
 
-// Días previos ya reconciliados en su mayoría (son historia, no "hoy") —
-// solo 1 de cada 6 queda `sale_only`, como recordatorio de que el cruce
-// tarda 1-2 días incluso para movimientos viejos que aún no cerraron.
+// Días previos conciliados en su mayoría; 1 de cada 6 queda `sale_only` (el cruce tarda 1-2 días).
 const RECONCILIATION_CYCLE: MatchStatus[] = ['matched', 'matched', 'matched', 'matched', 'matched', 'sale_only'];
 
 const REFERENCE_PREFIX: Record<TenderMedia, string> = {
@@ -356,15 +292,10 @@ const REFERENCE_PREFIX: Record<TenderMedia, string> = {
   didi_food: 'DIDI',
 };
 
-// Piso de subtotal (antes de descuento/IVA) que garantiza, incluso con el
-// máximo descuento posible del generador (10%), un total tras el 16% de IVA
-// por arriba de $1,000 con margen de sobra: (1150 * 0.9) * 1.16 ≈ $1,200.6.
+// Piso de subtotal: con el 10 % de descuento máximo y 16 % de IVA, (1150 × 0.9) × 1.16 ≈ $1,200.
 const MIN_SEED_SUBTOTAL = 1150;
 
-// El paso 7 es coprimo con el tamaño del catálogo (15) — para hasta 6
-// productos por venta (`itemCount`), los índices `(idx + p*7) % 15` no se
-// repiten dentro de la misma venta, a diferencia de un paso como 3 o 15 que
-// sí colisionaría.
+// Coprimo con el tamaño del catálogo (15): hasta 6 productos por venta sin repetir índice.
 const CATALOG_STEP = 7;
 
 function buildDay(date: string, count: number): RawSale[] {
@@ -375,19 +306,15 @@ function buildDay(date: string, count: number): RawSale[] {
     const tenderMedia = TENDER_CYCLE[idx % TENDER_CYCLE.length];
     const hasDiscount = idx % 7 === 0;
 
-    // Al menos 5 productos por venta (5 o 6, alternando por índice) — ver
-    // invariante "≥5 productos" arriba.
+    // Invariante "≥5 productos": 5 o 6 según el índice.
     const itemCount = 5 + (idx % 2);
     const picks = Array.from(
       { length: itemCount },
       (_, p) => PRODUCT_CATALOG[(idx + p * CATALOG_STEP) % PRODUCT_CATALOG.length],
     );
 
-    // Cantidad por línea: se calcula un multiplicador a partir de la suma a
-    // cantidad 1 de los productos elegidos, para que el subtotal quede
-    // SIEMPRE por arriba de `MIN_SEED_SUBTOTAL`, sin importar qué tan
-    // baratos hayan tocado esos productos en este índice — ver invariante
-    // "total > $1,000" arriba.
+    // Invariante "total > $1,000": el multiplicador lleva el subtotal sobre
+    // `MIN_SEED_SUBTOTAL` aunque los productos elegidos sean baratos.
     const baseSubtotal = picks.reduce((sum, p) => sum + p.price, 0);
     const qtyMultiplier = Math.max(2, Math.ceil(MIN_SEED_SUBTOTAL / baseSubtotal));
 
@@ -411,8 +338,7 @@ function buildDay(date: string, count: number): RawSale[] {
       subsidiariaId: DEFAULT_SUBSIDIARIA_ID,
       tenderMedia,
       reconciliationStatus: RECONCILIATION_CYCLE[idx % RECONCILIATION_CYCLE.length],
-      // Solo las 3 primeras ventas del mock (V-2001/2/3, en TODAY_SALES)
-      // traen valor real — el resto, generado o a mano, se queda en `null`.
+      // Solo V-2001/2/3 de `TODAY_SALES` traen NetSuite.
       netsuite: null,
       reconciliation: null,
       customer: { name: CUSTOMER_POOL[idx % CUSTOMER_POOL.length] },
@@ -428,8 +354,7 @@ function buildDay(date: string, count: number): RawSale[] {
 const RAW_SALES: RawSale[] = [
   ...TODAY_SALES,
 
-  // --- Resto de agosto — generadas, para tener volumen real de cara a
-  // paginación y a los filtros de fecha/cliente/medio de pago. ---
+  // --- Resto de agosto: volumen para paginación y filtros (sin 16 ni 23) ---
   ...buildDay('2026-08-26', 6),
   ...buildDay('2026-08-25', 5),
   ...buildDay('2026-08-24', 6),
@@ -443,23 +368,14 @@ const RAW_SALES: RawSale[] = [
   ...buildDay('2026-08-14', 4),
 ];
 
-// Serie del CFDI (MX) / prefijo de la resolución de facturación DIAN (CO) —
-// una sola serie/resolución cubre las 4 sucursales (`Store`), así que es
-// global en vez de una por sucursal; el consecutivo (`number`) sí es único
-// por venta, ver `INVOICE_NUMBER_SEED` abajo.
+// Una serie CFDI / prefijo DIAN global para las 4 sucursales; el consecutivo es por venta.
 const INVOICE_SERIES: Record<CountryProfile['code'], string> = { MX: 'A', CO: 'SETP' };
 
-// Arranca en un consecutivo "ya usado" (no en 1) — una serie de facturación
-// real nunca empieza una demo desde cero. Se suma el índice de la venta
-// dentro de `RAW_SALES` para que cada una tenga su propio número, sin
-// mantener un contador mutable aparte.
+// Consecutivo inicial "ya usado"; cada venta suma su índice en `RAW_SALES`.
 const INVOICE_NUMBER_SEED = 84210;
 
-// Hex determinístico a partir del id de la venta (FNV-1a + un LCG para
-// estirarlo al largo pedido) — no hay backend aquí que timbre ni calcule un
-// hash real. Mismo criterio de "índice, no `Math.random()`" que el resto de
-// este generador, para que el folio fiscal de una venta no cambie entre
-// builds.
+// Hex estable por id (FNV-1a + LCG): sin backend que timbre, el folio fiscal no
+// cambia entre builds.
 function deterministicHex(seed: string, length: number): string {
   let hash = 2166136261; // FNV-1a offset basis
   for (let i = 0; i < seed.length; i++) {
@@ -486,8 +402,7 @@ function buildFiscalId(seed: string, country: CountryProfile): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-A${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
-// RFC (MX) / cédula o NIT (CO) ficticio pero con el formato real, derivado
-// del id de la venta.
+// RFC (MX) o cédula/NIT (CO) ficticio con formato real, derivado del id.
 function buildTaxId(seed: string, personType: SaleCustomer['personType'], country: CountryProfile): string {
   const digits = parseInt(deterministicHex(seed, 12), 16).toString().padStart(12, '0');
   if (country.code === 'CO') {
@@ -503,10 +418,8 @@ function buildTaxId(seed: string, personType: SaleCustomer['personType'], countr
   return `${initials}${date}${letters.slice(4, 7)}`;
 }
 
-// Régimen fiscal del país a partir de lo que el mock sabe del cliente:
-// c_RegimenFiscal del SAT (601 personas morales; 612 personas físicas con
-// actividad empresarial; 616 sin obligaciones fiscales) / responsabilidad de
-// IVA de la DIAN (48 responsable; 49 no responsable).
+// SAT: 601 moral, 612 física con actividad empresarial, 616 sin obligaciones.
+// DIAN: 48 responsable de IVA, 49 no responsable.
 function taxRegimeFor(customer: MockCustomer, country: CountryProfile): string | undefined {
   if (!customer.personType || customer.vatResponsible === undefined) return undefined;
   if (country.code === 'CO') {
@@ -516,13 +429,8 @@ function taxRegimeFor(customer: MockCustomer, country: CountryProfile): string |
   return customer.vatResponsible ? '612' : '616';
 }
 
-// Completa lo fiscal de la venta según el país activo — nunca se declara a
-// mano en `TODAY_SALES` (ver invariante "TODA venta trae su comprobante"
-// arriba): se genera igual para las 7 de mano y para cualquiera de
-// `buildDay()`. Un cliente sin tipo de persona es un receptor genérico
-// ("Público en general" / "Consumidor final") y lleva el id genérico del
-// país. `issuedAt` reusa la fecha/hora de la venta con el offset fiscal del
-// país (-06:00 MX / -05:00 CO, ninguno con horario de verano).
+// Comprobante y datos fiscales del país activo para toda venta. Sin `personType`
+// es receptor genérico (id genérico del país). Ver docs/codigo/ventas.md#mock-de-ventas.
 function withFiscalData(
   sale: RawSale,
   seq: number,
@@ -555,14 +463,16 @@ function withFiscalData(
   };
 }
 
+/**
+ * Ventas mock del POS (27 ago a mano + resto de agosto generado), con datos fiscales y pagos completos.
+ *
+ * @see design-system/conciliation/MASTER.md "Invariantes del mock de ventas (`sales-mock.data.ts`)"
+ * @see docs/codigo/ventas.md#mock-de-ventas
+ */
 export const MOCK_SALES: Sale[] = RAW_SALES.map((sale, index) => withPayment(withFiscalData(sale, index)));
 
-// Si la venta ya trae `payments` explícito (pago mixto con reparto propio,
-// ver V-2007), se respeta tal cual. Si no, se deriva un pago PRINCIPAL +
-// uno SECUNDARIO (`SECONDARY_TENDER`) a partir del total ya calculado — 20%
-// del total va al método secundario y el resto al principal, sin mantener
-// dos números a mano por separado. Garantiza la invariante "≥2 métodos de
-// pago" para cualquier venta del mock, generada o a mano.
+// Respeta `payments` explícito (V-2007); si no, reparte el total 80/20 entre el
+// método principal y `SECONDARY_TENDER`.
 function withPayment(sale: Omit<Sale, 'payments'> & { payments?: Sale['payments'] }): Sale {
   if (sale.payments) {
     return sale as Sale;

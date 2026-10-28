@@ -139,9 +139,7 @@
             <nz-select
               class="summary-field__control"
               nzMode="multiple"
-              [ngModel]="createRoleIds()"
-              [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="createRoleIds.set($event)"
+              [formControl]="createForm.controls.roleIds"
               placeholder="Selecciona uno o más roles"
               [nzLoading]="catalogLoading()"
             >
@@ -149,6 +147,9 @@
                 <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
               }
             </nz-select>
+            @if (createForm.controls.roleIds.invalid && createForm.controls.roleIds.touched) {
+              <span class="summary-field__error">Selecciona al menos un rol.</span>
+            }
           </div>
 
           <div class="summary-field">
@@ -160,10 +161,9 @@
             <nz-select
               class="summary-field__control"
               nzMode="multiple"
-              [ngModel]="createSubsidiariaIds()"
-              [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="createSubsidiariaIds.set($event)"
+              [formControl]="createForm.controls.subsidiariaIds"
               placeholder="Selecciona una o más subsidiarias"
+              [nzLoading]="catalog.loading()"
             >
               @for (opt of catalog.subsidiarias(); track opt.id) {
                 <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
@@ -180,12 +180,11 @@
             <nz-select
               class="summary-field__control"
               nzMode="multiple"
-              [ngModel]="createUbicacionIds()"
-              [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="createUbicacionIds.set($event)"
+              [formControl]="createForm.controls.ubicacionIds"
               placeholder="Selecciona una o más ubicaciones"
+              [nzLoading]="catalog.loading()"
             >
-              @for (opt of catalog.ubicaciones(); track opt.id) {
+              @for (opt of createUbicacionOptions(); track opt.id) {
                 <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
               }
             </nz-select>
@@ -201,9 +200,7 @@
             <span class="summary-field__label">Supervisor:</span>
             <nz-select
               class="summary-field__control"
-              [ngModel]="createManagerId()"
-              [ngModelOptions]="{ standalone: true }"
-              (ngModelChange)="createManagerId.set($event)"
+              [formControl]="createForm.controls.managerId"
               nzAllowClear
               placeholder="Selecciona un responsable (opcional)"
             >
@@ -220,11 +217,7 @@
             </svg>
             <span class="summary-field__label">Estado inicial:</span>
             <label class="status-switch">
-              <nz-switch
-                [ngModel]="createActive()"
-                [ngModelOptions]="{ standalone: true }"
-                (ngModelChange)="createActive.set($event)"
-              />
+              <nz-switch [formControl]="createForm.controls.active" />
               <span>{{ createActive() ? 'Activo' : 'Inactivo' }}</span>
             </label>
           </div>
@@ -253,9 +246,7 @@
         <nz-tab nzTitle="Información general">
           <nz-card class="tab-card" [nzBodyStyle]="{ padding: '24px' }">
             <div class="tab-card__sections">
-              <!-- Sección 1: datos personales — misma estructura siempre
-                   (icono+etiqueta arriba, valor/input abajo); isEditing() solo
-                   cambia el NODO del valor, nunca el layout alrededor. -->
+              <!-- Sección 1: datos personales -->
               <div class="tab-card__section">
                 <h3 class="tab-card__section-title">Información personal</h3>
                 <form [formGroup]="infoForm">
@@ -566,8 +557,7 @@
                 </form>
               </div>
 
-              <!-- Sección 2: organización — antes su propia pestaña, fusionada
-                   aquí (ver MASTER.md). -->
+              <!-- Sección 2: organización -->
               <div class="tab-card__section">
                 <h3 class="tab-card__section-title">Organización</h3>
                 <form [formGroup]="orgForm">
@@ -578,46 +568,62 @@
                           <rect x="4" y="3" width="16" height="18" rx="1" />
                           <path stroke-linecap="round" d="M9 21v-4h6v4M9 8h1M14 8h1M9 12h1M14 12h1M9 16h1M14 16h1" />
                         </svg>
-                        <span class="info-field__label">Departamento</span>
+                        <span class="info-field__label">Departamentos</span>
                       </span>
                       @if (isEditing()) {
-                        <nz-select class="info-field__input" formControlName="department" nzAllowClear nzPlaceholder="Selecciona un departamento">
-                          @for (opt of departments; track opt) {
-                            <nz-option [nzValue]="opt" [nzLabel]="opt" />
+                        <nz-select
+                          class="info-field__input"
+                          nzMode="multiple"
+                          formControlName="departamentoIds"
+                          [nzPlaceHolder]="'Selecciona uno o más departamentos'"
+                          [nzLoading]="catalog.loading()"
+                          nzNotFoundContent="Sin opciones en el catálogo"
+                        >
+                          @for (opt of orgOptions('departamentos'); track opt.id) {
+                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
                           }
                         </nz-select>
                       } @else {
-                        @if (u.department) {
-                          <span class="info-field__value">{{ u.department }}</span>
-                        } @else {
-                          <span class="info-field__value text-muted">Sin asignar</span>
+                        @if (orgNames('departamentos', u.departamentoIds); as names) {
+                          @if (names.length) {
+                            <span class="info-field__value">{{ names.join(', ') }}</span>
+                          } @else {
+                            <span class="info-field__value text-muted">Sin asignar</span>
+                          }
                         }
                       }
                     </div>
-
                     <div class="info-field">
                       <span class="info-field__head">
                         <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                           <path stroke-linecap="round" stroke-linejoin="round" d="m12 2 10 5-10 5L2 7l10-5Z" />
                           <path stroke-linecap="round" stroke-linejoin="round" d="m2 12 10 5 10-5M2 17l10 5 10-5" />
                         </svg>
-                        <span class="info-field__label">Área</span>
+                        <span class="info-field__label">Áreas</span>
                       </span>
                       @if (isEditing()) {
-                        <nz-select class="info-field__input" formControlName="area" nzAllowClear nzPlaceholder="Selecciona un área">
-                          @for (opt of areas; track opt) {
-                            <nz-option [nzValue]="opt" [nzLabel]="opt" />
+                        <nz-select
+                          class="info-field__input"
+                          nzMode="multiple"
+                          formControlName="areaIds"
+                          [nzPlaceHolder]="'Selecciona una o más áreas'"
+                          [nzLoading]="catalog.loading()"
+                          nzNotFoundContent="Sin opciones en el catálogo"
+                        >
+                          @for (opt of orgOptions('areas'); track opt.id) {
+                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
                           }
                         </nz-select>
                       } @else {
-                        @if (u.area) {
-                          <span class="info-field__value">{{ u.area }}</span>
-                        } @else {
-                          <span class="info-field__value text-muted">Sin asignar</span>
+                        @if (orgNames('areas', u.areaIds); as names) {
+                          @if (names.length) {
+                            <span class="info-field__value">{{ names.join(', ') }}</span>
+                          } @else {
+                            <span class="info-field__value text-muted">Sin asignar</span>
+                          }
                         }
                       }
                     </div>
-
                     <div class="info-field">
                       <span class="info-field__head">
                         <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -627,13 +633,21 @@
                         <span class="info-field__label">Subsidiarias</span>
                       </span>
                       @if (isEditing()) {
-                        <nz-select class="info-field__input" nzMode="multiple" formControlName="subsidiariaIds" placeholder="Selecciona una o más subsidiarias">
-                          @for (opt of catalog.subsidiarias(); track opt.id) {
+                        <nz-select
+                          class="info-field__input"
+                          nzMode="multiple"
+                          formControlName="subsidiariaIds"
+                          [nzPlaceHolder]="'Selecciona una o más subsidiarias'"
+                          [nzLoading]="catalog.loading()"
+                          nzNotFoundContent="Sin opciones en el catálogo"
+                          (ngModelChange)="onEditSubsidiariasChange($event)"
+                        >
+                          @for (opt of orgOptions('subsidiarias'); track opt.id) {
                             <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
                           }
                         </nz-select>
                       } @else {
-                        @if (subsidiariaNames(u.subsidiariaIds); as names) {
+                        @if (orgNames('subsidiarias', u.subsidiariaIds); as names) {
                           @if (names.length) {
                             <span class="info-field__value">{{ names.join(', ') }}</span>
                           } @else {
@@ -642,7 +656,6 @@
                         }
                       }
                     </div>
-
                     <div class="info-field">
                       <span class="info-field__head">
                         <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -652,13 +665,20 @@
                         <span class="info-field__label">Ubicaciones</span>
                       </span>
                       @if (isEditing()) {
-                        <nz-select class="info-field__input" nzMode="multiple" formControlName="ubicacionIds" placeholder="Selecciona una o más ubicaciones">
-                          @for (opt of catalog.ubicaciones(); track opt.id) {
+                        <nz-select
+                          class="info-field__input"
+                          nzMode="multiple"
+                          formControlName="ubicacionIds"
+                          [nzPlaceHolder]="'Selecciona una o más ubicaciones'"
+                          [nzLoading]="catalog.loading()"
+                          nzNotFoundContent="Sin opciones en el catálogo"
+                        >
+                          @for (opt of editUbicacionOptions(); track opt.id) {
                             <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
                           }
                         </nz-select>
                       } @else {
-                        @if (ubicacionNames(u.ubicacionIds); as names) {
+                        @if (orgNames('ubicaciones', u.ubicacionIds); as names) {
                           @if (names.length) {
                             <span class="info-field__value">{{ names.join(', ') }}</span>
                           } @else {
@@ -667,26 +687,65 @@
                         }
                       }
                     </div>
-
                     <div class="info-field">
                       <span class="info-field__head">
                         <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                           <rect x="2" y="7" width="20" height="14" rx="2" />
                           <path stroke-linecap="round" stroke-linejoin="round" d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
                         </svg>
-                        <span class="info-field__label">Cargo o puesto</span>
+                        <span class="info-field__label">Cargos</span>
                       </span>
                       @if (isEditing()) {
-                        <nz-select class="info-field__input" formControlName="jobTitle" nzAllowClear nzPlaceholder="Selecciona un puesto">
-                          @for (opt of jobTitles; track opt) {
-                            <nz-option [nzValue]="opt" [nzLabel]="opt" />
+                        <nz-select
+                          class="info-field__input"
+                          nzMode="multiple"
+                          formControlName="cargoIds"
+                          [nzPlaceHolder]="'Selecciona uno o más cargos'"
+                          [nzLoading]="catalog.loading()"
+                          nzNotFoundContent="Sin opciones en el catálogo"
+                        >
+                          @for (opt of orgOptions('cargos'); track opt.id) {
+                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
                           }
                         </nz-select>
                       } @else {
-                        @if (u.jobTitle) {
-                          <span class="info-field__value">{{ u.jobTitle }}</span>
-                        } @else {
-                          <span class="info-field__value text-muted">Sin asignar</span>
+                        @if (orgNames('cargos', u.cargoIds); as names) {
+                          @if (names.length) {
+                            <span class="info-field__value">{{ names.join(', ') }}</span>
+                          } @else {
+                            <span class="info-field__value text-muted">Sin asignar</span>
+                          }
+                        }
+                      }
+                    </div>
+                    <div class="info-field">
+                      <span class="info-field__head">
+                        <svg class="info-field__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <circle cx="12" cy="8" r="4" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
+                        </svg>
+                        <span class="info-field__label">Puestos</span>
+                      </span>
+                      @if (isEditing()) {
+                        <nz-select
+                          class="info-field__input"
+                          nzMode="multiple"
+                          formControlName="puestoIds"
+                          [nzPlaceHolder]="'Selecciona uno o más puestos'"
+                          [nzLoading]="catalog.loading()"
+                          nzNotFoundContent="Sin opciones en el catálogo"
+                        >
+                          @for (opt of orgOptions('puestos'); track opt.id) {
+                            <nz-option [nzValue]="opt.id" [nzLabel]="opt.nombre" />
+                          }
+                        </nz-select>
+                      } @else {
+                        @if (orgNames('puestos', u.puestoIds); as names) {
+                          @if (names.length) {
+                            <span class="info-field__value">{{ names.join(', ') }}</span>
+                          } @else {
+                            <span class="info-field__value text-muted">Sin asignar</span>
+                          }
                         }
                       }
                     </div>
@@ -776,11 +835,7 @@
                       }
                     </div>
 
-                    <!-- Contraseña inicial generada por el BACKEND (key
-                         `temporaryPassword` de GET /users/{id}) — solo se
-                         muestra si llega y no está vacía. Siempre de solo
-                         lectura, también en modo edición: el frontend nunca
-                         la define. -->
+                    <!-- Contraseña temporal del backend: siempre de solo lectura -->
                     @if (temporaryPassword(); as temporaryPassword) {
                       <div class="info-field">
                         <span class="info-field__head">
@@ -816,8 +871,7 @@
                 </form>
               </div>
 
-              <!-- Sección 3: cuenta — siempre de solo lectura (Estado usa su
-                   propio chip editable, StatusChip, sin relación con isEditing()). -->
+              <!-- Sección 3: cuenta (solo lectura; el estado usa StatusChip) -->
               <div class="tab-card__section">
                 <h3 class="tab-card__section-title">Cuenta</h3>
                 <div class="info-fields">
@@ -839,7 +893,7 @@
                           <rect x="5" y="11" width="14" height="9" rx="2" />
                           <path stroke-linecap="round" d="M8 11V7a4 4 0 0 1 8 0v4" />
                         </svg>
-                        <span class="info-field__label">Bloqueo de la cuenta</span>
+                        <span class="info-field__label">Cuenta real (backend)</span>
                       </span>
                       <button nz-button nzSize="small" type="button" (click)="onUnlockBackendClick()">
                         Desbloquear cuenta
@@ -878,12 +932,7 @@
               </div>
             </div>
 
-            <!-- Un solo botón para AMBAS secciones editables (Información
-                 personal + Organización) — al guardar, se combinan los 2
-                 formularios y se envían juntos en una sola llamada
-                 (`onSaveProfile()` → `UserManagementService.updateUserProfile`),
-                 no por partes. "Cuenta" no tiene forma editable, así que no
-                 participa. -->
+            <!-- Guardado único de datos personales y organización -->
             @if (isEditing()) {
               <div class="tab-card__save-bar">
                 <button

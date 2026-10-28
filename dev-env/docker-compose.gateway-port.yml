@@ -1,0 +1,7 @@
+# Override SOLO del puerto publicado del Gateway (el docker-compose.yml del back fija "8080:8080" y no se
+# modifica). El puerto sale de GATEWAY_PORT en dev-env/.env (8080 por defecto): útil cuando otro proyecto
+# de esta máquina ya ocupa el 8080. proxy.conf.js y dev-env/pruebas-endpoints.mjs leen el mismo valor.
+services:
+  gateway:
+    ports: !override
+      - "${GATEWAY_PORT:-8080}:8080"

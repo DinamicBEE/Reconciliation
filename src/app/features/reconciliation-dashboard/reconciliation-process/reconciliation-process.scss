@@ -1,0 +1,218 @@
+@use '../../../shared/styles/bank-badge';
+@use '../../../shared/styles/status-card';
+@use '../../../shared/styles/data-table';
+
+.reconciliation-process {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+// Paso 1: dos columnas (una card por archivo); en una sola ≤ 768px.
+.process-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--grid-gap);
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Icono de banco a la izquierda; título y subtítulo a su costado derecho.
+.process-source {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.process-source__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.process-source__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.process-source__subtitle {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+// Paso 2 · Validación: engranes girando, textos y barra, en columna centrada.
+.validation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.gears {
+  margin-bottom: 8px;
+}
+
+// Engranes acoplados: sentidos opuestos; el chico, más rápido (menos dientes).
+.gear {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gear-spin 6s linear infinite;
+}
+
+.gear--a {
+  color: var(--color-primary);
+}
+
+.gear--b {
+  color: var(--color-secondary);
+  animation-direction: reverse;
+  animation-duration: 4.5s;
+}
+
+.gear__hole {
+  fill: var(--color-card);
+}
+
+@keyframes gear-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gear {
+    animation: none;
+  }
+}
+
+.validation__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.validation__subtitle {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+.validation__progress {
+  width: 100%;
+  max-width: 420px;
+  margin-top: 16px;
+}
+
+// Resultado: 3 KPI de semáforo y el indicador de líneas por gestionar.
+.result-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--grid-gap);
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Espacio reservado de lo que aún no se define.
+.process-pending__body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+}
+
+.process-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.process-footer__hint {
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+// Los iconos son SVG de este template: heredan `currentColor` de aquí, no del tema de los steps.
+.process-steps svg {
+  color: var(--color-primary);
+}
+
+// Paso 3: banner de éxito, divisor tenue y métricas en columna (nombre arriba, valor abajo).
+.completion {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid;
+  border-radius: 8px;
+}
+
+.completion__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.completion__title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.completion__subtitle {
+  font-size: 13px;
+}
+
+.completion__divider {
+  margin: 24px 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  opacity: 0.6;
+}
+
+.completion__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin: 0;
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  dt {
+    font-size: 13px;
+    color: var(--color-muted-foreground);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--color-foreground);
+  }
+}
+
+.metric__percentage {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+}

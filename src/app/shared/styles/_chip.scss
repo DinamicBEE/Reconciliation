@@ -1,8 +1,5 @@
-// Chip INDICADOR — mismas métricas que `StatusChip` (pastilla 999px, 12px/600,
-// padding 2px 10px, borde de 1px) pero sin menú, sin chevron y sin cursor de
-// acción: solo muestra un dato (p. ej. "5 usuarios" en "Roles y permisos").
-// Si el chip debe cambiar algo, no es este: es un `StatusChip` (o similar con
-// `nz-dropdown`). Ver MASTER.md, "Regla general: tablas".
+// Chip indicador de solo lectura: métricas de `StatusChip` sin menú ni cursor de acción.
+// MASTER.md "Regla general: tablas". Ver docs/codigo/estilos.md#partial-tabla-acciones
 .chip {
   display: inline-flex;
   align-items: center;

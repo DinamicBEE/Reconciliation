@@ -83,6 +83,7 @@ const COLOMBIA: CountryProfile = {
   },
 };
 
+/** Perfiles soportados por código de país. */
 export const COUNTRY_PROFILES: Record<CountryCode, CountryProfile> = {
   MX: MEXICO,
   CO: COLOMBIA,

@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, map, of, throwError } from 'rxjs';
-import { AuthService, CreateUserRequest, UpdateUserRequest, UpdateUserRolesRequest, UserDetailDto } from '../../auth/data/auth.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { CreateUserRequest, UpdateUserRequest, UpdateUserRolesRequest, UserDetailDto, UsersApiService } from './users-api.service';
 import {
   AppUser,
   AppUserAddress,
@@ -12,46 +13,67 @@ import {
 } from './user-management.model';
 import { MOCK_USERS } from './user-management-mock.data';
 
-// `UserSummaryDto.status`/`UserDetailDto.status` (backend, mayúsculas) ↔
-// `UserStatus` (este frontend, minúsculas) — ver `syncFromBackend` y
-// `UserDetail` (fusión del detalle real).
 const BACKEND_STATUS_TO_LOCAL: Record<string, UserStatus> = {
   ACTIVE: 'active',
   INACTIVE: 'inactive',
   LOCKED: 'blocked',
 };
 
+/**
+ * Traduce el estado del backend (mayúsculas) a {@link UserStatus}.
+ *
+ * @returns `'active'` para un código desconocido.
+ * @see docs/codigo/usuarios.md#estados-de-cuenta
+ */
 export function backendStatusToLocal(status: string): UserStatus {
   return BACKEND_STATUS_TO_LOCAL[status] ?? 'active';
 }
 
+/**
+ * Ids de cargos, puestos, departamentos y áreas del detalle de `GET /users/{id}`.
+ *
+ * @remarks Tolera listas ausentes (`[]`) por si el backend desplegado no trae los catálogos organizacionales.
+ */
+export function organizationIdsFromDetail(
+  detail: UserDetailDto,
+): Pick<AppUser, 'cargoIds' | 'puestoIds' | 'departamentoIds' | 'areaIds'> {
+  return {
+    cargoIds: (detail.cargos ?? []).map((c) => c.id),
+    puestoIds: (detail.puestos ?? []).map((p) => p.id),
+    departamentoIds: (detail.departamentos ?? []).map((d) => d.id),
+    areaIds: (detail.areas ?? []).map((a) => a.id),
+  };
+}
+
+/** Filtro de estado de la lista de usuarios. */
 export type StatusFilter = 'all' | UserStatus;
+/** Filtro de rol de la lista de usuarios. */
 export type RoleFilter = 'all' | RoleId;
 
+/**
+ * Datos del formulario de alta.
+ *
+ * @see docs/codigo/usuarios.md#alta-de-usuario
+ */
 export interface CreateUserInput {
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
   roleIds: RoleId[];
+  /** El formulario solo ofrece `active` e `inactive`. */
   status: UserStatus;
-  // A diferencia del resto de "Organización", sí se piden al crear (ver
-  // AppUser.subsidiariaIds/.ubicacionIds) — catálogo REAL del backend
-  // (CatalogService), no un valor propio de este mock. Arreglos: el backend
-  // (`CreateUserRequest.subsidiariaIds`/`.ubicacionIds`) acepta varias.
   subsidiariaIds: number[];
   ubicacionIds: number[];
-  // Supervisor — select SIMPLE (uno solo). Id 'uXXXX' de ESTE mock (igual
-  // que `UpdateUserProfileInput.managerId`); `createUser()` lo resuelve al
-  // `backendUserId` real antes de mandarlo como `supervisorId`.
+  /** Id local `uXXXX` del supervisor; se envía como `supervisorId` con su `backendUserId`. */
   managerId: string | null;
 }
 
-// Datos personales SOLOS (sin organización) — el único que necesita
-// `Profile` (self-service: cada quien edita su propia información de
-// contacto, nunca su propia asignación organizacional). Ver
-// `UpdateUserProfileInput` abajo para el caso de `UserDetail` (un admin
-// editando a otro usuario, personal + organización JUNTOS).
+/**
+ * Datos personales que cada quien edita en su perfil (sin organización).
+ *
+ * @see docs/codigo/usuarios.md#edicion-de-perfil
+ */
 export interface UpdateUserInfoInput {
   firstName: string;
   lastName: string;
@@ -63,16 +85,12 @@ export interface UpdateUserInfoInput {
   address: AppUserAddress;
 }
 
-// Un solo input para TODO "Información general" en `UserDetail` (datos
-// personales + organización) — antes eran 2 interfaces
-// (`UpdateUserInfoInput`/`UpdateOrganizationInput`) que viajaban a 2 métodos
-// del service en 2 llamadas separadas; ahora esa pantalla las junta en un
-// solo `<form>` lógico y las guarda en una sola llamada
-// (`updateUserProfile`, ver abajo) — el día que exista backend real, esto
-// es UN solo endpoint, no dos. `Profile` (self-service) sigue usando el
-// `UpdateUserInfoInput` más chico de arriba, vía `updateInfo` — 2 métodos
-// a propósito: son 2 casos de uso distintos (self-service acotado vs.
-// edición administrativa completa), no la misma acción con menos campos.
+/**
+ * Datos personales y organización que un administrador edita en `UserDetail`.
+ *
+ * @remarks `managerId` es un id local `uXXXX`.
+ * @see docs/codigo/usuarios.md#edicion-de-perfil
+ */
 export interface UpdateUserProfileInput {
   firstName: string;
   lastName: string;
@@ -82,9 +100,10 @@ export interface UpdateUserProfileInput {
   ssn: string;
   gender: string;
   address: AppUserAddress;
-  department: string;
-  area: string;
-  jobTitle: string;
+  cargoIds: number[];
+  puestoIds: number[];
+  departamentoIds: number[];
+  areaIds: number[];
   managerId: string | null;
   employeeId: string;
   hireDate: string;
@@ -104,25 +123,33 @@ function maxSeq(ids: string[]): number {
 let nextUserSeq = maxSeq(MOCK_USERS.map((u) => u.id)) + 1;
 
 /**
- * `providedIn: 'root'` — a diferencia de los servicios de un solo feature
- * (SalesDashboardService, ReconciliationService, con `providers: [...]` a
- * nivel de componente), este necesita SOBREVIVIR la navegación entre las 3
- * pantallas del módulo (lista, detalle, auditoría global): son 3 rutas de
- * nivel superior distintas, no un solo árbol de componentes, así que cada
- * una obtendría su propia instancia (y perdería los cambios de la sesión)
- * si se proveyera a nivel de componente. Mismo criterio que AuthService.
+ * Registro de usuarios, filtros y selección de la lista, y mutaciones contra `/users/**`.
+ *
+ * @remarks `providedIn: 'root'` para que el estado sobreviva entre lista, detalle y auditoría (rutas distintas).
+ * @see docs/codigo/usuarios.md#servicio-de-usuarios
  */
 @Injectable({ providedIn: 'root' })
 export class UserManagementService {
   private readonly auth = inject(AuthService);
+  private readonly usersApi = inject(UsersApiService);
 
   private readonly usersSignal = signal<AppUser[]>(MOCK_USERS);
 
   readonly allUsers = this.usersSignal.asReadonly();
 
-  readonly search = signal('');
-  readonly roleFilter = signal<RoleFilter>('all');
-  readonly statusFilter = signal<StatusFilter>('all');
+  /** Registro de la sesión actual, resuelto por correo (ADR-0001, punto 5); `null` si no hay registro. */
+  readonly currentAppUser = computed<AppUser | null>(() => {
+    const email = this.auth.currentUser()?.username;
+    return email ? this.findUserByEmail(email) : null;
+  });
+
+  // Escritura solo por métodos (ADR-0002, punto 4).
+  private readonly searchState = signal('');
+  private readonly roleFilterState = signal<RoleFilter>('all');
+  private readonly statusFilterState = signal<StatusFilter>('all');
+  readonly search = this.searchState.asReadonly();
+  readonly roleFilter = this.roleFilterState.asReadonly();
+  readonly statusFilter = this.statusFilterState.asReadonly();
 
   readonly filteredUsers = computed(() => {
     const term = this.search().trim().toLowerCase();
@@ -137,12 +164,7 @@ export class UserManagementService {
     });
   });
 
-  // Selección de filas en la lista — vive aquí (no en el componente) por el
-  // mismo motivo que search/roleFilter/statusFilter: es estado de ESA
-  // pantalla, y el service ya es el dueño del estado de la pantalla de
-  // lista. Alcance: los usuarios FILTRADOS actualmente visibles, no todos
-  // los usuarios del sistema (seleccionar "todos" con un filtro activo solo
-  // selecciona lo que se ve, no lo oculto por el filtro).
+  // Selección de la lista; "todos" abarca solo los usuarios filtrados visibles.
   private readonly selectedIdsSignal = signal<ReadonlySet<string>>(new Set());
   readonly selectedIds = this.selectedIdsSignal.asReadonly();
 
@@ -164,24 +186,21 @@ export class UserManagementService {
     };
   });
 
-  // Candidatos a "Administrador responsable" (Organización) — cualquier
-  // usuario con un rol de gestión (ver MANAGER_ROLE_IDS). El componente
-  // excluye además al propio usuario que se está editando (no puede ser su
-  // propio responsable).
+  /** Usuarios con un rol de {@link MANAGER_ROLE_IDS}; el componente excluye a la persona editada. */
   readonly managerCandidates = computed(() =>
     this.usersSignal().filter((u) => u.roleIds.some((r) => MANAGER_ROLE_IDS.includes(r))),
   );
 
   setSearch(value: string): void {
-    this.search.set(value);
+    this.searchState.set(value);
   }
 
   setRoleFilter(value: RoleFilter): void {
-    this.roleFilter.set(value);
+    this.roleFilterState.set(value);
   }
 
   setStatusFilter(value: StatusFilter): void {
-    this.statusFilter.set(value);
+    this.statusFilterState.set(value);
   }
 
   isSelected(userId: string): boolean {
@@ -200,11 +219,7 @@ export class UserManagementService {
     });
   }
 
-  // Selecciona/deselecciona todos los usuarios FILTRADOS a la vez — si ya
-  // están todos seleccionados, el toggle los quita; si falta alguno (o
-  // ninguno), los agrega todos (mismo comportamiento que el checkbox
-  // "seleccionar todo" de cualquier tabla: el estado indeterminado cuenta
-  // como "no completo" y el siguiente click completa la selección).
+  /** Quita los filtrados si ya están todos seleccionados; si no (incluido el indeterminado), los agrega. */
   toggleSelectAllFiltered(): void {
     const filtered = this.filteredUsers();
     const allSelected = this.isAllFilteredSelected();
@@ -225,41 +240,34 @@ export class UserManagementService {
     return this.usersSignal().find((u) => u.id === userId) ?? null;
   }
 
-  // Reverso de `backendUserId` — para resolver `UserDetailDto.manager.id`
-  // (un id REAL del backend) de vuelta al registro de ESTE mock, cuando lo
-  // tiene (ver `UserDetail`, que fusiona el detalle real sobre la base del
-  // mock). `null` si ese manager no tiene bridge conocido aquí — no todos
-  // lo tienen todavía (ver AppUser.backendUserId).
+  /**
+   * Registro local cuyo `backendUserId` coincide (p. ej. para resolver `UserDetailDto.manager.id`).
+   *
+   * @returns `null` si ningún registro local tiene ese id del backend.
+   */
   findByBackendUserId(backendUserId: number): AppUser | null {
     return this.usersSignal().find((u) => u.backendUserId === backendUserId) ?? null;
   }
 
-  // Puente entre la sesión (login.ts, tras un login real contra
-  // coctel-del-mar) y el registro local de `user-management` — el backend
-  // de autenticación identifica cuentas por email, no por el `id` mock de
-  // este módulo (no hay todavía un backend de administración de usuarios
-  // que los comparta). Solo resuelve para cuentas de demo cuyo email
-  // coincide con las sembradas en coctel-del-mar; si no hay match, la sesión
-  // sigue autenticada pero sin `AppUser` vinculado (ver
-  // `AccessControlService.currentAppUser`).
+  /**
+   * Registro local con ese correo, sin distinguir mayúsculas; vincula la sesión con su registro.
+   *
+   * @returns `null` si no hay registro; la sesión sigue autenticada sin `AppUser`.
+   * @see docs/codigo/usuarios.md#sincronizacion-con-backend
+   */
   findUserByEmail(email: string): AppUser | null {
     const target = email.trim().toLowerCase();
     return this.usersSignal().find((u) => u.email.toLowerCase() === target) ?? null;
   }
 
-  // CU3 pasos 1-2: alta REAL (`POST /users`, ver `AuthService.createUser`) —
-  // ya no genera nada localmente: `id` (numérico, el `backendUserId`),
-  // `roleIds`/`permissions` efectivos y `temporaryPassword` vienen todos de
-  // la respuesta del backend. `roleIds` en el alta solo se respeta si quien
-  // la hace tiene `manage_roles` — si no, el backend responde 403
-  // `ROLE_ASSIGNMENT_FORBIDDEN` (el `notifyBackendError` ya muestra
-  // esa alerta; el `.subscribe({ error })` del llamador solo necesita
-  // reaccionar, no traducir el mensaje).
+  /**
+   * Da de alta con `POST /users` y agrega el registro con el id, roles, permisos y contraseña que asigna el backend.
+   *
+   * @returns Observable con el nuevo `AppUser`; falla con el error HTTP del alta (lo avisa el interceptor).
+   * @see docs/codigo/usuarios.md#alta-de-usuario
+   */
   createUser(input: CreateUserInput): Observable<AppUser> {
-    // "Administrador responsable" (id 'uXXXX' de ESTE mock) → id NUMÉRICO
-    // real del backend, mismo bridge que `updateUserProfile`. `null` si no
-    // se eligió uno o si el elegido todavía no tiene `backendUserId` (no
-    // debería pasar, ver `managerCandidates`).
+    // Id local del responsable → `backendUserId`; `null` si no tiene.
     const managerBackendId = input.managerId ? (this.findUser(input.managerId)?.backendUserId ?? null) : null;
 
     const request: CreateUserRequest = {
@@ -271,28 +279,20 @@ export class UserManagementService {
       subsidiariaIds: input.subsidiariaIds,
       ubicacionIds: input.ubicacionIds,
       roleIds: input.roleIds,
-      // El form de creación solo ofrece Activo/Inactivo (ver
-      // `UserDetail.createActive`) — nunca 'blocked', que el backend
-      // rechazaría de todos modos (LOCKED solo lo genera el sistema).
+      // El alta nunca es `blocked`: `LOCKED` solo lo genera el sistema.
       status: input.status === 'active' ? 'ACTIVE' : 'INACTIVE',
     };
 
-    return this.auth.createUser(request).pipe(
+    return this.usersApi.createUser(request).pipe(
       map((result) => {
         const user: AppUser = {
-          // Mínimo 4 dígitos (regla de negocio) — el padding es solo
-          // cosmético, `maxSeq` (arriba) sigue leyendo el número con
-          // `Number(...)` así que un id viejo sin padding igual se compara
-          // bien. Este id 'uXXXX' sigue siendo solo de ESTE mock —
-          // `backendUserId` (abajo) es el id real.
+          // Id local de mínimo 4 dígitos (regla de negocio); `maxSeq` lee el número sin padding.
           id: `u${String(nextUserSeq++).padStart(4, '0')}`,
           firstName: input.firstName.trim(),
           lastName: input.lastName.trim(),
           email: result.email,
           phone: input.phone.trim(),
-          // Sin foto al crear — se sube después (no hay flujo de carga de
-          // avatar todavía); cae a iniciales + color hasta entonces (ver
-          // AppUser.avatarUrl). El backend tampoco modela avatar.
+          // No hay carga de avatar y el backend no lo modela.
           avatarUrl: null,
           status: input.status,
           createdAt: new Date().toISOString(),
@@ -308,16 +308,15 @@ export class UserManagementService {
           activeSessions: 0,
           mustChangePassword: result.mustChangePassword,
           temporaryPassword: result.temporaryPassword,
-          // No se piden al crear — se completan después editando el detalle
-          // (ver UpdateUserProfileInput/updateUserProfile). El backend
-          // tampoco los pide al alta (ver CreateUserRequest.java).
+          // No se piden en el alta; se completan editando el detalle.
           birthDate: '',
           ssn: '',
           gender: '',
           address: { city: '', state: '', zipCode: '', street1: '', street2: null, exteriorNumber: '', interiorNumber: null },
-          department: '',
-          area: '',
-          jobTitle: '',
+          cargoIds: [],
+          puestoIds: [],
+          departamentoIds: [],
+          areaIds: [],
           managerId: input.managerId,
           employeeId: '',
           hireDate: '',
@@ -333,28 +332,14 @@ export class UserManagementService {
     );
   }
 
-  // `GET /users` — reconcilia el mock local con el backend real: para cada
-  // fila del mock CON `backendUserId`, sobreescribe roleIds/permissions/
-  // status/emailVerified/lastAccessAt/mustChangePassword/subsidiariaIds/
-  // ubicacionIds con lo que devuelva el backend (fuente de verdad); una fila
-  // sin `backendUserId` (no debería quedar ninguna tras sembrar los 26, ver
-  // MASTER.md) se deja intacta. Best-effort: si la llamada falla (backend
-  // caído), se queda con lo último conocido — `UserList` la dispara una vez
-  // al entrar a la pantalla, no es una fuente de verdad en vivo todavía.
-  //
-  // Además INSERTA cualquier cuenta real que el backend ya conoce pero que
-  // `usersSignal` todavía no tiene — antes se perdían para siempre: `usersSignal`
-  // arranca SIEMPRE desde `MOCK_USERS` (26 cuentas fijas) en cada bootstrap de
-  // la app, así que un alta hecha en una sesión anterior (o desde fuera de
-  // este frontend) nunca tenía un registro local con el que reconciliarse —
-  // `GET /users` la devolvía, pero el `.map()` de arriba la ignoraba por
-  // completo al no encontrar ningún `user.backendUserId` que hiciera match.
-  //
-  // Pagina: `GET /users` devuelve de a `size` (100) y el backend informa
-  // `totalPages` — `AuthService.listAllUsers()` recorre todas las páginas, así
-  // que con más de 100 cuentas la lista ya no se trunca.
+  /**
+   * Reconcilia el registro local con todas las páginas de `GET /users`: actualiza, quita e inserta cuentas.
+   *
+   * @remarks Best-effort: si la llamada falla se conserva lo último conocido.
+   * @see docs/codigo/usuarios.md#sincronizacion-con-backend
+   */
   syncFromBackend(): void {
-    this.auth.listAllUsers().subscribe({
+    this.usersApi.listAllUsers().subscribe({
       next: (users) => {
         const byBackendId = new Map(users.map((u) => [u.id, u]));
         const knownBackendIds = new Set(
@@ -363,9 +348,7 @@ export class UserManagementService {
             .filter((id): id is number => id !== null),
         );
 
-        // El backend es la fuente de verdad: una cuenta con `backendUserId` que ya
-        // no aparece en `GET /users` se dio de baja (o la base se re-sembró) y sale
-        // de la lista local; antes se quedaba para siempre.
+        // Una cuenta con `backendUserId` ausente de `GET /users` se dio de baja: sale de la lista.
         this.usersSignal.update((list) =>
           list
             .filter((user) => user.backendUserId === null || byBackendId.has(user.backendUserId))
@@ -395,14 +378,10 @@ export class UserManagementService {
     });
   }
 
-  // Trae el detalle COMPLETO (`GET /users/{id}`, no solo `UserSummaryDto` —
-  // ahí no viene firstName/lastName/createdAt/organización) de una cuenta
-  // real descubierta por `syncFromBackend()` sin registro local, y la agrega
-  // como un `AppUser` nuevo. Guard de carrera: si para cuando responde esta
-  // llamada esa cuenta YA tiene registro local (otra sync concurrente, o se
-  // insertó por otra vía), no duplica.
+  // Inserta una cuenta del backend sin registro local; no duplica si otra sync la insertó antes.
+  // Ver docs/codigo/usuarios.md#sincronizacion-con-backend.
   private fetchAndInsertUser(backendUserId: number): void {
-    this.auth.getUserDetail(backendUserId).subscribe({
+    this.usersApi.getUserDetail(backendUserId).subscribe({
       next: (detail) => {
         if (this.usersSignal().some((u) => u.backendUserId === backendUserId)) return;
         this.usersSignal.update((list) => [this.buildUserFromDetail(detail), ...list]);
@@ -411,12 +390,8 @@ export class UserManagementService {
     });
   }
 
-  // Arma un `AppUser` completo a partir del detalle real del backend — mismo
-  // mapeo de campos que `UserDetail.mergeBackendDetail`, pero construyendo un
-  // registro NUEVO en vez de fusionar sobre una base del mock (no hay base:
-  // esta cuenta no vivía en `MOCK_USERS`). Lo que el backend no modela
-  // (avatarUrl, 2FA, última actividad) cae a su default; intentos fallidos,
-  // sesiones activas y fin del bloqueo SÍ vienen del detalle real.
+  // Mismo mapeo que `UserDetail.mergeBackendDetail`, pero sin registro base; avatar, 2FA y
+  // última actividad no los modela el backend.
   private buildUserFromDetail(detail: UserDetailDto): AppUser {
     const managerId = detail.manager ? (this.findByBackendUserId(detail.manager.id)?.id ?? null) : null;
 
@@ -452,9 +427,7 @@ export class UserManagementService {
       activeSessions: detail.activeSessions ?? 0,
       mustChangePassword: detail.mustChangePassword,
       temporaryPassword: detail.temporaryPassword,
-      department: detail.department ?? '',
-      area: detail.area ?? '',
-      jobTitle: detail.jobTitle ?? '',
+      ...organizationIdsFromDetail(detail),
       managerId,
       employeeId: detail.employeeCode ?? '',
       hireDate: detail.hireDate ?? '',
@@ -465,10 +438,11 @@ export class UserManagementService {
     };
   }
 
-  // Self-service: el propio usuario edita SOLO su información personal (ver
-  // `Profile`, `/perfil`) — nunca su organización, así que no reutiliza
-  // `updateUserProfile` (exigiría los 7 campos de organización que esa
-  // pantalla ni siquiera muestra).
+  /**
+   * Actualiza localmente los datos personales que la persona edita en su perfil (`/perfil`).
+   *
+   * @see docs/codigo/usuarios.md#edicion-de-perfil
+   */
   updateInfo(userId: string, input: UpdateUserInfoInput): void {
     const user = this.findUser(userId);
     if (!user) return;
@@ -495,24 +469,13 @@ export class UserManagementService {
     this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
   }
 
-  // Administrativo: un admin edita a OTRO usuario, información personal Y
-  // organización JUNTAS, en una sola actualización + una sola entrada de
-  // auditoría (ver `UserDetail.onSaveProfile()`) — reemplaza a los antiguos
-  // `updateInfo`/`updateOrganization` como 2 llamadas separadas para ESE
-  // caso de uso. Ver `UpdateUserProfileInput`.
-  //
-  // CU3 paso 3: `PATCH /users/{id}` real (ver `AuthService.updateUser`) —
-  // requiere que el usuario ya esté vinculado (`backendUserId`); no debería
-  // quedar ninguno sin vincular tras sembrar los 26 (ver MASTER.md). La
-  // respuesta (`UserSummaryDto`) NO repite los campos que se acaban de
-  // mandar, así que el `AppUser` resultante combina el `input` (lo que el
-  // backend acaba de guardar) con lo que SÍ trae la respuesta (roles,
-  // permisos, estado, mustChangePassword, emailVerified — autoritativo).
-  // `subsidiariaIds`/`ubicacionIds` SÍ viajan (DEV, Guía_Endpoints: una lista
-  // reemplaza la actual, vacía las quita, omitirla no toca nada): este form
-  // siempre manda las dos listas. Un id inexistente rechaza TODO el PATCH con
-  // 400 `INVALID_LOCATION` (lo avisa `notifyBackendError`). Tras
-  // guardar, el `AppUser` toma las listas de la RESPUESTA (autoritativas).
+  /**
+   * Guarda datos personales y organización de otra persona con `PATCH /users/{id}` (CU3 paso 3).
+   *
+   * @remarks El resultado combina el `input` con la respuesta, autoritativa para roles, estado y listas.
+   * @returns Observable con el `AppUser` actualizado; falla sin `backendUserId` o con 400 `INVALID_LOCATION`/`INVALID_CATALOG_ITEM`.
+   * @see docs/codigo/usuarios.md#edicion-de-perfil
+   */
   updateUserProfile(userId: string, input: UpdateUserProfileInput): Observable<AppUser> {
     const user = this.findUser(userId);
     if (!user) {
@@ -523,9 +486,7 @@ export class UserManagementService {
     }
     const backendUserId = user.backendUserId;
 
-    // `managerId` del form es el id 'uXXXX' de ESTE mock — el backend
-    // necesita el id numérico real del manager (mismo bridge que
-    // `UserDetail.mergeBackendDetail`, en sentido inverso).
+    // Id local del responsable → `backendUserId` (inverso de `UserDetail.mergeBackendDetail`).
     const managerBackendId = input.managerId ? (this.findUser(input.managerId)?.backendUserId ?? null) : null;
 
     const request: UpdateUserRequest = {
@@ -545,18 +506,20 @@ export class UserManagementService {
         interiorNumber: input.address.interiorNumber?.trim() || null,
         exteriorNumber: input.address.exteriorNumber.trim() || null,
       },
-      department: input.department.trim() || null,
-      area: input.area.trim() || null,
-      jobTitle: input.jobTitle.trim() || null,
       managerId: managerBackendId,
       employeeCode: input.employeeId.trim() || null,
       hireDate: input.hireDate || null,
       contractEndDate: input.contractEndDate,
       subsidiariaIds: input.subsidiariaIds,
       ubicacionIds: input.ubicacionIds,
+      // Siempre la lista completa: la del backend se reemplaza.
+      cargoIds: input.cargoIds,
+      puestoIds: input.puestoIds,
+      departamentoIds: input.departamentoIds,
+      areaIds: input.areaIds,
     };
 
-    return this.auth.updateUser(backendUserId, request).pipe(
+    return this.usersApi.updateUser(backendUserId, request).pipe(
       map((summary) => {
         const updated: AppUser = {
           ...user,
@@ -568,9 +531,12 @@ export class UserManagementService {
           ssn: input.ssn.trim(),
           gender: input.gender,
           address: { ...input.address },
-          department: input.department.trim(),
-          area: input.area.trim(),
-          jobTitle: input.jobTitle.trim(),
+          // `UserSummaryDto` no repite cargos/puestos/departamentos/áreas: se
+          // toma lo enviado (el backend lo guardó tal cual o habría respondido 400).
+          cargoIds: [...input.cargoIds],
+          puestoIds: [...input.puestoIds],
+          departamentoIds: [...input.departamentoIds],
+          areaIds: [...input.areaIds],
           managerId: input.managerId,
           employeeId: input.employeeId.trim(),
           hireDate: input.hireDate,
@@ -589,22 +555,19 @@ export class UserManagementService {
     );
   }
 
-  // ¿Hay algo que guardar en "Seguridad y acceso"? (roles o permisos distintos a los actuales)
+  /** Indica si roles o permisos difieren, como conjuntos, de los guardados ("Seguridad y acceso"). */
   accessChanged(userId: string, roleIds: RoleId[], permissions: PermissionKey[]): boolean {
     const user = this.findUser(userId);
     return !!user && (!sameSet(user.roleIds, roleIds) || !sameSet(user.permissions, permissions));
   }
 
-  // `PATCH /users/{id}/roles` real (ver `AuthService.updateUserRoles`). Cambiar los
-  // roles asignados resetea los permisos a la UNIÓN de los defaults de esos
-  // roles (`AccessCatalogService.defaultPermissionsForRoles`) — el componente
-  // parte de ahí y el admin ajusta lo que necesite; aquí llega el RESULTADO
-  // FINAL y el backend lo guarda tal cual. Solo se manda lo que cambió (omitido =
-  // no tocar). El endpoint EXIGE `manage_roles` (403 `ROLE_ASSIGNMENT_FORBIDDEN`)
-  // aunque solo se cambien permisos.
-  // La respuesta (`UserSummaryDto`) es autoritativa para roles/permisos/estado.
-  // Si la persona editada es la de la sesión, se renueva la sesión YA
-  // (`AuthService.renewSession`) en vez de esperar al siguiente refresh.
+  /**
+   * Guarda con `PATCH /users/{id}/roles` solo los roles o permisos que cambiaron.
+   *
+   * @remarks `permissions` es el resultado final; si la persona es la de la sesión, se renueva la sesión.
+   * @returns Observable con el `AppUser` actualizado (o el actual si nada cambió); falla con 403 `ROLE_ASSIGNMENT_FORBIDDEN`.
+   * @see docs/codigo/usuarios.md#roles-asignados
+   */
   changeRoles(userId: string, roleIds: RoleId[], permissions: PermissionKey[]): Observable<AppUser> {
     const user = this.findUser(userId);
     if (!user) {
@@ -628,7 +591,7 @@ export class UserManagementService {
       ...(permissionsChanged ? { permissions } : {}),
     };
 
-    return this.auth.updateUserRoles(user.backendUserId, request).pipe(
+    return this.usersApi.updateUserRoles(user.backendUserId, request).pipe(
       map((summary) => {
         const updated: AppUser = {
           ...user,
@@ -642,14 +605,13 @@ export class UserManagementService {
         };
         this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
 
-        if (this.auth.currentUser()?.appUserId === userId) {
+        if (this.currentAppUser()?.id === userId) {
           this.auth.renewSession().subscribe();
         }
         return updated;
       }),
-      // Si el backend rechaza el cambio, el registro no cambió: se re-emite con
-      // arreglos NUEVOS para que los selectores de rol (ngModel) vuelvan a
-      // mostrar los roles reales en vez de la selección que se descartó.
+      // Ante un rechazo se re-emite con arreglos nuevos para que los selectores (ngModel)
+      // vuelvan a mostrar los roles guardados.
       catchError((err: unknown) => {
         this.usersSignal.update((list) =>
           list.map((u) => (u.id === userId ? { ...u, roleIds: [...u.roleIds], permissions: [...u.permissions] } : u)),
@@ -659,15 +621,12 @@ export class UserManagementService {
     );
   }
 
-  // 3 estados posibles (activo/inactivo/bloqueado, ver StatusChip) — cada
-  // uno tiene su propia AuditAction para que el historial diga exactamente
-  // qué pasó, no un genérico "estado cambiado".
-  //
-  // CU3 paso 4: `PATCH /users/{id}/status` real (ver `AuthService.changeStatus`)
-  // — mismo criterio que `updateUserProfile`: requiere `backendUserId`, y la
-  // respuesta (`UserSummaryDto`) es autoritativa para roles/permisos/estado/
-  // mustChangePassword/emailVerified/subsidiarias/ubicaciones (se reconcilian
-  // también, por si divergieron).
+  /**
+   * Cambia el estado con `PATCH /users/{id}/status` (CU3 paso 4); la respuesta reconcilia el registro.
+   *
+   * @returns Observable con el `AppUser` actualizado; falla si ya tiene ese estado o no tiene `backendUserId`.
+   * @see docs/codigo/usuarios.md#acciones-administrativas
+   */
   setStatus(userId: string, status: UserStatus): Observable<AppUser> {
     const user = this.findUser(userId);
     if (!user) {
@@ -680,7 +639,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.changeStatus(user.backendUserId, status).pipe(
+    return this.usersApi.changeStatus(user.backendUserId, status).pipe(
       map((summary) => {
         const updated: AppUser = {
           ...user,
@@ -691,11 +650,7 @@ export class UserManagementService {
           mustChangePassword: summary.mustChangePassword,
           subsidiariaIds: summary.subsidiarias.map((s) => s.id),
           ubicacionIds: summary.ubicaciones.map((u) => u.id),
-          // Guía_Endpoints (`PATCH /users/{id}/status`): `active` también
-          // desbloquea (borra el vencimiento y el contador de intentos);
-          // `blocked` es manual y no vence solo (`lockedUntil` null). La
-          // respuesta es un `UserSummaryDto` sin estos 2 campos, así que se
-          // reflejan aquí.
+          // `active` desbloquea y `blocked` no vence; la respuesta no trae estos campos.
           ...(status === 'active' ? { failedLoginAttempts: 0, lockedUntil: null } : {}),
           ...(status === 'blocked' ? { lockedUntil: null } : {}),
         };
@@ -706,11 +661,11 @@ export class UserManagementService {
     );
   }
 
-  // CU3 paso 5: `PATCH /users/{id}/unlock` real (ver `AuthService.unlockUser`)
-  // — desbloquea una cuenta bloqueada (por intentos fallidos o manual). El
-  // backend responde un `UserSummaryDto`; además deja en cero el contador de
-  // intentos y borra `lockedUntil` (ver `setStatus`, mismo efecto que
-  // `status: active`).
+  /**
+   * Desbloquea con `PATCH /users/{id}/unlock` (CU3 paso 5): contador de intentos a 0 y sin `lockedUntil`.
+   *
+   * @see docs/codigo/usuarios.md#acciones-administrativas
+   */
   unlockAccount(userId: string): Observable<AppUser> {
     const user = this.findUser(userId);
     if (!user) {
@@ -720,7 +675,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.unlockUser(user.backendUserId).pipe(
+    return this.usersApi.unlockUser(user.backendUserId).pipe(
       map((summary) => {
         const updated: AppUser = {
           ...user,
@@ -734,11 +689,12 @@ export class UserManagementService {
     );
   }
 
-  // CU3 paso 6: `POST /users/{id}/verify-email` real (ver
-  // `AuthService.verifyEmail`) — el guard `user.emailVerified` evita una
-  // llamada innecesaria (el botón ya está oculto en ese caso, ver
-  // `user-detail.html`), no algo que el backend exija (fuerza el flag
-  // igual si se llama de nuevo).
+  /**
+   * Marca el correo como verificado con `POST /users/{id}/verify-email` (CU3 paso 6).
+   *
+   * @returns Observable con el `AppUser` actualizado; falla sin llamar si el correo ya está verificado.
+   * @see docs/codigo/usuarios.md#acciones-administrativas
+   */
   setEmailVerified(userId: string): Observable<AppUser> {
     const user = this.findUser(userId);
     if (!user) {
@@ -751,7 +707,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.verifyEmail(user.backendUserId).pipe(
+    return this.usersApi.verifyEmail(user.backendUserId).pipe(
       map(() => {
         const updated: AppUser = { ...user, emailVerified: true };
         this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
@@ -760,10 +716,12 @@ export class UserManagementService {
     );
   }
 
-  // `POST /users/{id}/close-sessions` real (ver `AuthService.closeUserSessions`):
-  // revoca todos los refresh tokens vigentes de la persona — no cambia su
-  // contraseña ni su estado, puede volver a entrar (el access token ya emitido
-  // vive hasta 15 min). La respuesta trae el contador resultante.
+  /**
+   * Revoca los refresh tokens de la persona con `POST /users/{id}/close-sessions`.
+   *
+   * @remarks No cambia contraseña ni estado; el access token emitido sigue vivo hasta 15 min.
+   * @see docs/codigo/usuarios.md#acciones-administrativas
+   */
   closeSessions(userId: string): Observable<AppUser> {
     const user = this.findUser(userId);
     if (!user) {
@@ -773,7 +731,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.closeUserSessions(user.backendUserId).pipe(
+    return this.usersApi.closeUserSessions(user.backendUserId).pipe(
       map((res) => {
         const updated: AppUser = { ...user, activeSessions: res.activeSessions };
         this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
@@ -782,12 +740,13 @@ export class UserManagementService {
     );
   }
 
-  // `POST /users/{id}/reset-password` real (ver `AuthService.resetUserPassword`): el
-  // backend devuelve a la persona a su contraseña temporal (NOMBRE + PRIMER
-  // APELLIDO + año de alta), marca `mustChangePassword` y REVOCA todas sus
-  // sesiones (`activeSessions` queda en 0); no cambia su estado — un bloqueo se
-  // levanta con "Desbloquear". El sistema no envía correos: la contraseña se
-  // devuelve para que el administrador la entregue (toast).
+  /**
+   * Restablece la contraseña temporal con `POST /users/{id}/reset-password` y revoca las sesiones.
+   *
+   * @remarks No cambia el estado ni envía correos: el administrador entrega la contraseña.
+   * @returns Observable con la contraseña temporal.
+   * @see docs/codigo/usuarios.md#acciones-administrativas
+   */
   resetPassword(userId: string): Observable<string> {
     const user = this.findUser(userId);
     if (!user) {
@@ -797,7 +756,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.resetUserPassword(user.backendUserId).pipe(
+    return this.usersApi.resetUserPassword(user.backendUserId).pipe(
       map((res) => {
         const updated: AppUser = {
           ...user,
@@ -811,11 +770,12 @@ export class UserManagementService {
     );
   }
 
-  // `DELETE /users/{id}` real (ver `AuthService.deleteUser`): baja LÓGICA — la
-  // cuenta deja de poder entrar y desaparece de listados y detalle, pero su fila
-  // y su bitácora se conservan y su correo queda libre. Un administrador no
-  // puede darse de baja a sí mismo (409 `CANNOT_DELETE_SELF`; la UI además lo
-  // deshabilita). Al responder, el registro sale de la lista local.
+  /**
+   * Da de baja lógica con `DELETE /users/{id}` y quita el registro de la lista y de la selección.
+   *
+   * @returns Observable que completa tras la baja; falla con 409 `CANNOT_DELETE_SELF`.
+   * @see docs/codigo/usuarios.md#acciones-administrativas
+   */
   deleteUser(userId: string): Observable<void> {
     const user = this.findUser(userId);
     if (!user) {
@@ -825,7 +785,7 @@ export class UserManagementService {
       return throwError(() => new Error('Este usuario no está vinculado a una cuenta real del backend.'));
     }
 
-    return this.auth.deleteUser(user.backendUserId).pipe(
+    return this.usersApi.deleteUser(user.backendUserId).pipe(
       map(() => {
         this.usersSignal.update((list) => list.filter((u) => u.id !== userId));
         this.selectedIdsSignal.update((current) => {
@@ -836,24 +796,6 @@ export class UserManagementService {
       }),
     );
   }
-
-  // Llamado por `ChangePassword` tras confirmar el cambio (ver
-  // `AuthService.changePassword`, que valida/actualiza la CONTRASEÑA en sí —
-  // este método solo apaga la bandera en el registro de `user-management`,
-  // el único de los dos que la conoce). Sin entrada de auditoría propia:
-  // "Contraseña restablecida" (`password_reset`) ya quedó registrada cuando
-  // se ORIGINÓ la obligación (alta de cuenta o reset de un admin) — esto es
-  // solo completarla, no un evento nuevo que reportar.
-  clearMustChangePassword(userId: string): void {
-    const user = this.findUser(userId);
-    if (!user || !user.mustChangePassword) return;
-
-    // Ya definió su propia contraseña — la temporal deja de estar vigente
-    // (el backend deja de devolver `temporaryPassword`).
-    const updated: AppUser = { ...user, mustChangePassword: false, temporaryPassword: null };
-    this.usersSignal.update((list) => list.map((u) => (u.id === userId ? updated : u)));
-  }
-
 }
 
 // Igualdad de conjuntos (sin importar el orden) — roles/permisos son conjuntos.

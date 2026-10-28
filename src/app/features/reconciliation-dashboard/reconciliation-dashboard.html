@@ -1,91 +1,7 @@
 <div class="dashboard">
   <nz-page-header class="page-header" nzTitle="Conciliación bancaria" />
 
-  <!-- Los 3 KPI principales. La sección completa está topada a 33vh (ver .scss). -->
-  <section class="kpi-grid">
-    <!-- KPI 1: visión inmediata de qué medio de pago está al día / atrasado -->
-    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px' }">
-      <span class="kpi-card__title">Medios de pago</span>
-      <ul class="tender-status-list">
-        @for (t of service.tenderMediaStatuses(); track t.tenderMedia) {
-          <li class="tender-status-list__item">
-            <span
-              class="status-dot"
-              [class.status-dot--ok]="t.health === 'up_to_date'"
-              [class.status-dot--late]="t.health === 'delayed'"
-            ></span>
-            <span class="tender-status-list__label">{{ tenderMediaLabel[t.tenderMedia] }}</span>
-            <span
-              class="tender-status-list__state"
-              [class.text-success]="t.health === 'up_to_date'"
-              [class.text-destructive]="t.health === 'delayed'"
-            >
-              {{ t.health === 'up_to_date' ? 'Al día' : 'Atrasado ' + t.daysBehind + 'd' }}
-            </span>
-          </li>
-        }
-      </ul>
-    </nz-card>
-
-    <!-- KPI 2: % conciliado — la dona domina el ancho/alto del card, a la derecha -->
-    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '8px', height: '100%', display: 'flex', flexDirection: 'column' }">
-      <span class="kpi-card__title">Conciliado hoy</span>
-      <div class="kpi-card__body kpi-card__body--donut">
-        <div class="kpi-card__stat">
-          <span class="kpi-card__value">{{ reconciledPct().today }}%</span>
-          <span class="kpi-card__delta" [class.text-success]="reconciledPct().delta >= 0" [class.text-destructive]="reconciledPct().delta < 0">
-            <svg
-              class="trend-arrow"
-              [class.trend-arrow--down]="reconciledPct().delta < 0"
-              viewBox="0 0 10 10"
-              width="9"
-              height="9"
-            >
-              <polygon points="5,0 10,10 0,10" fill="currentColor" />
-            </svg>
-            {{ (reconciledPct().delta >= 0 ? '+' : '') + reconciledPct().delta }} pts vs. ayer
-          </span>
-        </div>
-        <div class="kpi-card__donut">
-          <app-radial-progress [percent]="reconciledPct().today" color="var(--color-chart-donut)" />
-        </div>
-      </div>
-    </nz-card>
-
-    <!-- KPI 3: monto en discrepancia — info arriba, gráfica abajo -->
-    <nz-card class="kpi-card" [nzBodyStyle]="{ padding: '10px 12px', height: '100%', display: 'flex', flexDirection: 'column' }">
-      <span class="kpi-card__title">Discrepancias</span>
-      <div class="kpi-card__body kpi-card__body--stacked">
-        <div class="kpi-card__stat">
-          <span class="kpi-card__value">
-            {{ discrepancyTrendSummary().today | money: '1.0-0' }}
-          </span>
-          <span
-            class="kpi-card__delta"
-            [class.text-destructive]="discrepancyTrendSummary().delta > 0"
-            [class.text-success]="discrepancyTrendSummary().delta <= 0"
-          >
-            <svg
-              class="trend-arrow"
-              [class.trend-arrow--down]="discrepancyTrendSummary().delta <= 0"
-              viewBox="0 0 10 10"
-              width="9"
-              height="9"
-            >
-              <polygon points="5,0 10,10 0,10" fill="currentColor" />
-            </svg>
-            {{ discrepancyTrendSummary().delta | money: '1.0-0' }} vs. ayer
-          </span>
-        </div>
-        <app-sparkline class="kpi-card__sparkline" [values]="discrepancyTrendSummary().values" color="var(--color-destructive)" />
-      </div>
-    </nz-card>
-  </section>
-
-
-
-  <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
-       tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
+  <!-- Filtros y tabla -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
     <section class="toolbar">
       <nz-select
@@ -98,125 +14,84 @@
         }
       </nz-select>
 
-      <nz-select
-        class="toolbar__filter"
-        [ngModel]="service.tenderMediaFilter()"
-        (ngModelChange)="onTenderMediaFilterChange($event)"
-      >
-        @for (opt of tenderMediaOptions; track opt.value) {
-          <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
-        }
-      </nz-select>
-
       <nz-range-picker
-        class="toolbar__filter"
+        class="toolbar__filter toolbar__filter--range"
         [ngModel]="service.dateRange()"
         (ngModelChange)="onDateRangeChange($event)"
+        [nzPlaceHolder]="['Creada desde', 'Creada hasta']"
         nzFormat="dd/MM/yyyy"
       />
 
       <span class="toolbar__spacer"></span>
 
-        <!-- Botón "Importar" — carga masiva de un estado de cuenta bancario
-       completo (ver modal al final del archivo), independiente de la tabla:
-       por eso vive arriba, a la derecha, no dentro de la columna Acciones.
-       Permiso propio `import_settlements` (matriz 7.16 del DED). -->
       @if (access.hasPermission('import_settlements')) {
-        <div class="dashboard__actions">
-          <button nz-button type="button" class="dashboard__import-btn" (click)="openImportModal()">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-            </svg>
-            <span>Importar</span>
-          </button>
-        </div>
+        <button nz-button nzType="primary" type="button" (click)="openNewModal()">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10 12 4l9 6" />
+            <path stroke-linecap="round" d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18" />
+          </svg>
+          Nueva conciliación
+        </button>
       }
-
     </section>
 
-    <!-- Bleed: se sale del padding de la card (margin negativo, ver
-         _data-table.scss) para que el borde superior toque los bordes
-         izquierdo/derecho de la card, como divisor entre filtros y tabla. -->
     <div class="table-bleed">
-      <nz-table #tbl [nzData]="service.filteredItems()" [nzPageSize]="10" nzSize="middle">
+      <nz-table
+        #tbl
+        [nzData]="service.filteredRuns()"
+        [nzPageSize]="10"
+        nzSize="middle"
+        nzNoResult="No hay conciliaciones con los filtros aplicados."
+      >
         <thead>
           <tr>
-            <th>Fecha</th>
-            <th class="col-truncate" style="--col-max-width: 130px">Medio de pago</th>
-            <th class="text-right">Transacciones</th>
-            <th class="text-right">Monto vendido (POS)</th>
-            <th class="text-right">Monto banco</th>
-            <th class="text-right">Diferencia</th>
-            <th>Estado</th>
+            <th style="width: 120px">Fecha</th>
+            <th class="col-truncate" style="--col-max-width: 180px">Empresa</th>
+            <th class="col-truncate" style="--col-max-width: 220px">Restaurante</th>
+            <th style="width: 220px">Periodo</th>
+            <th class="text-center" style="width: 140px">Estatus</th>
+            <th class="col-truncate" style="--col-max-width: 260px">Comentarios</th>
             <th class="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
-          @for (group of tbl.data; track group.date + '|' + group.tenderMedia) {
-            <tr
-              [class.clickable-row]="isActionable(group)"
-              [routerLink]="isActionable(group) ? resolveLink(group) : null"
-            >
-              <td>{{ group.date | date: 'dd/MM/yyyy' }}</td>
-              <td class="col-truncate" style="--col-max-width: 130px">{{ tenderLabel(group.tenderMedia) }}</td>
-              <td class="text-right font-mono">{{ group.soldCount }}</td>
-              <td class="text-right font-mono">
-                @if (group.soldAmount > 0) {
-                  {{ group.soldAmount | money }}
-                } @else {
-                  <span class="text-muted">—</span>
-                }
+          @for (run of tbl.data; track run.id) {
+            <tr class="clickable-row" [routerLink]="['/conciliacion', run.id]">
+              <td class="font-mono">{{ run.createdAt | date: 'dd/MM/yyyy' }}</td>
+              <td class="col-truncate" style="--col-max-width: 180px" [attr.title]="run.companyName">
+                {{ run.companyName }}
               </td>
-              <td class="text-right font-mono">
-                @if (group.settledAmount > 0) {
-                  {{ group.settledAmount | money }}
-                } @else {
-                  <span class="text-muted">—</span>
-                }
+              <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="run.storeName">
+                {{ run.storeName }}
               </td>
-              <td class="text-right font-mono" [class.text-destructive]="group.difference !== 0">
-                {{ group.difference | money }}
+              <td class="font-mono">{{ formatPeriod(run) }}</td>
+              <td class="cell-indicator"><app-run-status-tag [status]="run.status" /></td>
+              <td class="col-truncate" style="--col-max-width: 260px" [attr.title]="run.comments || null">
+                {{ run.comments || '—' }}
               </td>
-              <td><app-reconciliation-status-tag [status]="group.status" /></td>
               <td class="text-center" (click)="$event.stopPropagation()">
                 <div class="row-actions">
-                  @if (isActionable(group)) {
-                    <button
-                      nz-button
-                      nzType="text"
-                      type="button"
-                      [routerLink]="resolveLink(group)"
-                      nz-tooltip
-                      nzTooltipTitle="Gestionar"
-                      aria-label="Gestionar"
-                    >
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                      </svg>
-                    </button>
-                  }
-                  @if (isConciliado(group)) {
-                    <button
-                      nz-button
-                      nzType="text"
-                      type="button"
-                      (click)="openDetails(group)"
-                      nz-tooltip
-                      nzTooltipTitle="Ver detalles"
-                      aria-label="Ver detalles"
-                    >
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M2 12c1.3-3.6 5-7 10-7s8.7 3.4 10 7c-1.3 3.6-5 7-10 7s-8.7-3.4-10-7Z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    </button>
+                  <button
+                    nz-button
+                    nzType="text"
+                    type="button"
+                    [routerLink]="['/conciliacion', run.id]"
+                    nz-tooltip
+                    nzTooltipTitle="Ver"
+                    aria-label="Ver"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2 12c1.3-3.6 5-7 10-7s8.7 3.4 10 7c-1.3 3.6-5 7-10 7s-8.7-3.4-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                  @if (canDesconciliar(run)) {
                     <button
                       nz-button
                       nzType="text"
                       nzDanger
                       type="button"
-                      (click)="onDesconciliarClick(group)"
+                      (click)="onDesconciliarClick(run)"
                       nz-tooltip
                       nzTooltipTitle="Desconciliar"
                       aria-label="Desconciliar"
@@ -224,6 +99,22 @@
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="9" />
                         <path stroke-linecap="round" d="M5.5 5.5l13 13" />
+                      </svg>
+                    </button>
+                  }
+                  @if (canDownload(run) && access.hasPermission('export_reports')) {
+                    <button
+                      nz-button
+                      nzType="text"
+                      type="button"
+                      (click)="onDownloadClick(run)"
+                      nz-tooltip
+                      nzTooltipTitle="Descargar"
+                      aria-label="Descargar"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0-4-4m4 4 4-4" />
+                        <path stroke-linecap="round" d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
                       </svg>
                     </button>
                   }
@@ -236,179 +127,86 @@
     </div>
   </nz-card>
 
-  <!-- "Ver detalles": solo grupos "Cruzado" — de solo lectura, no
-       gestionable, por eso es un modal y no una ruta propia (mismo criterio
-       que el Drawer de sales-dashboard, ver MASTER.md "Patrón: Drawer de
-       detalle al hacer click en una fila"). Título por medio de pago + fecha
-       (ya no por orden — la fila que lo abre es un total agrupado). -->
+  <!-- Modal "Nueva conciliación" -->
   <nz-modal
-    [nzVisible]="selectedGroup() !== null"
-    [nzTitle]="modalTitle()"
+    [nzVisible]="newModalOpen()"
+    nzTitle="Nueva conciliación"
     [nzFooter]="null"
-    nzWidth="640px"
-    (nzOnCancel)="closeDetails()"
+    nzWidth="760px"
+    (nzOnCancel)="closeNewModal()"
   >
     <ng-container *nzModalContent>
-      @if (selectedGroup(); as group) {
-        <!-- .table-bleed: mismo padding de 24px que trae .ant-modal-body de
-             fábrica, así el borde superior de la tabla toca los bordes del
-             modal en vez de quedar flotando dentro del padding (ver
-             MASTER.md, "Patrón: conciliación por tender media y fecha"). -->
-        <div class="table-bleed">
-          <nz-table [nzData]="group.settlements" [nzShowPagination]="false" nzSize="small">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Referencia</th>
-                <th>Lote</th>
-                <th class="col-truncate" style="--col-max-width: 220px">Concepto</th>
-                <th class="text-right">Bruto</th>
-                <th class="text-right">Neto</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (settlement of group.settlements; track settlement.id) {
-                <tr>
-                  <td>{{ settlement.date | date: 'dd/MM/yyyy' }}</td>
-                  <td class="font-mono">{{ settlement.id }}</td>
-                  <td class="font-mono">{{ settlement.batchId }}</td>
-                  <td class="col-truncate" style="--col-max-width: 220px" [attr.title]="settlement.concept">
-                    {{ settlement.concept }}
-                  </td>
-                  <td class="text-right font-mono">{{ settlement.grossAmount | money }}</td>
-                  <td class="text-right font-mono">{{ settlement.netAmount | money }}</td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="6" class="text-muted">Sin transacciones bancarias asociadas.</td>
-                </tr>
+      <div class="new-reco">
+        <div class="new-reco__form">
+          <div class="new-reco__field">
+            <label class="new-reco__label" for="new-reco-company">Empresa</label>
+            <nz-select
+              id="new-reco-company"
+              class="new-reco__control"
+              nzPlaceHolder="Selecciona una empresa"
+              [ngModel]="newCompanyId()"
+              (ngModelChange)="onCompanyChange($event)"
+            >
+              @for (opt of companyOptions(); track opt.value) {
+                <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
               }
-            </tbody>
-          </nz-table>
-        </div>
-      }
-    </ng-container>
-  </nz-modal>
-
-  <!-- "Importar movimientos bancarios": carga masiva de un estado de cuenta
-       completo, no ligada a una fila de la tabla. No hay backend real — se
-       simula la llamada con 500ms de espera (ver reconciliation-dashboard.ts)
-       y, a partir del segundo intento en esta pantalla, se simula además el
-       rechazo del archivo en vez del resumen de carga. -->
-  <nz-modal
-    [nzVisible]="importModalOpen()"
-    nzTitle="Importar movimientos bancarios"
-    [nzFooter]="null"
-    nzWidth="480px"
-    (nzOnCancel)="closeImportModal()"
-  >
-    <ng-container *nzModalContent>
-      <div class="bank-import">
-        <div class="bank-import__field">
-          <label class="bank-import__label" for="import-origin">Origen</label>
-          <nz-select
-            id="import-origin"
-            class="bank-import__select"
-            nzPlaceHolder="Selecciona el origen del archivo"
-            [nzDisabled]="importing()"
-            [ngModel]="importOrigin()"
-            (ngModelChange)="onImportOriginChange($event)"
-          >
-            @for (origin of importOrigins; track origin.id) {
-              <nz-option [nzValue]="origin.id" [nzLabel]="origin.label" />
-            }
-          </nz-select>
-        </div>
-
-        <div class="bank-import__field">
-          <label class="bank-import__label" for="import-target">Cuenta/lote</label>
-          <nz-select
-            id="import-target"
-            class="bank-import__select"
-            [nzPlaceHolder]="importTargetPlaceholder()"
-            [nzDisabled]="importing() || importOrigin() === null"
-            [ngModel]="importTargetId()"
-            (ngModelChange)="onImportTargetChange($event)"
-          >
-            @for (target of importTargets(); track target.id) {
-              <nz-option [nzValue]="target.id" [nzLabel]="target.label" />
-            }
-          </nz-select>
-        </div>
-
-        <!-- Mismo botón de importación (icono + label centrados) que
-             "Importar CSV" en Gestión de diferencias — ver
-             shared/styles/_import-dropzone.scss. Deshabilitado hasta que
-             ambos selectores de arriba tengan valor. Acepta CSV, Excel o TXT;
-             el archivo se envía tal cual al backend (`BankImportApi`). El
-             icono se cambia por un spinner mientras se envía, y el nombre
-             del archivo elegido se muestra debajo del label en cuanto se
-             selecciona uno. -->
-        <section class="import-dropzone-row">
-          <input
-            #bankImportInput
-            type="file"
-            [accept]="importFileAccept"
-            hidden
-            (change)="onImportFileSelected($event)"
-          />
-          <button type="button" class="import-dropzone" [disabled]="!canImportFile()" (click)="bankImportInput.click()">
-            @if (importing()) {
-              <svg class="import-dropzone__spinner" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="9" stroke-opacity="0.25" />
-                <path stroke-linecap="round" d="M21 12a9 9 0 0 0-9-9" />
-              </svg>
-            } @else {
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-              </svg>
-            }
-            <span class="import-dropzone__text">
-              <span>{{ importing() ? 'Enviando archivo…' : 'Importar archivo (.csv, .xlsx, .txt)' }}</span>
-              @if (selectedFileName()) {
-                <span class="import-dropzone__filename">{{ selectedFileName() }}</span>
-              }
-            </span>
-          </button>
-        </section>
-
-        @if (importSummary(); as summary) {
-          <div class="import-result">
-            <div class="import-result__item import-result__item--success">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M20 6 9 17l-5-5" />
-              </svg>
-              <span class="import-result__value">{{ summary.incorporated }}</span>
-              <span class="import-result__label">Incorporados</span>
-            </div>
-            <div class="import-result__item import-result__item--warning">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="8" y="8" width="12" height="12" rx="2" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16V6a2 2 0 0 1 2-2h10" />
-              </svg>
-              <span class="import-result__value">{{ summary.duplicates }}</span>
-              <span class="import-result__label">Duplicados</span>
-            </div>
-            <div class="import-result__item import-result__item--error">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="9" />
-                <path stroke-linecap="round" d="M12 8v5M12 16h.01" />
-              </svg>
-              <span class="import-result__value">{{ summary.errors }}</span>
-              <span class="import-result__label">Con error</span>
-            </div>
+            </nz-select>
           </div>
-        }
 
-        @if (importRejection(); as rejection) {
-          <nz-alert
-            nzType="error"
-            nzShowIcon
-            nzMessage="El archivo fue rechazado"
-            [nzDescription]="(rejection.line > 0 ? 'Línea ' + rejection.line + ': ' : '') + rejection.reason"
-          />
-        }
+          <div class="new-reco__field">
+            <label class="new-reco__label" for="new-reco-store">Tienda</label>
+            <nz-select
+              id="new-reco-store"
+              class="new-reco__control"
+              [nzPlaceHolder]="newCompanyId() === null ? 'Selecciona primero una empresa' : 'Selecciona una tienda'"
+              [nzDisabled]="newCompanyId() === null"
+              [ngModel]="newStoreId()"
+              (ngModelChange)="newStoreId.set($event)"
+            >
+              @for (opt of storeOptions(); track opt.value) {
+                <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
+              }
+            </nz-select>
+          </div>
+
+          <div class="new-reco__field">
+            <label class="new-reco__label" for="new-reco-period">Periodo</label>
+            <nz-range-picker
+              id="new-reco-period"
+              class="new-reco__control"
+              nzFormat="dd/MM/yyyy"
+              [ngModel]="newPeriod()"
+              (ngModelChange)="onNewPeriodChange($event)"
+            />
+          </div>
+
+          <button
+            nz-button
+            nzType="primary"
+            type="button"
+            class="new-reco__submit"
+            [disabled]="!canStart()"
+            (click)="startReconciliation()"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 5v14l11-7-11-7Z" />
+            </svg>
+            Iniciar conciliación
+          </button>
+        </div>
+
+        <nz-card class="new-reco__hero" [nzBodyStyle]="{ padding: '24px', height: '100%' }">
+          <div class="new-reco__hero-body">
+            <span class="bank-badge">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10 12 4l9 6" />
+                <path stroke-linecap="round" d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18" />
+              </svg>
+            </span>
+            <strong class="new-reco__hero-title">Conciliación Bancaria y de ingresos</strong>
+            <span class="new-reco__hero-subtitle">Compara ventas de sistemas POS con archivos bancarios</span>
+          </div>
+        </nz-card>
       </div>
     </ng-container>
   </nz-modal>

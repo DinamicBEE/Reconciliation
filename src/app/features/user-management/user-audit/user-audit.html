@@ -16,8 +16,6 @@
     </svg>
   </ng-template>
 
-  <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
-       tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
     <section class="toolbar">
       <input
@@ -36,9 +34,6 @@
       </nz-select>
     </section>
 
-    <!-- Bleed: se sale del padding de la card (margin negativo, ver
-         _data-table.scss) para que el borde superior toque los bordes
-         izquierdo/derecho de la card, como divisor entre filtros y tabla. -->
     <div class="table-bleed">
       <nz-table
         #tbl

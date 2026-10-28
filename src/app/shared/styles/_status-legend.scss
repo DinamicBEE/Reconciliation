@@ -1,0 +1,33 @@
+// Leyenda de resultado "icono + texto" con las variantes de --color-tag-*.
+// MASTER.md "Patrón: leyenda de resultado". Ver docs/codigo/estilos.md#partial-kpi-y-estado
+.status-legend {
+  width: 100%;
+  min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  padding: 2px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.status-legend-success {
+  color: var(--color-tag-success-fg);
+  background: var(--color-tag-success-bg);
+  border-color: var(--color-tag-success-border);
+}
+
+.status-legend-warning {
+  color: var(--color-tag-warning-fg);
+  background: var(--color-tag-warning-bg);
+  border-color: var(--color-tag-warning-border);
+}
+
+.status-legend-error {
+  color: var(--color-tag-error-fg);
+  background: var(--color-tag-error-bg);
+  border-color: var(--color-tag-error-border);
+}

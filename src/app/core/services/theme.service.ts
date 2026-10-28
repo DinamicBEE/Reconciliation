@@ -1,38 +1,40 @@
 import { Injectable, effect, signal } from '@angular/core';
 
+/** Modo de color de la app. */
 export type ThemeMode = 'light' | 'dark';
 
 const STORAGE_KEY = 'conciliation-theme';
 const NZ_LINK_ID = 'nz-theme-link';
 
-// Hojas de estilo precompiladas de ng-zorro-antd, copiadas a /ng-zorro en el
-// build (ver angular.json → assets). Se intercambia el href del <link> en
-// runtime porque ng-zorro no expone variables CSS para fondo/texto/borde,
-// solo para colores de marca (ver investigación previa).
+// Hojas precompiladas de ng-zorro (copiadas a /ng-zorro por angular.json): se cambia el href
+// porque ng-zorro no expone variables CSS de superficie. Ver docs/codigo/layout-y-tema.md#tema
 const NZ_STYLESHEET: Record<ThemeMode, string> = {
   light: '/ng-zorro/ng-zorro-antd.min.css',
   dark: '/ng-zorro/ng-zorro-antd.dark.min.css',
 };
 
 /**
- * Maneja el modo claro/oscuro de toda la app: alterna la clase `dark` en
- * <html> (para nuestros propios tokens en styles.scss) y el stylesheet de
- * ng-zorro-antd (para sus componentes), y persiste la preferencia.
+ * Modo claro/oscuro: alterna la clase `dark` en `<html>` y la hoja de ng-zorro, y persiste la preferencia.
+ *
+ * @remarks Sin preferencia guardada, sigue `prefers-color-scheme`.
+ * @see docs/codigo/layout-y-tema.md#tema
  */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
-  readonly mode = signal<ThemeMode>(this.resolveInitialMode());
+  // Escritura solo por métodos (ADR-0002, punto 4).
+  private readonly modeState = signal<ThemeMode>(this.resolveInitialMode());
+  readonly mode = this.modeState.asReadonly();
 
   constructor() {
     effect(() => this.applyMode(this.mode()));
   }
 
   toggle(): void {
-    this.mode.set(this.mode() === 'light' ? 'dark' : 'light');
+    this.modeState.set(this.mode() === 'light' ? 'dark' : 'light');
   }
 
   set(mode: ThemeMode): void {
-    this.mode.set(mode);
+    this.modeState.set(mode);
   }
 
   private resolveInitialMode(): ThemeMode {

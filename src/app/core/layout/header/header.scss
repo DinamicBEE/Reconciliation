@@ -1,6 +1,4 @@
-// Sin fondo ni línea divisora a propósito — el Header flota sobre
-// `--color-background` (el body/shell ya tiene su propio fondo), a
-// diferencia del resto de "cards" del design system.
+// Sin fondo ni divisor: flota sobre --color-background. Ver docs/codigo/layout-y-tema.md#header
 .app-header {
   height: 72px;
   display: flex;
@@ -16,9 +14,7 @@
   margin-left: auto;
 }
 
-// Botones de icono: sin fondo ni borde en reposo — solo el icono es
-// visible. El borde totalmente redondo solo aparece con hover (nunca en
-// reposo), y el fondo tenue acompaña como affordance de que es clickeable.
+// Botón de icono: sin fondo ni borde en reposo; borde redondo y fondo tenue solo en hover.
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -46,11 +42,7 @@
 }
 
 // --- Card de usuario logeado (abre el menú del avatar) -------------------
-// Círculo apenas más grande que el avatar — la distancia angosta entre
-// ambos (`padding`) más una sombra interna en el card y una sombra externa
-// en el avatar generan el efecto de profundidad: el avatar "flota" sobre
-// el card en vez de quedar pegado a su borde. Único elemento con fondo
-// propio dentro del Header.
+// El avatar "flota" sobre el card: sombra interna en el card y externa en el avatar.
 .app-header__avatar-menu {
   position: relative;
 }
@@ -90,8 +82,7 @@
 }
 
 // --- Menú del avatar (Perfil / paleta / tema / logout) -------------------
-// Mismo look que `.search-box__results` (fondo card, borde, radio 12px,
-// sombra) — un solo lenguaje visual para "panel flotante del Header".
+// Mismo look que `.search-box__results`: un solo lenguaje de panel flotante en el Header.
 .avatar-menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -144,9 +135,7 @@
   white-space: nowrap;
 }
 
-// Grid de acentos — se despliega debajo de "Paleta de colores" dentro del
-// mismo panel (sin popover anidado: más simple y sin conflictos de cierre
-// entre dos overlays superpuestos).
+// Grid de acentos dentro del mismo panel: sin popover anidado, que complica el cierre.
 .avatar-menu__palette {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -180,8 +169,7 @@
 }
 
 // --- Búsqueda de pantallas ------------------------------------------------
-// El botón de lupa se reemplaza por el input al abrir (no conviven) — mismo
-// contenedor para que el dropdown de resultados se posicione relativo a él.
+// La lupa se reemplaza por el input (no conviven); el contenedor ancla los resultados.
 .app-header__search {
   position: relative;
   display: flex;

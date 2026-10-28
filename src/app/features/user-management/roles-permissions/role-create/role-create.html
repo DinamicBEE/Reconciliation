@@ -1,0 +1,206 @@
+<div class="role-create">
+  <nz-page-header class="page-header" [nzTitle]="isEdit() ? 'Editar rol' : 'Nuevo rol'" [nzBackIcon]="backIcon" (nzBack)="onBack()">
+    <nz-breadcrumb nz-page-header-breadcrumb>
+      <nz-breadcrumb-item><a routerLink="/gestion-de-roles">Roles y permisos</a></nz-breadcrumb-item>
+      <nz-breadcrumb-item>{{ isEdit() ? 'Editar rol' : 'Nuevo rol' }}</nz-breadcrumb-item>
+    </nz-breadcrumb>
+    @if (isEdit()) {
+      <nz-page-header-extra>
+        <!-- El tooltip va en el <span>: un botón disabled no dispara hover -->
+        <span
+          nz-tooltip
+          [nzTooltipTitle]="
+            assignedUsers().length
+              ? 'No se puede eliminar: ' + assignedUsers().length + (assignedUsers().length === 1 ? ' usuario tiene' : ' usuarios tienen') + ' este rol asignado'
+              : ''
+          "
+        >
+          <button nz-button nzDanger type="button" [disabled]="!canDelete()" (click)="onDelete()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+            </svg>
+            Eliminar rol
+          </button>
+        </span>
+      </nz-page-header-extra>
+    }
+  </nz-page-header>
+  <ng-template #backIcon>
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+    </svg>
+  </ng-template>
+
+  <!-- Barra de nombre + crear -->
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
+    <section class="role-create__bar">
+      <label class="role-create__field">
+        <span class="role-create__label">Nombre del rol</span>
+        <input
+          nz-input
+          type="text"
+          placeholder="Ej. Auditoría externa"
+          [maxlength]="maxLength"
+          [formControl]="nameControl"
+          [nzStatus]="nameControl.invalid && nameControl.touched ? 'error' : ''"
+          (keydown.enter)="onSave()"
+        />
+        @if (roleCode()) {
+          <span class="role-create__code text-muted">
+            {{ isEdit() ? 'Código' : 'Código estimado' }}: <span class="font-mono">{{ roleCode() }}</span>
+            @if (!isEdit()) {
+              (si ya está en uso, el sistema le agrega un número)
+            }
+          </span>
+        }
+        @if (nameControl.touched && nameControl.errors; as errors) {
+          <span class="role-create__error">
+            @if (errors['required']) {
+              Escribe el nombre del rol.
+            } @else if (errors['duplicate']) {
+              Ya existe un rol con ese nombre.
+            } @else if (errors['maxlength']) {
+              Máximo {{ maxLength }} caracteres.
+            }
+          </span>
+        }
+      </label>
+
+      <span class="role-create__spacer"></span>
+
+      <div class="role-create__counter" aria-live="polite">
+        <span class="role-create__counter-value font-mono">{{ selectedCount() }}</span>
+        <span class="role-create__counter-label">
+          {{ selectedCount() === 1 ? 'permiso asignado' : 'permisos asignados' }}
+          <span class="text-muted">de {{ totalPermissions() }}</span>
+        </span>
+      </div>
+
+      <button nz-button nzType="primary" type="button" [disabled]="!canSave()" [nzLoading]="saving()" (click)="onSave()">
+        @if (isEdit()) {
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          Guardar cambios
+        } @else {
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+          </svg>
+          Crear rol
+        }
+      </button>
+    </section>
+  </nz-card>
+
+  <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
+    @if (loadingRole()) {
+      <p class="role-create__state text-muted">Cargando el rol…</p>
+    } @else if (roleNotFound()) {
+      <div class="role-create__state">
+        <span class="text-muted">El rol no existe o ya fue dado de baja.</span>
+        <button nz-button type="button" routerLink="/gestion-de-roles">Volver a Roles y permisos</button>
+      </div>
+    } @else if (catalog.loading()) {
+      <p class="role-create__state text-muted">Cargando permisos…</p>
+    } @else if (catalog.loadFailed()) {
+      <div class="role-create__state">
+        <span class="text-muted">No se pudo cargar el catálogo de permisos.</span>
+        <button nz-button type="button" (click)="catalog.load()">Reintentar</button>
+      </div>
+    } @else if (modules().length === 0) {
+      <p class="role-create__state text-muted">No hay permisos disponibles.</p>
+    } @else {
+      <nz-collapse [nzBordered]="false">
+        @for (mod of modules(); track mod.module; let first = $first) {
+          <nz-collapse-panel [nzHeader]="mod.module" [nzExtra]="extra" [nzExpandedIcon]="arrow" [nzActive]="first">
+            <ng-template #extra>
+              <span class="role-create__module-count" [class.role-create__module-count--active]="mod.selectedCount > 0">
+                {{ mod.selectedCount }} / {{ mod.items.length }}
+              </span>
+            </ng-template>
+
+            <!-- Tabla de permisos del módulo -->
+            <table class="permission-table">
+              <thead>
+                <tr>
+                  <th class="permission-table__label">Código</th>
+                  <th class="permission-table__label">Descripción</th>
+                  <th class="permission-table__check">
+                    <label
+                      nz-checkbox
+                      [nzChecked]="mod.selectedCount === mod.items.length"
+                      [nzIndeterminate]="mod.selectedCount > 0 && mod.selectedCount < mod.items.length"
+                      (nzCheckedChange)="toggleModule(mod, $event)"
+                    >
+                      <span class="visually-hidden">Seleccionar todos los permisos de {{ mod.module }}</span>
+                    </label>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (perm of mod.items; track perm.key) {
+                  <tr>
+                    <td class="permission-table__label permission-table__code font-mono">{{ perm.key }}</td>
+                    <td class="permission-table__label">{{ perm.label }}</td>
+                    <td class="permission-table__check">
+                      <label
+                        nz-checkbox
+                        [nzChecked]="isSelected(perm.key)"
+                        (nzCheckedChange)="toggle(perm.key, $event)"
+                      >
+                        <span class="visually-hidden">{{ perm.label }}</span>
+                      </label>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </nz-collapse-panel>
+        }
+      </nz-collapse>
+    }
+  </nz-card>
+
+  <ng-template #arrow>
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 18l6-6-6-6" />
+    </svg>
+  </ng-template>
+
+  <!-- Contenido del modal de confirmación (`NzModalService.confirm`). -->
+  <ng-template #confirmContent>
+    <div class="role-confirm">
+      <p class="role-confirm__name">
+        Nombre del rol: <strong>{{ roleName() }}</strong>
+      </p>
+      <ul class="role-confirm__list">
+        @for (mod of summary(); track mod.module) {
+          <li>
+            <span>{{ mod.module }}</span>
+            <span class="font-mono">{{ mod.selectedCount }} {{ mod.selectedCount === 1 ? 'permiso' : 'permisos' }}</span>
+          </li>
+        }
+      </ul>
+      <p class="role-confirm__total">
+        Total: <strong>{{ selectedCount() }}</strong> {{ selectedCount() === 1 ? 'permiso' : 'permisos' }}
+      </p>
+      @if (isEdit() && permissionsChanged()) {
+        @if (addedPermissions().length) {
+          <p class="role-confirm__change">Se agregan: {{ addedPermissions().join(', ') }}</p>
+        }
+        @if (removedPermissions().length) {
+          <p class="role-confirm__change">Se quitan: {{ removedPermissions().join(', ') }}</p>
+        }
+        <p class="role-confirm__impact">
+          @if (assignedUsers().length) {
+            El cambio se aplica también a las <strong>{{ assignedUsers().length }}</strong>
+            {{ assignedUsers().length === 1 ? 'persona que tiene' : 'personas que tienen' }} este rol (salvo permisos que
+            les dé otro rol o que tengan asignados de forma directa).
+          } @else {
+            Ninguna persona tiene este rol asignado.
+          }
+        </p>
+      }
+    </div>
+  </ng-template>
+</div>

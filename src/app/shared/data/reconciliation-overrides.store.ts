@@ -6,24 +6,16 @@ function keyFor(tenderMedia: TenderMedia, date: string): string {
 }
 
 /**
- * "Desconciliar" (columna Acciones de "Conciliación", solo en filas
- * `conciliado`): un override manual, a nivel de GRUPO (tender media +
- * fecha, no de una orden puntual — la fila que dispara la acción ya es un
- * total agrupado, ver `group-by-tender-day.util.ts`), que fuerza el estado
- * de vuelta a `desconciliado` aunque la suma vendido/liquidado siga
- * cuadrando. Root — mismo motivo que `ResolvedMatchesStore` (sobrevive la
- * navegación aunque `ReconciliationService` sea por-ruta): sin esto, volver
- * a `/conciliacion` olvidaría el "desconciliar" con solo recargar el
- * computed.
+ * Overrides manuales de "Desconciliar" por grupo medio de pago + día.
  *
- * No hay "volver a conciliar" todavía — no se pidió, y el mock no tiene
- * backend que reconcilie de verdad; si aparece esa necesidad, agregar un
- * `resolve()` simétrico aquí, no reinventar el patrón.
+ * @remarks Es `root` para sobrevivir la navegación; el servicio de la tabla es por ruta.
+ * @see docs/codigo/conciliacion.md#stores-compartidos
  */
 @Injectable({ providedIn: 'root' })
 export class ReconciliationOverridesStore {
   private readonly overridden = signal<Set<string>>(new Set());
 
+  /** Fuerza el grupo a `desconciliado` aunque los montos cuadren. */
   markDesconciliado(tenderMedia: TenderMedia, date: string): void {
     this.overridden.update((current) => {
       const next = new Set(current);

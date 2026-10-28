@@ -1,48 +1,50 @@
-import { Injectable, computed, signal } from '@angular/core';
-import { ReconciliationStatus, TenderMedia } from '../../../shared/models/reconciliation-item.model';
-import { Sale, Store } from '../../../shared/models/sale.model';
-import { MOCK_SALES } from './sales-mock.data';
-import { saleReconciliationStatus } from './sale.util';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { Observable, catchError, debounceTime, of, switchMap, tap } from 'rxjs';
+import { toIsoDate } from '../../../shared/utils/iso-date.util';
+import { CaptureBatchResult, SaleListItem, SalesApiService, SalesListParams } from './sales-api.service';
 
-export type TenderMediaFilter = TenderMedia | 'all';
-export type StoreFilter = Store | 'all';
-export type StatusFilter = ReconciliationStatus | 'all';
+/** Id de `SalesCatalogService.tenderMedia` que recibe `GET /sales` como `tenderMedia`. */
+export type TenderMediaFilter = number | 'all';
+/** Id de ubicación del login (`CatalogService`) que recibe `GET /sales` como `store`. */
+export type StoreFilter = number | 'all';
+/** Id de `SalesCatalogService.reconciliationStatuses` que recibe `GET /sales` como `status`. */
+export type StatusFilter = number | 'all';
+/** Rango de fechas completo o `null`. */
 export type DateRangeFilter = [Date, Date] | null;
-// Filtro "Empresa" (subsidiaria) del toolbar — id del catálogo de la
-// sesión (`Sale.subsidiariaId`/`CatalogService.subsidiarias()`), a
-// diferencia de `StoreFilter` (que sigue siendo un slug fijo del mock, ver
-// sale.model.ts).
+/**
+ * Filtro "Empresa" (id de subsidiaria del login).
+ *
+ * @remarks `GET /sales` aún no filtra por subsidiaria: el select queda deshabilitado.
+ * @see docs/codigo/ventas.md#resumen-de-venta
+ */
 export type SubsidiariaFilter = number | 'all';
 
-function startOfDay(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
-
-function endOfDay(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999).getTime();
-}
+/** Tamaños de página del paginador (máximo del backend: 100). */
+export const SALES_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const SEARCH_DEBOUNCE_MS = 300;
 
 function isSameDay(a: Date, b: Date): boolean {
-  return startOfDay(a) === startOfDay(b);
+  return toIsoDate(a) === toIsoDate(b);
 }
 
-// Tienda + día sobre los que actuaría el botón "Reprocesar" del toolbar.
+/** Tienda y día sobre los que actúa "Reprocesar". */
 export interface ReprocessTarget {
   date: Date;
-  store: Store;
+  storeId: number;
 }
 
 /**
- * Estado de "Resumen de venta". Sin KPIs ni toggle día/mes (retirados) — la
- * tabla ahora es el catálogo completo de ventas, acotado por los 5 filtros
- * de abajo (mismo criterio de filtros que `reconciliation.service.ts` y
- * `user-management.service.ts`: `search` para texto libre, `signal` +
- * `'all'` para selects, `[Date, Date] | null` para rango de fecha).
+ * Estado de "Resumen de venta" con paginación en el servidor sobre `GET /sales`.
+ *
+ * @remarks Provisto en `SalesDashboard.providers`: el estado vive lo que vive la pantalla.
+ * @see docs/codigo/ventas.md#resumen-de-venta
  */
 @Injectable()
 export class SalesDashboardService {
-  private readonly sales = signal<Sale[]>(MOCK_SALES);
-  readonly selectedSale = signal<Sale | null>(null);
+  private readonly api = inject(SalesApiService);
+
+  readonly selectedSale = signal<SaleListItem | null>(null);
 
   readonly dateRange = signal<DateRangeFilter>(null);
   readonly subsidiariaFilter = signal<SubsidiariaFilter>('all');
@@ -50,83 +52,138 @@ export class SalesDashboardService {
   readonly statusFilter = signal<StatusFilter>('all');
   readonly tenderMediaFilter = signal<TenderMediaFilter>('all');
   readonly search = signal('');
+  readonly page = signal(1);
+  readonly pageSize = signal(SALES_PAGE_SIZE_OPTIONS[0]);
 
-  readonly filteredSales = computed(() => {
+  readonly rows = signal<SaleListItem[]>([]);
+  readonly total = signal(0);
+  readonly loading = signal(false);
+  readonly loadFailed = signal(false);
+
+  /** Filtros sin paginación en el formato de `GET /sales`; también los usa la exportación. */
+  readonly filters = computed<Omit<SalesListParams, 'page' | 'pageSize'>>(() => {
     const range = this.dateRange();
-    const subsidiaria = this.subsidiariaFilter();
     const store = this.storeFilter();
     const status = this.statusFilter();
     const tenderMedia = this.tenderMediaFilter();
-    const term = this.search().trim().toLowerCase();
-
-    return this.sales().filter((sale) => {
-      if (subsidiaria !== 'all' && sale.subsidiariaId !== subsidiaria) return false;
-      if (store !== 'all' && sale.store !== store) return false;
-      if (status !== 'all' && saleReconciliationStatus(sale) !== status) return false;
-      if (tenderMedia !== 'all' && sale.tenderMedia !== tenderMedia) return false;
-      if (term && !sale.customer.name.toLowerCase().includes(term)) return false;
-      if (range) {
-        const saleTime = new Date(sale.date).getTime();
-        if (saleTime < startOfDay(range[0]) || saleTime > endOfDay(range[1])) return false;
-      }
-      return true;
-    });
+    return {
+      dateFrom: range ? toIsoDate(range[0]) : undefined,
+      dateTo: range ? toIsoDate(range[1]) : undefined,
+      store: store === 'all' ? undefined : store,
+      status: status === 'all' ? undefined : status,
+      tenderMedia: tenderMedia === 'all' ? undefined : tenderMedia,
+      search: this.search().trim() || undefined,
+    };
   });
 
-  // El botón "x" del range-picker (y a veces un cambio a medias de fecha)
-  // emite un array truthy con huecos (`[undefined, undefined]`) en vez de
-  // `null` — normalizarlo aquí evita que `filteredSales`/`reprocessTarget`
-  // reciban un rango con `range[0]`/`range[1]` inválidos.
+  // Sube para repetir la consulta actual (p. ej. tras reprocesar).
+  private readonly refreshTick = signal(0);
+
+  // `tick` no viaja al backend: solo fuerza repetir la misma consulta.
+  private readonly query = computed<{ params: SalesListParams; tick: number }>(() => ({
+    params: { ...this.filters(), page: this.page(), pageSize: this.pageSize() },
+    tick: this.refreshTick(),
+  }));
+
+  constructor() {
+    toObservable(this.query)
+      .pipe(
+        // Agrupa cambios seguidos (p. ej. filtro + regreso a la página 1) y deja
+        // de consultar en cada tecla de la búsqueda.
+        debounceTime(SEARCH_DEBOUNCE_MS),
+        tap(() => {
+          this.loading.set(true);
+          this.loadFailed.set(false);
+        }),
+        switchMap((query) =>
+          this.api.list(query.params).pipe(
+            // El aviso del error lo da `httpErrorAlertInterceptor`.
+            catchError(() => {
+              this.loadFailed.set(true);
+              return of(null);
+            }),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((res) => {
+        this.loading.set(false);
+        if (res) {
+          this.rows.set(res.data);
+          this.total.set(res.total);
+        } else {
+          this.rows.set([]);
+          this.total.set(0);
+        }
+      });
+  }
+
+  /** Normaliza a `null` el `[undefined, undefined]` que emite la "x" del range-picker. */
   setDateRange(range: DateRangeFilter): void {
     this.dateRange.set(range && range[0] && range[1] ? range : null);
+    this.page.set(1);
   }
 
   setSubsidiariaFilter(filter: SubsidiariaFilter): void {
     this.subsidiariaFilter.set(filter);
+    this.page.set(1);
   }
 
   setStoreFilter(filter: StoreFilter): void {
     this.storeFilter.set(filter);
+    this.page.set(1);
   }
 
   setStatusFilter(filter: StatusFilter): void {
     this.statusFilter.set(filter);
+    this.page.set(1);
   }
 
   setTenderMediaFilter(filter: TenderMediaFilter): void {
     this.tenderMediaFilter.set(filter);
+    this.page.set(1);
   }
 
   setSearch(value: string): void {
     this.search.set(value);
+    this.page.set(1);
   }
 
-  // Botón "Reprocesar" del toolbar: solo tiene sentido cuando los filtros
-  // acotan a UN día específico (mismo día de inicio/fin del range-picker, no
-  // un rango) Y una tienda específica (`storeFilter !== 'all'`) — reprocesar
-  // "todas las tiendas" o un rango de varios días no es la operación que
-  // pidió el botón. `null` cuando no se cumple, consumido directamente por
-  // `[disabled]` en la plantilla.
+  setPage(page: number): void {
+    this.page.set(page);
+  }
+
+  setPageSize(size: number): void {
+    this.pageSize.set(size);
+    this.page.set(1);
+  }
+
+  /** Todas las filas de los filtros actuales, no solo la página. */
+  exportRows(): Observable<SaleListItem[]> {
+    return this.api.listAll(this.filters());
+  }
+
+  /** Destino de "Reprocesar"; `null` salvo que los filtros acoten a un día y una tienda. */
   readonly reprocessTarget = computed<ReprocessTarget | null>(() => {
     const range = this.dateRange();
     const store = this.storeFilter();
-
     if (!range || store === 'all' || !isSameDay(range[0], range[1])) {
       return null;
     }
-
-    return { date: range[0], store };
+    return { date: range[0], storeId: store };
   });
 
-  // Simula la llamada al backend del reproceso (ver docs/api-endpoints.csv,
-  // POST /sales/{store}/{date}/reprocess) — delay artificial + éxito, sin
-  // mutar `sales()`: el reproceso corre del lado del backend real, la tabla
-  // de este mock no tiene un estado "reprocesando" que reflejar.
-  reprocessDay(target: ReprocessTarget): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, 1200));
+  /** `POST /sales/capture` de un día y una tienda; idempotente (lo existente cuenta como omitido). */
+  reprocessDay(target: ReprocessTarget): Observable<CaptureBatchResult> {
+    return this.api.capture({ ubicacionIds: [target.storeId], dateFrom: toIsoDate(target.date) });
   }
 
-  openSale(sale: Sale): void {
+  /** Vuelve a consultar la página actual con los filtros actuales. */
+  reload(): void {
+    this.refreshTick.update((n) => n + 1);
+  }
+
+  openSale(sale: SaleListItem): void {
     this.selectedSale.set(sale);
   }
 

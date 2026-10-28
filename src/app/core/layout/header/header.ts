@@ -15,18 +15,16 @@ import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzPopoverModule } from 'ng-zorro-antd/popover';
 import { ThemeService } from '../../services/theme.service';
 import { PaletteService } from '../../services/palette.service';
-import { AccessControlService } from '../../../features/auth/data/access-control.service';
-import { AuthService } from '../../../features/auth/data/auth.service';
-import { AccessCatalogService } from '../../../features/user-management/data/access-catalog.service';
-import { fullName as appUserFullName } from '../../../features/user-management/data/user-management.model';
+import { AccessControlService } from '../../auth/access-control.service';
+import { AuthService } from '../../auth/auth.service';
+import { AccessCatalogService } from '../../auth/access-catalog.service';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { SEARCHABLE_PAGES, SearchablePage, searchPages } from './header-search.util';
 
 /**
- * Header del layout principal (`Shell`). Extraído de `shell.html`/`.ts` para
- * aislar acciones + card de usuario en su propio componente — la
- * navegación entre módulos vive en `core/layout/menu` (Menu), no aquí.
- * `Shell` orquesta `<app-menu>` + `<app-header>` + `<router-outlet>`.
+ * Header del layout: búsqueda de pantallas, notificaciones y menú del avatar.
+ *
+ * @see docs/codigo/layout-y-tema.md#header
  */
 @Component({
   selector: 'app-header',
@@ -49,9 +47,7 @@ export class Header {
   // --- Búsqueda de pantallas ---------------------------------------------
   protected readonly searchOpen = signal(false);
   protected readonly query = signal('');
-  // Filtra por permiso ANTES de buscar por texto — un resultado que el
-  // usuario no puede abrir es peor que no mostrarlo (mismo criterio que el
-  // Menu lateral, ver AccessControlService).
+  // Filtra por permiso antes de buscar: no se ofrece una pantalla que el usuario no puede abrir.
   protected readonly results = computed(() =>
     searchPages(
       SEARCHABLE_PAGES.filter(
@@ -102,15 +98,8 @@ export class Header {
   }
 
   // --- Usuario logeado -------------------------------------------------
-  // Delega en `AccessControlService` (misma resolución `appUserId` →
-  // `AppUser` que antes vivía duplicada aquí) — se mantiene el nombre
-  // `currentAppUser` para no tocar `header.html`.
-  protected readonly currentAppUser = this.access.currentAppUser;
-
-  protected readonly fullName = computed(() => {
-    const user = this.currentAppUser();
-    return user ? appUserFullName(user) : '';
-  });
+  // Solo datos de la sesión (`AuthUser`): `core` no lee el mock de user-management (ADR-0001).
+  protected readonly fullName = computed(() => this.auth.currentUser()?.displayName ?? '');
 
   // Roles REALES de la sesión (`AuthUser.roles`) con el nombre de `GET /roles`
   // (sin permiso para pedirlo, una versión legible del código).
@@ -118,11 +107,9 @@ export class Header {
     (this.auth.currentUser()?.roles ?? []).map((roleId) => this.accessCatalog.roleLabel(roleId)).join(', '),
   );
 
-  // Mismo criterio que user-list/user-detail: foto real (`avatarUrl`) con
-  // fallback a iniciales+color por hash del id — nunca por username, para
-  // que la persona tenga el mismo color en Header, lista y detalle.
-  protected readonly avatarUrl = computed(() => this.currentAppUser()?.avatarUrl ?? undefined);
-  protected readonly avatarStyle = computed(() => avatarTokensFor(this.currentAppUser()?.id ?? ''));
+  // Iniciales + color por hash del username (la sesión no trae foto ni el id
+  // del registro de `user-management`).
+  protected readonly avatarStyle = computed(() => avatarTokensFor(this.auth.currentUser()?.username ?? ''));
   protected readonly initials = computed(() => initialsFor(this.fullName()));
 
   // --- Menú del avatar (Perfil / paleta / tema / logout) -----------------
@@ -145,9 +132,7 @@ export class Header {
     this.paletteExpanded.update((open) => !open);
   }
 
-  // Cierra el menú al hacer click fuera de él — el avatar y el propio menú
-  // (incl. el grid de paleta anidado) están dentro de `#avatarMenuRoot`, así
-  // que un click ahí adentro nunca debe cerrarlo.
+  // Un click fuera de `#avatarMenuRoot` (avatar, menú y grid de paleta) cierra el menú.
   @HostListener('document:click', ['$event'])
   protected onDocumentClick(event: MouseEvent): void {
     if (!this.avatarMenuOpen()) return;

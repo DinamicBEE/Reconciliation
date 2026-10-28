@@ -1,10 +1,5 @@
-// Patrón "KPI card" — ver design-system/conciliation/MASTER.md
-// ("Patrón de layout: card de KPI con gráfica"). Cualquier feature con una
-// fila de indicadores arriba de una tabla debería @use-ar este partial en
-// vez de redefinir estas clases.
-//
-// Regla dura heredada del dashboard: la fila completa de KPIs nunca debe
-// superar ~1/3 del alto de la ventana (`.kpi-grid` ya lo topa a 22vh).
+// Card de KPI (MASTER.md "Patrón de layout: card de KPI"): la fila no supera ~1/3 del alto
+// de la ventana (22vh). Ver docs/codigo/estilos.md#partial-kpi-y-estado
 
 .kpi-grid {
   display: grid;
@@ -44,10 +39,8 @@
   min-height: 0;
 }
 
-// Dona a un costado: stat pegado a la izquierda, la dona se centra en el
-// espacio libre que queda después del texto vía margin:auto en
-// .kpi-card__donut. Sin gap aquí a propósito — un gap fijo se sumaría solo
-// al lado izquierdo del margin:auto y rompería la simetría del centrado.
+// Dona a un costado, centrada con `margin: auto`; sin `gap`, que rompería la simetría del
+// centrado.
 .kpi-card__body--donut {
   flex-direction: row;
   align-items: stretch;
@@ -90,12 +83,8 @@
   font-weight: 500;
 }
 
-// Dona: crece al alto completo disponible del card, con un tope de ancho
-// para no desbordar en cards muy altos (el SVG interno preserva su propia
-// proporción circular vía preserveAspectRatio="meet", así que un box más
-// alto que ancho no lo distorsiona). El padding uniforme de 8px del card
-// (definido en el nzBodyStyle del html) es lo que le deja el espacio contra
-// los bordes — este bloque no añade padding propio.
+// Dona al alto del card con tope de ancho; el SVG conserva su proporción (`meet`). El espacio
+// contra los bordes lo da el `nzBodyStyle` del card.
 .kpi-card__donut {
   flex: 0 0 auto;
   height: 100%;

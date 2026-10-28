@@ -1,8 +1,10 @@
-// Conversión hex↔HSL sin dependencias — usada por PaletteService para
-// derivar una paleta completa (primary/secondary/accent/superficies) a
-// partir de un solo color base, en vez de tener que codificar a mano
-// 6 paletas × 2 modos × ~14 tokens.
+// Conversión hex↔HSL sin dependencias. Ver docs/codigo/layout-y-tema.md#paleta
 
+/**
+ * Matiz (hue) de un color `#rrggbb`.
+ *
+ * @returns Grados en `[0, 360)`; `0` para grises.
+ */
 export function hexToHue(hex: string): number {
   const clean = hex.replace('#', '');
   const r = parseInt(clean.substring(0, 2), 16) / 255;
@@ -29,7 +31,14 @@ export function hexToHue(hex: string): number {
   return h < 0 ? h + 360 : h;
 }
 
-/** h: 0-360, s/l: 0-100 → "#rrggbb" */
+/**
+ * Convierte HSL a hex.
+ *
+ * @param h - Matiz en grados (0-360).
+ * @param s - Saturación (0-100).
+ * @param l - Luminosidad (0-100).
+ * @returns Color `#rrggbb`.
+ */
 export function hsl(h: number, s: number, l: number): string {
   const sN = s / 100;
   const lN = l / 100;

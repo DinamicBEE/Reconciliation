@@ -4,12 +4,12 @@ import { Catalog, CatalogKind } from './catalogs.model';
 import { filterCatalogRows, filterCatalogs } from './catalog-filter.util';
 
 /**
- * Estado de la pantalla de Catálogos cargados (CU14 del DED). Solo lectura:
- * no expone ninguna operación que modifique un catálogo — las correcciones
- * se canalizan por soporte (DED 2.2 y 7.17). Hoy lee de `MOCK_CATALOGS`; el
- * día que exista backend, las listas llegan del Core / Ventas Service.
+ * Estado de "Catálogos cargados", de solo lectura, sobre `MOCK_CATALOGS`.
+ *
+ * @remarks Provisto en `Catalogs.providers` (ADR-0002, punto 4): no sobrevive a salir de la pantalla.
+ * @see docs/codigo/catalogos.md#pantalla-catalogos-cargados
  */
-@Injectable({ providedIn: 'root' })
+@Injectable()
 export class CatalogsService {
   private readonly catalogs = signal<readonly Catalog[]>(MOCK_CATALOGS);
 

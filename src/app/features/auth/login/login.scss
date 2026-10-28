@@ -1,6 +1,5 @@
-// Pantalla fuera de Shell (ver design-system/conciliation/pages/login.md):
-// login es la desviación deliberada de MASTER.md — no lleva header/nav, es
-// una pantalla propia de dos paneles (marca + formulario).
+// Fuera de Shell, dos paneles (marca + formulario): desviación deliberada de MASTER.md.
+// Ver design-system/conciliation/pages/login.md
 .login-page {
   min-height: 100vh;
   display: grid;
@@ -153,9 +152,7 @@
   margin-top: 4px;
 }
 
-// Reemplaza el antiguo hint de una sola cuenta ("Demo: admin / ...") —
-// ahora son 4, una por rol (ver login.html, "Cuentas de demo"), así que
-// necesitan lista, no una sola línea.
+// Lista de cuentas de desarrollo, una por rol.
 .login-card__demo {
   margin: 20px 0 0;
   padding-top: 16px;

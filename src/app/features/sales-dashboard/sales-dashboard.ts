@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NzCardModule } from 'ng-zorro-antd/card';
@@ -10,42 +11,37 @@ import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzDrawerModule } from 'ng-zorro-antd/drawer';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import { NzMessageService } from 'ng-zorro-antd/message';
-import { SaleStatusTag } from '../../shared/components/sale-status-tag/sale-status-tag';
-import { MatchStatusTag } from '../../shared/components/match-status-tag/match-status-tag';
 import { ReconciliationStatusTag } from '../../shared/components/reconciliation-status-tag/reconciliation-status-tag';
-import { ReconciliationStatus, TENDER_MEDIA_LABEL } from '../../shared/models/reconciliation-item.model';
-import { Sale, STORE_LABEL, Store } from '../../shared/models/sale.model';
+import { ReconciliationStatus } from '../../shared/models/reconciliation-item.model';
 import { COUNTRY_PROFILE } from '../../core/country/active-country';
 import { CatalogService } from '../../core/services/catalog.service';
-import { AccessControlService } from '../auth/data/access-control.service';
+import { AccessControlService } from '../../core/auth/access-control.service';
 import {
   DateRangeFilter,
+  SALES_PAGE_SIZE_OPTIONS,
   SalesDashboardService,
   StatusFilter,
   StoreFilter,
   SubsidiariaFilter,
   TenderMediaFilter,
 } from './data/sales-dashboard.service';
-import {
-  saleReconciliationStatus,
-  saleSubtotal as computeSaleSubtotal,
-  saleTaxAmount as computeSaleTaxAmount,
-  saleTaxableBase,
-  saleTaxLines,
-  saleTotal as computeSaleTotal,
-} from './data/sale.util';
-import { buildSalesCsv } from './data/sale-export.util';
+import { SaleListItem } from './data/sales-api.service';
+import { buildSaleListCsv } from './data/sale-list-export.util';
 import { MoneyPipe } from '../../core/country/money.pipe';
+import { SalesCatalogService } from './data/sales-catalog.service';
+import { CaptureMessage, describeCaptureError, describeCaptureResult } from './data/capture-result.util';
 
-// Lookup inverso de `STORE_LABEL` ("Sucursal Polanco" → 'polanco') — ver el
-// comentario de `storeOptions` en el componente sobre por qué existe este
-// puente por nombre en vez de usar el id numérico real de la ubicación.
-const LABEL_TO_STORE: Record<string, Store> = Object.fromEntries(
-  Object.entries(STORE_LABEL).map(([slug, label]) => [label, slug as Store]),
-);
+const RECONCILIATION_STATUSES = new Set<string>(['conciliado', 'desconciliado', 'por_conciliar']);
 
+/**
+ * "Resumen de venta": tabla de `GET /sales` con filtros, exportación y "Reprocesar".
+ *
+ * @remarks Sin `GET /sales/{id}`, el Drawer muestra lo que trae la fila del listado.
+ * @see docs/codigo/ventas.md#resumen-de-venta
+ */
 @Component({
   selector: 'app-sales-dashboard',
   imports: [
@@ -61,9 +57,8 @@ const LABEL_TO_STORE: Record<string, Store> = Object.fromEntries(
     NzDrawerModule,
     NzButtonModule,
     NzTooltipModule,
+    NzTagModule,
     NzModalModule,
-    SaleStatusTag,
-    MatchStatusTag,
     ReconciliationStatusTag,
   ],
   providers: [SalesDashboardService],
@@ -77,83 +72,43 @@ export class SalesDashboard {
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
   protected readonly access = inject(AccessControlService);
-  protected readonly tenderMediaLabel = TENDER_MEDIA_LABEL;
-  protected readonly storeLabel = STORE_LABEL;
-  // Vocabulario fiscal y general del país activo (`environment.country`):
-  // tipo de persona, régimen, comprobante (CFDI / factura electrónica),
-  // RFC / NIT, impuestos y el nombre del punto de venta.
+  // Vocabulario del país activo (`environment.country`): nombre del punto de venta.
   protected readonly country = inject(COUNTRY_PROFILE);
+  protected readonly pageSizeOptions = SALES_PAGE_SIZE_OPTIONS;
+  protected readonly exporting = signal(false);
 
-  // Opciones del catálogo de la sesión (`CatalogService.ubicaciones()`, ver
-  // MASTER.md "Catálogos reales: subsidiaria/ubicación" — regla general
-  // para todo select de este tipo), no un array hardcodeado como antes.
-  // `Store` (el slug interno que usa el mock de ventas, `sale.model.ts`)
-  // sigue fijo — no hay backend real de ventas todavía, así que este mock
-  // no puede recibir ids numéricos de ubicación como valor de `Sale.store`.
-  // El puente es por NOMBRE: las 4 ubicaciones del catálogo (mock hoy, las
-  // sembradas en el backend real después) se llaman EXACTAMENTE igual que los 4 valores de `STORE_LABEL`
-  // ("Sucursal Polanco", etc.) — `LABEL_TO_STORE` hace el lookup inverso.
-  // Una ubicación real que el backend agregue/quite con un nombre que NO
-  // está en `STORE_LABEL` simplemente no aparece en el filtro (no hay datos
-  // mock para ella); el día que exista un backend real de ventas, `Store`
-  // pasa a ser el id numérico de la ubicación directamente, sin este mapeo.
-  protected readonly storeOptions = computed<{ value: StoreFilter; label: string }[]>(() => {
-    const known = this.catalog
-      .ubicaciones()
-      .filter((u) => LABEL_TO_STORE[u.nombre])
-      .map((u) => ({ value: LABEL_TO_STORE[u.nombre], label: u.nombre }));
-    return [{ value: 'all' as const, label: this.country.vocabulary.allLocations }, ...known];
-  });
+  // Ubicaciones del login (`CatalogService`); su id es el `store` de `GET /sales`.
+  protected readonly storeOptions = computed<{ value: StoreFilter; label: string }[]>(() => [
+    { value: 'all', label: this.country.vocabulary.allLocations },
+    ...this.catalog.ubicaciones().map((u) => ({ value: u.id, label: u.nombre })),
+  ]);
 
-  // Filtro "Empresa" — a diferencia de `storeOptions` (que traduce por
-  // NOMBRE a un slug fijo del mock, ver LABEL_TO_STORE), aquí sí hay un id
-  // real (`Sale.subsidiariaId`) que comparar 1:1 contra
-  // `CatalogService.subsidiarias()` (arreglo que llega en el login vía
-  // `AuthUser.subsidiarias`), sin indirección por nombre.
-  protected readonly subsidiariaOptions = computed<{ value: SubsidiariaFilter; label: string }[]>(() => {
-    const known = this.catalog.subsidiarias().map((s) => ({ value: s.id, label: s.nombre }));
-    return [{ value: 'all' as const, label: 'Todas las empresas' }, ...known];
-  });
+  // Subsidiarias del login; el select va deshabilitado porque `GET /sales` no filtra
+  // por subsidiaria (ver docs/codigo/ventas.md#resumen-de-venta).
+  protected readonly subsidiariaOptions = computed<{ value: SubsidiariaFilter; label: string }[]>(() => [
+    { value: 'all', label: 'Todas las empresas' },
+    ...this.catalog.subsidiarias().map((s) => ({ value: s.id, label: s.nombre })),
+  ]);
 
-  // Mismo vocabulario/orden que reconciliation-dashboard.ts (statusOptions)
-  // — "los mismos estados que los de la conciliación".
-  protected readonly statusOptions: { value: StatusFilter; label: string }[] = [
+  // `GET /sales/catalogs/tender-media` y `/reconciliation-statuses`.
+  protected readonly salesCatalog = inject(SalesCatalogService);
+
+  protected readonly statusOptions = computed<{ value: StatusFilter; label: string }[]>(() => [
     { value: 'all', label: 'Todos los estados' },
-    { value: 'conciliado', label: 'Conciliado' },
-    { value: 'desconciliado', label: 'Desconciliado' },
-    { value: 'por_conciliar', label: 'Por conciliar' },
-  ];
+    ...this.salesCatalog.reconciliationStatuses().map((s) => ({ value: s.id, label: s.description })),
+  ]);
 
-  protected readonly tenderMediaOptions: { value: TenderMediaFilter; label: string }[] = [
+  // `pendingReview`: código del POS que llegó en una venta sin estar sembrado.
+  protected readonly tenderMediaOptions = computed<{ value: TenderMediaFilter; label: string }[]>(() => [
     { value: 'all', label: 'Todos los medios' },
-    { value: 'bbva', label: 'BBVA' },
-    { value: 'rappi', label: 'Rappi' },
-    { value: 'didi_food', label: 'DiDi Food' },
-    { value: 'efectivo', label: 'Efectivo' },
-  ];
+    ...this.salesCatalog
+      .tenderMedia()
+      .map((m) => ({ value: m.id, label: m.pendingReview ? `${m.description} (por revisar)` : m.description })),
+  ]);
 
-  // Mismo texto que `statusOptions` (sin 'all') — como Record en vez de array
-  // porque así lo consume `buildSalesCsv()`, igual que `storeLabel`/
-  // `tenderMediaLabel` de arriba.
-  protected readonly statusLabel: Record<ReconciliationStatus, string> = {
-    conciliado: 'Conciliado',
-    desconciliado: 'Desconciliado',
-    por_conciliar: 'Por conciliar',
-  };
-
-  // Desglose financiero completo de la venta abierta en el Drawer — un solo
-  // computed para no repetir las llamadas a sale.util en la plantilla.
-  protected readonly selectedSaleBreakdown = computed(() => {
-    const sale = this.service.selectedSale();
-    if (!sale) return null;
-    return {
-      subtotal: computeSaleSubtotal(sale),
-      taxableBase: saleTaxableBase(sale),
-      taxLines: saleTaxLines(sale),
-      taxAmount: computeSaleTaxAmount(sale),
-      total: computeSaleTotal(sale),
-    };
-  });
+  constructor() {
+    this.salesCatalog.ensureLoaded();
+  }
 
   protected onDateRangeChange(value: [Date, Date] | null): void {
     this.service.setDateRange(value as DateRangeFilter);
@@ -179,103 +134,87 @@ export class SalesDashboard {
     this.service.setSearch(value);
   }
 
-  protected onRowClick(sale: Sale): void {
+  protected onPageIndexChange(page: number): void {
+    this.service.setPage(page);
+  }
+
+  protected onPageSizeChange(size: number): void {
+    this.service.setPageSize(size);
+  }
+
+  protected onRowClick(sale: SaleListItem): void {
     this.service.openSale(sale);
   }
 
-  protected itemSubtotal(quantity: number, unitPrice: number): number {
-    return quantity * unitPrice;
+  // `ReconciliationStatusTag` pinta los 3 estados del portal; el `code` del
+  // backend es el mismo valor. Un código nuevo cae a "por conciliar".
+  protected statusOf(sale: SaleListItem): ReconciliationStatus {
+    const code = sale.reconciliationStatus.code;
+    return (RECONCILIATION_STATUSES.has(code) ? code : 'por_conciliar') as ReconciliationStatus;
   }
 
-  // Suma de sale.payments — solo se muestra en la plantilla cuando hay más
-  // de un pago (pago mixto), como verificación de que los montos cuadran.
-  protected paymentsTotal(sale: Sale): number {
-    return sale.payments.reduce((sum, payment) => sum + payment.amount, 0);
+  protected tenderMediaText(sale: SaleListItem): string {
+    const media = sale.tenderMedia;
+    if (!media) return 'Sin pagos';
+    return media.mixed ? `${media.description} +${media.paymentCount - 1}` : media.description;
   }
 
-  // Expuestos para la tabla — las plantillas no pueden llamar funciones de
-  // módulo importadas directamente, solo miembros del componente.
-  protected saleSubtotal(sale: Sale): number {
-    return computeSaleSubtotal(sale);
-  }
-
-  protected saleTaxAmount(sale: Sale): number {
-    return computeSaleTaxAmount(sale);
-  }
-
-  protected saleTotal(sale: Sale): number {
-    return computeSaleTotal(sale);
-  }
-
-  protected saleStatus(sale: Sale): ReconciliationStatus {
-    return saleReconciliationStatus(sale);
-  }
-
-  // Enlace de consulta del comprobante ante la autoridad del país —
-  // verificador de CFDI del SAT (por UUID) o catálogo público de la DIAN
-  // (por CUFE).
-  protected fiscalQueryUrl(sale: Sale): string {
-    return this.country.invoice.queryUrl(sale.invoice.fiscalId);
-  }
-
-  // Botón "Exportar" del toolbar — exporta lo que los 5 filtros están
-  // mostrando (`filteredSales`, no solo la página actual de la tabla) como
-  // CSV, que Excel abre igual de bien que un .xlsx para esta tabla sin
-  // formato/fórmulas. BOM UTF-8 al inicio del Blob para que Excel respete los
-  // acentos (nombres de cliente, "Sucursal ...") al abrirlo directamente.
+  // CSV de todo lo filtrado, con BOM UTF-8 para que Excel respete los acentos.
   protected exportCsv(): void {
-    // Matriz 7.16 del DED: exportar requiere `export_reports` propio, no solo
-    // poder VER la pantalla (`view_dashboard`) — ver el botón en el template,
-    // que ya lo oculta; este guard es defensa en profundidad.
-    if (!this.access.hasPermission('export_reports')) return;
+    // Defensa en profundidad: el botón ya se oculta sin `export_reports` (matriz 7.16 del DED).
+    if (!this.access.hasPermission('export_reports') || this.exporting()) return;
 
-    const csv = buildSalesCsv(this.service.filteredSales(), {
-      location: this.country.vocabulary.location,
-      store: this.storeLabel,
-      tenderMedia: this.tenderMediaLabel,
-      status: this.statusLabel,
+    this.exporting.set(true);
+    this.service.exportRows().subscribe({
+      next: (rows) => {
+        this.exporting.set(false);
+        if (rows.length === 0) {
+          this.message.info('No hay ventas que exportar con los filtros actuales.');
+          return;
+        }
+        const csv = buildSaleListCsv(rows, { location: this.country.vocabulary.location });
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const now = new Date();
+        const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `resumen-de-venta_${stamp}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      // El aviso del error lo da `httpErrorAlertInterceptor`.
+      error: () => this.exporting.set(false),
     });
-
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const now = new Date();
-    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `resumen-de-venta_${stamp}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 
-  // Botón "Reprocesar" del toolbar — solo llega a ejecutarse cuando
-  // `service.reprocessTarget()` no es null (mismo guard que `[disabled]` en
-  // la plantilla: un día específico + una tienda específica seleccionados).
-  // `nzOnOk` como Promise dice a ng-zorro que deje el botón "Confirmar" en
-  // estado de carga hasta que resuelva — así se simula la conexión con el
-  // backend sin necesitar un spinner propio (mismo patrón de
-  // `modal.confirm()` que "Desconciliar" en reconciliation-dashboard.ts).
+  // `nzOnOk` como Promise deja "Reprocesar" en carga mientras dura la captura síncrona.
+  // Ver docs/codigo/ventas.md#reprocesar.
   protected onReprocessClick(): void {
-    // Matriz 7.16 del DED: "Reproceso de ventas" es Admin/Contabilidad
-    // únicamente — sin permiso propio, por rol directo (ver
-    // AccessControlService.canReprocessSales); el botón en el template ya lo
-    // oculta, este guard es defensa en profundidad.
+    // Defensa en profundidad: el botón ya se oculta sin `capture_sales`.
     if (!this.access.canReprocessSales()) return;
     const target = this.service.reprocessTarget();
     if (!target) return;
 
     const dateLabel = this.formatDate(target.date);
-    const storeLabel = this.storeLabel[target.store];
+    const storeLabel = this.catalog.findUbicacion(target.storeId)?.nombre ?? `#${target.storeId}`;
+    const place = `${storeLabel} del ${dateLabel}`;
 
     this.modal.confirm({
       nzTitle: 'Reprocesar día',
-      nzContent: `Estás a punto de reprocesar el día completo del <b>${dateLabel}</b> para <b>${storeLabel}</b>. Esto vuelve a ejecutar la conciliación de ese día para esa tienda.`,
-      nzOkText: 'Confirmar',
+      nzContent: `Se volverán a traer de Facturiza las ventas del <b>${dateLabel}</b> de <b>${storeLabel}</b>. Las que ya existen no se duplican. Puede tardar unos segundos.`,
+      nzOkText: 'Reprocesar',
       nzCancelText: 'Cancelar',
-      nzOnOk: () =>
-        this.service.reprocessDay(target).then(() => {
-          this.message.success(`${storeLabel} del ${dateLabel} se reprocesó correctamente.`);
-        }),
+      nzOnOk: async () => {
+        let result: CaptureMessage;
+        try {
+          result = describeCaptureResult(await firstValueFrom(this.service.reprocessDay(target)), place);
+        } catch (err) {
+          result = describeCaptureError(err, place);
+        }
+        this.message.create(result.level, result.text, { nzDuration: result.level === 'success' ? 4500 : 8000 });
+        if (result.reload) this.service.reload();
+      },
     });
   }
 
