@@ -2,12 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { ReconciliationStatus } from '../../models/reconciliation-item.model';
 
-// Su propio "X-tag" — mismo criterio que `MatchStatusTag`/`SaleStatusTag`
-// (ver MASTER.md): un enum de estado nuevo no se resuelve con un
-// `[ngSwitch]` inline repetido en la tabla. `ReconciliationStatus` es un
-// concepto DISTINTO de `MatchStatus` (3 estados agrupados por día + medio de
-// pago, no 4 por orden) — no se reutiliza `MatchStatusTag` aunque ambos
-// coincidan en verde/rojo/ámbar.
+// No reutiliza `MatchStatusTag`: `ReconciliationStatus` es otro concepto (por grupo, no por orden).
 const STATUS_META: Record<ReconciliationStatus, { label: string; color: string }> = {
   conciliado: { label: 'Conciliado', color: 'success' },
   desconciliado: { label: 'Desconciliado', color: 'error' },

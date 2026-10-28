@@ -1,0 +1,28 @@
+@use '../../../shared/styles/summary-strip';
+@use '../../../shared/styles/data-table';
+
+.reconciliation-compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+// 6 campos en 3 columnas: el primero de cada fila también va sin divisor ni sangría
+// (`.summary-strip__item` solo lo quita al primer hijo).
+.summary-strip__item:nth-child(3n + 1) {
+  padding-left: 0;
+  border-left: none;
+}
+
+.compare-placeholder__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--color-muted-foreground);
+
+  strong {
+    color: var(--color-foreground);
+  }
+}

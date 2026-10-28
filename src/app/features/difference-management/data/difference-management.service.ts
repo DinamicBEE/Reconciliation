@@ -6,6 +6,7 @@ import { ResolvedMatchesStore } from '../../../shared/data/resolved-matches.stor
 import { findMatchCandidates } from './candidate-match.util';
 import { MatchCandidate, MatchOrigin } from './difference-management.model';
 
+/** Payload que se enviaría al backend al confirmar el match de una orden. */
 export interface SaveResult {
   orderId: string;
   matchedSettlementIds: string[];
@@ -17,17 +18,21 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * Estado de la resolución manual de una orden: candidatos, selección, nota y guardado.
+ *
+ * @remarks Se provee en el componente; el estado se reinicia al cambiar de orden.
+ * @see docs/codigo/diferencias.md#pantalla
+ */
 @Injectable()
 export class DifferenceManagementService {
   private readonly resolvedMatches = inject(ResolvedMatchesStore);
 
-  // Orden en pantalla: signals de la ruta que entrega el componente una sola vez
-  // (`bindOrder`). Todo lo demás se deriva de ellos — sin `effect` que copie
-  // parámetros de ruta en el servicio (ADR-0002, punto 6).
+  // Signals de la ruta entregados una vez por `bindOrder`; todo se deriva de ellos (ADR-0002, punto 6).
   private readonly source = signal<{ tenderMedia: Signal<TenderMedia | null>; orderId: Signal<string | null> } | null>(null);
   private readonly tenderMediaSignal = computed(() => this.source()?.tenderMedia() ?? null);
   private readonly orderIdSignal = computed(() => this.source()?.orderId() ?? null);
-  // Cambia solo al pasar a OTRA orden: reinicia la sesión de resolución.
+  // Cambia solo al pasar a otra orden: reinicia la sesión de resolución.
   private readonly orderKey = computed(() => `${this.tenderMediaSignal() ?? ''}|${this.orderIdSignal() ?? ''}`);
 
   private readonly importedSettlements = linkedSignal<string, SettlementTransaction[]>({
@@ -35,9 +40,8 @@ export class DifferenceManagementService {
     computation: () => [],
   });
 
-  // settlement.id -> origen. Solo contiene entradas SELECCIONADAS — la
-  // ausencia de una liquidación aquí significa "no seleccionada". Al entrar a
-  // una orden con `amount_mismatch` arranca con la liquidación sugerida.
+  // settlement.id -> origen; solo guarda las seleccionadas. Con `amount_mismatch`
+  // arranca con la liquidación sugerida por el motor.
   private readonly selection = linkedSignal<string, Map<string, MatchOrigin>>({
     source: this.orderKey,
     computation: () => {
@@ -52,9 +56,17 @@ export class DifferenceManagementService {
   private readonly noteState = linkedSignal<string, string>({ source: this.orderKey, computation: () => '' });
   readonly note = this.noteState.asReadonly();
 
-  // La orden en cuestión, armada con el mismo motor de cruce que
-  // "Detalle por tender media" (ver cross-match.util.ts) — una sola fuente
-  // de verdad de qué es sale_only/amount_mismatch/etc.
+  private readonly importErrorsState = linkedSignal<string, string[]>({ source: this.orderKey, computation: () => [] });
+  /** Errores por línea de la última importación de CSV. */
+  readonly importErrors = this.importErrorsState.asReadonly();
+  /** Liquidaciones importadas por CSV en esta sesión. */
+  readonly importedCount = computed(() => this.importedSettlements().length);
+
+  /**
+   * Orden en pantalla, calculada con el mismo motor de cruce que "Detalle por tender media".
+   *
+   * @see docs/codigo/conciliacion.md#cruce-de-transacciones
+   */
   readonly order = computed<TransactionMatch | null>(() => {
     const tenderMedia = this.tenderMediaSignal();
     const orderId = this.orderIdSignal();
@@ -62,19 +74,13 @@ export class DifferenceManagementService {
     return this.crossMatchFor(tenderMedia).find((m) => m.orderId === orderId) ?? null;
   });
 
-  // Pool de liquidaciones candidatas: todas las del tender media MENOS las ya
-  // cruzadas 1:1 limpiamente con OTRA orden (esas están resueltas, no se
-  // pueden "robar"), más las que se hayan importado por CSV en esta sesión.
+  // Liquidaciones del tender, sin las de órdenes ya cruzadas limpiamente, más las importadas por CSV.
+  // Ver docs/codigo/diferencias.md#candidatos
   private readonly candidatePool = computed<SettlementTransaction[]>(() => {
     const tenderMedia = this.tenderMediaSignal();
     if (!tenderMedia) return [];
 
-    // Filtra por `orderId`, no por el id de la fila representativa de
-    // `TransactionMatch.settlement` — una orden puede liquidarse en MÁS de
-    // un depósito (ver cross-match.util.ts), así que excluir solo esa fila
-    // dejaría las demás liquidaciones de esa misma orden "sueltas" en el
-    // pool, disponibles para robárselas a otra orden aunque ya estén
-    // cuadradas.
+    // Por `orderId`: una orden puede liquidarse en varios depósitos y todos quedan fuera.
     const cleanlyMatchedOrderIds = new Set(
       this.crossMatchFor(tenderMedia)
         .filter((m) => m.status === 'matched')
@@ -96,9 +102,7 @@ export class DifferenceManagementService {
   readonly selectedCount = computed(() => this.selection().size);
   readonly canSave = computed(() => this.selectedCount() > 0 && this.note().trim().length > 0);
 
-  // "Monto liquidado"/"Diferencia" en vivo para el Card de resumen — la suma
-  // de lo YA seleccionado, no el `settlement` original de la orden (que
-  // puede no coincidir con lo que el analista termine eligiendo aquí).
+  /** Suma en vivo de las liquidaciones seleccionadas (no el `settlement` original de la orden). */
   readonly selectedSettledAmount = computed(() => {
     const selectedIds = this.selection();
     let sum = 0;
@@ -110,32 +114,34 @@ export class DifferenceManagementService {
 
   readonly selectedDifference = computed(() => round2((this.order()?.sale?.amount ?? 0) - this.selectedSettledAmount()));
 
-  // Función pura de cruce, cacheada implícitamente por `computed` — se
-  // recalcula solo cuando cambia el tender media en scope.
   private crossMatchFor(tenderMedia: TenderMedia): TransactionMatch[] {
     return crossMatchTransactions(MOCK_SALES[tenderMedia], MOCK_SETTLEMENTS[tenderMedia]);
   }
 
-  // Lo llama el componente UNA vez (constructor) con los signals de su ruta. Al
-  // cambiar de orden, importados, nota y selección se reinician solos
-  // (`linkedSignal` sobre `orderKey`).
+  /**
+   * Conecta el servicio a los signals de la ruta; el componente lo llama una vez en su constructor.
+   *
+   * @remarks Al cambiar de orden, importados, nota y selección se reinician (`linkedSignal` sobre la orden).
+   */
   bindOrder(tenderMedia: Signal<TenderMedia | null>, orderId: Signal<string | null>): void {
     this.source.set({ tenderMedia, orderId });
+  }
+
+  setImportErrors(errors: string[]): void {
+    this.importErrorsState.set(errors);
   }
 
   importSettlements(rows: SettlementTransaction[]): void {
     this.importedSettlements.update((current) => [...current, ...rows]);
   }
 
+  /** Selecciona o deselecciona una liquidación; toda selección hecha aquí queda como `manual`. */
   toggleCandidate(settlementId: string): void {
     this.selection.update((current) => {
       const next = new Map(current);
       if (next.has(settlementId)) {
         next.delete(settlementId);
       } else {
-        // Cualquier toggle hecho por el usuario cuenta como manual, incluso
-        // si estaba seleccionada por el backend — el humano acaba de
-        // intervenir sobre ella.
         next.set(settlementId, 'manual');
       }
       return next;
@@ -154,11 +160,12 @@ export class DifferenceManagementService {
     this.noteState.set(value);
   }
 
-  // No hay backend todavía — esto arma el payload que se enviaría Y deja
-  // constancia en `ResolvedMatchesStore` (root, sobrevive la navegación) para
-  // que la fila agrupada de "Conciliación" refleje el match al volver ahí.
-  // El componente decide qué hacer con el resultado (confirmación + toast +
-  // navegación).
+  /**
+   * Arma el payload del match y lo registra en {@link ResolvedMatchesStore}; no llama al backend.
+   *
+   * @returns El payload, o `null` si no hay orden o `canSave` es falso.
+   * @see docs/codigo/diferencias.md#guardado
+   */
   save(): SaveResult | null {
     const order = this.order();
     const tenderMedia = this.tenderMediaSignal();

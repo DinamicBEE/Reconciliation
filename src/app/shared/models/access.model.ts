@@ -1,17 +1,14 @@
-// Tipos transversales de control de acceso (roles y permisos) — los usan la
-// sesión (`core/auth`), el layout (`core/layout`) y varias features, así que
-// viven aquí y no en `user-management` (ADR-0001, punto 3).
+// Tipos transversales de roles y permisos; viven en `shared` (ADR-0001, punto 3).
 
-// Códigos TAL CUAL los sembró coctel-del-mar/coctel_midd (`app_role.code`,
-// ver V1__init_schema.sql de ese repo y `UserSummaryDto.roles` en /auth/login)
-// — el backend es la fuente de verdad de qué roles EXISTEN y de sus nombres y
-// permisos por defecto: `GET /roles` (ver `AccessCatalogService`). Este tipo
-// solo da nombre a los códigos que el código del front compara (p. ej.
-// `MANAGER_ROLE_IDS`, `canReprocessSales`); NO hay lista de roles propia del
-// front. El acceso a cada pantalla lo decide el PERMISO (`permissionGuard`,
-// `core/auth/permission.guard.ts`, rutas en `app.routes.ts`), no el rol.
+/**
+ * Códigos de rol (`app_role.code`) que el front compara en código.
+ *
+ * @remarks El catálogo real de roles es `GET /roles`; el acceso a pantallas lo decide el permiso, no el rol.
+ * @see docs/codigo/roles-y-permisos.md#codigos-de-rol-y-permiso
+ */
 export type RoleId = 'ADMIN' | 'ALTAS' | 'CONTABILIDAD' | 'TESORERIA' | 'COSTOS';
 
+/** Códigos de permiso del backend que el front reconoce (rutas, menú y acciones). */
 export type PermissionKey =
   | 'view_dashboard'
   | 'view_reconciliation'
@@ -24,19 +21,19 @@ export type PermissionKey =
   | 'view_catalogs'
   | 'capture_sales';
 
-// Una entrada de `GET /permissions` (`code` → key, `description` → label,
-// `module` → group: título del bloque en el grid de "Seguridad y acceso").
+/** Entrada de `GET /permissions`: `code` → `key`, `description` → `label`, `module` → `group`. */
 export interface PermissionDef {
   key: PermissionKey;
   label: string;
   group: string;
 }
 
-// Una entrada de `GET /roles` (`code` → id, `name` → label). Permisos que una
-// persona recién asignada a este rol recibe por defecto — el admin puede
-// ajustarlos después por usuario (ver "Seguridad y acceso" en user-detail).
-// Cambiar los roles asignados RESETEA a la unión de estos sets
-// (`AccessCatalogService.defaultPermissionsForRoles`).
+/**
+ * Entrada de `GET /roles`: `code` → `id`, `name` → `label`.
+ *
+ * @remarks `defaultPermissions` se otorga al asignar el rol; cambiar los roles reinicia a la unión de estos sets.
+ * @see docs/codigo/roles-y-permisos.md#codigos-de-rol-y-permiso
+ */
 export interface RoleDef {
   id: RoleId;
   label: string;

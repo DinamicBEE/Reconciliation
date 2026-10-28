@@ -1,7 +1,6 @@
 import { Catalog, CatalogRow } from './catalogs.model';
 
-// Catálogos que dependen del país — Colombia (DIAN). Ver
-// `country-catalogs.ts` y `environment.country`.
+// Catálogos de Colombia (DIAN). Ver docs/codigo/catalogos.md#datos-mock-por-pais.
 
 const DOCUMENT_TYPES: CatalogRow[] = [
   { code: '11', name: 'Registro civil' },

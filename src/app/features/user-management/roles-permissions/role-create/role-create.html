@@ -6,9 +6,7 @@
     </nz-breadcrumb>
     @if (isEdit()) {
       <nz-page-header-extra>
-        <!-- Baja del rol (`DELETE /roles/{code}`). Deshabilitada mientras alguien
-             tenga el rol (el backend respondería 409 ROLE_IN_USE); el <span>
-             lleva el tooltip porque un botón `disabled` no dispara hover. -->
+        <!-- El tooltip va en el <span>: un botón disabled no dispara hover -->
         <span
           nz-tooltip
           [nzTooltipTitle]="
@@ -33,8 +31,7 @@
     </svg>
   </ng-template>
 
-  <!-- Nombre + contador + crear en una sola card, permisos en otra debajo.
-       `.table-card` en ambas: mismo radius/look que el resto de la app. -->
+  <!-- Barra de nombre + crear -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '0' }">
     <section class="role-create__bar">
       <label class="role-create__field">
@@ -122,8 +119,7 @@
               </span>
             </ng-template>
 
-            <!-- Look de `nz-descriptions` con borde: código y descripción
-                 sobre fondo tenue (como las etiquetas), check sobre la card. -->
+            <!-- Tabla de permisos del módulo -->
             <table class="permission-table">
               <thead>
                 <tr>

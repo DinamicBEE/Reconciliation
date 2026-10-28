@@ -1,19 +1,16 @@
-// Color del avatar de iniciales — deriva de las marcas *token*, nunca un hex
-// propio (regla dura del design system, ver MASTER.md "Tokens de color").
-// Rota entre las 3 parejas marca/on-marca disponibles según un hash estable
-// del id, así cada usuario mantiene el mismo color entre renders sin
-// necesidad de guardarlo en el modelo.
-//
-// Vivió en `features/user-management/data/` (primer consumidor: user-list)
-// hasta que el card de usuario del Header lo necesitó también — promovido
-// aquí siguiendo la misma regla de "segundo consumidor" del resto de
-// shared/ (ver MASTER.md "Estructura de carpetas").
+// Parejas marca/on-marca: el avatar usa tokens, nunca un hex propio (MASTER.md "Tokens de color").
 const AVATAR_TOKENS: { background: string; color: string }[] = [
   { background: 'var(--color-primary)', color: 'var(--color-on-primary)' },
   { background: 'var(--color-secondary)', color: 'var(--color-on-secondary)' },
   { background: 'var(--color-accent)', color: 'var(--color-on-accent)' },
 ];
 
+/**
+ * Pareja fondo/texto del avatar de iniciales, rotada por un hash estable de `id`.
+ *
+ * @remarks El mismo id obtiene siempre el mismo color sin guardarlo en el modelo.
+ * @see docs/codigo/componentes-y-utilidades.md#avatar-color
+ */
 export function avatarTokensFor(id: string): { background: string; color: string } {
   let hash = 0;
   for (let i = 0; i < id.length; i++) {
@@ -22,6 +19,11 @@ export function avatarTokensFor(id: string): { background: string; color: string
   return AVATAR_TOKENS[hash % AVATAR_TOKENS.length];
 }
 
+/**
+ * Iniciales del avatar: primera letra del primer y del último token, o dos letras si hay uno solo.
+ *
+ * @returns `'?'` si el nombre está vacío.
+ */
 export function initialsFor(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';

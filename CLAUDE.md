@@ -20,7 +20,8 @@ manda sobre cualquier sugerencia genérica de la skill.
 
 ## Regla: actualizar documentos (docs/)
 
-Cada vez que se **actualice un documento** de `docs/` (PDF, Excel, etc.):
+Cada vez que se **actualice un documento** de `docs/` (PDF, Excel, etc.; los `.md` de
+`docs/architecture/` y `docs/codigo/` se versionan con git y no llevan respaldo `_vN`):
 
 1. **Respaldo primero.** Copiar la versión vigente a una carpeta de respaldo,
    agregando la versión al nombre (`<nombre>_v<versión>.<ext>`, p. ej.
@@ -60,6 +61,14 @@ Toda tabla nueva va en `<nz-card class="table-card" [nzBodyStyle]="{ padding: '2
 `nzSize="middle"`, celda principal título + subtítulo, listas en columna (dos columnas si
 crecen), indicadores en su propia celda centrada como `.chip` de solo lectura. Detalle en
 `design-system/conciliation/MASTER.md`, "Regla general: tablas".
+
+## Regla: comentarios cortos
+
+Nada de comentarios largos en `src/`: `//` de 2 líneas como máximo, TSDoc de 4 líneas de
+descripción como máximo (más tags) para la API exportada, y en HTML solo marcas de sección de una
+línea. Sin historia ("antes era…"): vive en git y en MASTER.md. El porqué extenso, los contratos y
+las invariantes van a `docs/codigo/<area>.md` y se enlazan con `@see docs/codigo/<area>.md#<ancla>`.
+Convención: [`docs/codigo/README.md`](docs/codigo/README.md); revisión: `pnpm lint:comments`.
 
 ## Agentes de pruebas
 

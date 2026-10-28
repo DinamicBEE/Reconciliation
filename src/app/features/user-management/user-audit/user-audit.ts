@@ -24,10 +24,10 @@ interface AuditQuery {
 }
 
 /**
- * "Historial y auditoría de usuarios" — bitácora REAL del backend
- * (`GET /audit-log`, ver `AuditLogService`): búsqueda, filtro de acción y
- * paginación son del lado del servidor, no un filtro sobre un arreglo local.
- * Exige `view_audit_log` (la ruta lo evalúa con `permissionGuard`).
+ * Historial y auditoría de usuarios (`GET /audit-log`): búsqueda, filtro y paginación en servidor.
+ *
+ * @remarks La ruta exige `view_audit_log` (`permissionGuard`).
+ * @see docs/codigo/usuarios-pantallas.md#historial-y-auditoria
  */
 @Component({
   selector: 'app-user-audit',
@@ -58,9 +58,7 @@ export class UserAudit {
   ];
 
   constructor() {
-    // Una petición por cambio de filtro/página; `switchMap` descarta la respuesta
-    // de una consulta vieja si ya se pidió otra, y el `debounceTime` evita una
-    // petición por cada tecla al escribir en el buscador.
+    // `switchMap` descarta respuestas viejas; `debounceTime` evita una petición por tecla.
     toObservable(this.query)
       .pipe(
         debounceTime(300),
@@ -78,7 +76,7 @@ export class UserAudit {
       .subscribe((result) => {
         this.loading.set(false);
         if (!result) {
-          // El aviso (403 sin permiso, 5xx...) lo da `httpErrorAlertInterceptor`.
+          // El aviso (403, 5xx) lo da `httpErrorAlertInterceptor`.
           this.failed.set(true);
           this.entries.set([]);
           this.total.set(0);
@@ -89,7 +87,6 @@ export class UserAudit {
       });
   }
 
-  // Flecha del nz-page-header: de vuelta a la pantalla padre (Administración de usuarios).
   protected onBack(): void {
     void this.router.navigateByUrl('/usuarios');
   }

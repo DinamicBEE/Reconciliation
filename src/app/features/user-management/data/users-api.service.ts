@@ -6,10 +6,10 @@ import { UserSummaryDto } from '../../../core/auth/auth.service';
 import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
 import { RoleId, UserStatus } from './user-management.model';
 
-// Tamaño de página con el que se recorre `GET /users` (el backend usa 20 por
-// defecto; el front mantiene 100 por petición, ver `listAllUsers`).
+// Tamaño de página de `GET /users` (el backend usa 20 por defecto).
 const USERS_PAGE_SIZE = 100;
 
+/** Dirección tal como la envía y devuelve `/users/{id}`. */
 export interface AddressInfo {
   city: string | null;
   state: string | null;
@@ -20,17 +20,17 @@ export interface AddressInfo {
   exteriorNumber: string | null;
 }
 
+/** Responsable resuelto en `UserDetailDto.manager`; `id` es `app_user.id`. */
 export interface ManagerSummary {
   id: number;
   displayName: string;
 }
 
-// `GET /users/{id}` — detalle COMPLETO (a diferencia de `UserSummaryDto`,
-// ningún dato relacional sale como id suelto: el manager llega resuelto a
-// su nombre, igual que subsidiarias/ubicaciones). `UserDetail` lo usa para
-// precargar TODA la pantalla de una cuenta con `backendUserId`, no solo
-// `temporaryPassword` como antes (ver MASTER.md, "Actualización: endpoints
-// de administración de usuarios (CRUD real)...").
+/**
+ * Respuesta de `GET /users/{id}`: detalle completo, con los datos relacionales resueltos a `{ id, nombre }`.
+ *
+ * @see docs/codigo/usuarios.md#contrato-users-api
+ */
 export interface UserDetailDto {
   id: number;
   email: string;
@@ -44,15 +44,12 @@ export interface UserDetailDto {
   subsidiarias: CatalogEntry[];
   ubicaciones: CatalogEntry[];
   mustChangePassword: boolean;
-  // Solo viene poblada mientras `mustChangePassword` sea true — ver
-  // UserDetailDto.java (el backend la recalcula al vuelo, nunca la guarda
-  // en texto plano).
+  /** Solo viene mientras `mustChangePassword` es `true`; el backend la recalcula, no la guarda. */
   temporaryPassword: string | null;
-  // Contadores de seguridad (Guía_Endpoints, `GET /users/{id}`): intentos
-  // fallidos de login, sesiones activas (refresh tokens sin revocar ni vencer) y
-  // fin del bloqueo temporal (`null` si no está bloqueada o el bloqueo es manual).
   failedLoginAttempts: number;
+  /** Refresh tokens sin revocar ni vencer. */
   activeSessions: number;
+  /** Fin del bloqueo temporal; `null` si no hay bloqueo o es manual. */
   lockedUntil: string | null;
   lastLoginAt: string | null;
   emailVerified: boolean;
@@ -61,10 +58,7 @@ export interface UserDetailDto {
   ssn: string | null;
   gender: string | null;
   address: AddressInfo;
-  // Organización asignada (Core, `GET /catalogs/...`): listas `{ id, nombre }`
-  // con los mismos ids que los combos; `[]` si no tiene ninguno. Reemplazan a
-  // los antiguos `department`/`area`/`jobTitle` de texto libre, que el backend
-  // ya no devuelve (Guia_Integracion_Frontend §5.2).
+  /** Catálogo del Core (`GET /catalogs/cargos`), mismos ids que los combos; igual puestos, departamentos y áreas. */
   cargos: CatalogEntry[];
   puestos: CatalogEntry[];
   departamentos: CatalogEntry[];
@@ -75,27 +69,27 @@ export interface UserDetailDto {
   contractEndDate: string | null;
 }
 
-// `POST /users` — alta de usuario (CU3 pasos 1-2). `roleIds` solo se
-// respeta si la sesión que da de alta tiene el permiso `manage_roles`
-// (el backend lo valida server-side vía el claim `permissions` del JWT,
-// no por rol — ver CreateUserRequest.java); si no alcanza, responde 403
-// `ROLE_ASSIGNMENT_FORBIDDEN` (ver `auth-errors.ts`).
+/**
+ * Cuerpo de `POST /users` (CU3 pasos 1-2).
+ *
+ * @remarks `roleIds` exige `manage_roles` en la sesión; si falta, 403 `ROLE_ASSIGNMENT_FORBIDDEN`.
+ * @see docs/codigo/usuarios.md#alta-de-usuario
+ */
 export interface CreateUserRequest {
   firstName: string;
   lastName: string;
   email: string;
   phone: string | null;
+  /** `app_user.id` del responsable. */
   supervisorId: number | null;
   subsidiariaIds: number[];
   ubicacionIds: number[];
   roleIds: RoleId[];
-  // Solo 'ACTIVE'/'INACTIVE' — LOCKED lo rechaza el backend (ese estado
-  // solo lo genera el sistema por intentos fallidos, nunca un alta manual).
+  /** `LOCKED` lo genera solo el sistema; el backend lo rechaza en el alta. */
   status: 'ACTIVE' | 'INACTIVE' | null;
 }
 
-// Forma cruda de la respuesta de `POST /users` (roles como `string[]`, sin
-// castear) — `createUser()` la mapea a `NewUserResult` abajo.
+// Respuesta cruda de `POST /users`; `createUser()` castea `roles`.
 interface NewUserResponseDto {
   id: number;
   email: string;
@@ -108,9 +102,7 @@ interface NewUserResponseDto {
   temporaryPassword: string;
 }
 
-// Respuesta de `POST /users` — separada de `UserSummaryDto` a propósito
-// (igual que en el backend): `temporaryPassword` solo debe verse UNA vez,
-// justo al crear.
+/** Resultado del alta; separado de `UserSummaryDto` porque `temporaryPassword` se muestra una sola vez. */
 export interface NewUserResult {
   id: number;
   email: string;
@@ -123,19 +115,12 @@ export interface NewUserResult {
   temporaryPassword: string;
 }
 
-// `PATCH /users/{id}` — edición administrativa de información personal +
-// organización. NO incluye `status` (`PATCH /users/{id}/status`) ni roles/
-// permisos (`PATCH /users/{id}/roles`). Todo campo es opcional/nullable del
-// lado del backend (solo sobreescribe lo que llega no-null — un `null`
-// explícito NO borra un campo de texto), pero este frontend siempre manda el
-// formulario completo.
-// `subsidiariaIds`/`ubicacionIds` (DEV, Guía_Endpoints): una lista REEMPLAZA
-// la actual, una lista vacía las quita todas y omitirla (`undefined`) no toca
-// nada. Un id inexistente rechaza TODA la actualización con 400
-// `INVALID_LOCATION`. Misma regla para `cargoIds`/`puestoIds`/`departamentoIds`/
-// `areaIds` (ids de `GET /catalogs/...`), con 400 `INVALID_CATALOG_ITEM`. El
-// backend ya no acepta `department`/`area`/`jobTitle`: si llegan, los ignora en
-// silencio.
+/**
+ * Cuerpo de `PATCH /users/{id}`: información personal y organización (sin estado ni roles).
+ *
+ * @remarks Un `null` no borra un texto; una lista reemplaza la actual y omitirla no la toca.
+ * @see docs/codigo/usuarios.md#edicion-de-perfil
+ */
 export interface UpdateUserRequest {
   firstName: string | null;
   lastName: string | null;
@@ -157,47 +142,41 @@ export interface UpdateUserRequest {
   areaIds?: number[];
 }
 
-// `POST /users/{id}/verify-email` — el backend fuerza `emailVerified=true`
-// sin validar ningún token pendiente (ver UserAdminService.verifyEmail
-// real).
+/** Respuesta de `POST /users/{id}/verify-email`. */
 export interface EmailVerificationResponse {
   id: number;
   emailVerified: boolean;
 }
 
-// `PATCH /users/{id}/roles` — los dos campos son opcionales: omitido = no tocar;
-// una lista reemplaza la actual por completo. El endpoint exige `manage_roles` en
-// quien lo ejecuta (403 `ROLE_ASSIGNMENT_FORBIDDEN` si falta) — también para un
-// cambio solo de permisos (probado contra DEV; la guía solo lo dice de los roles). Los permisos
-// son independientes del rol: el front calcula los defaults al cambiar de rol
-// (`AccessCatalogService.defaultPermissionsForRoles`) y envía el resultado final.
+/**
+ * Cuerpo de `PATCH /users/{id}/roles`: omitido = no tocar; una lista reemplaza la actual.
+ *
+ * @see docs/codigo/usuarios.md#roles-asignados
+ */
 export interface UpdateUserRolesRequest {
   roleIds?: string[];
   permissions?: string[];
 }
 
-// `POST /users/{id}/reset-password` — devuelve al usuario a su contraseña
-// temporal (NOMBRE + PRIMER APELLIDO + año de alta), marca `mustChangePassword`
-// y revoca todas sus sesiones. El sistema no envía correos: el administrador
-// debe comunicársela.
+/** Respuesta de `POST /users/{id}/reset-password`. */
 export interface ResetPasswordResponse {
   id: number;
   temporaryPassword: string;
 }
 
-// `DELETE /users/{id}` — baja lógica (`enabled = false`): conserva la fila y su
-// bitácora, libera el correo. 404 `USER_NOT_FOUND`, 409 `CANNOT_DELETE_SELF`.
+/** Respuesta de `DELETE /users/{id}` (baja lógica). */
 export interface DeleteUserResponse {
   success: boolean;
   id: number;
 }
 
-// `POST /users/{id}/close-sessions`
+/** Respuesta de `POST /users/{id}/close-sessions`. */
 export interface CloseSessionsResponse {
   id: number;
   activeSessions: number;
 }
 
+/** Filtros y página de `GET /users`; `page` empieza en 0. */
 export interface UserListParams {
   search?: string;
   role?: RoleId;
@@ -206,6 +185,7 @@ export interface UserListParams {
   size?: number;
 }
 
+/** Página de `GET /users`. */
 export interface UserListPage {
   content: UserSummaryDto[];
   page: number;
@@ -215,53 +195,43 @@ export interface UserListPage {
 }
 
 /**
- * Cliente HTTP de administración de usuarios (`/users/**`). Antes vivía dentro
- * de `AuthService`; se separó para que la sesión no cargue con el CRUD de
- * usuarios (ADR-0001, punto 4). Lo consumen `UserManagementService` y
- * `UserDetail`; los errores de negocio los avisa `httpErrorAlertInterceptor`.
+ * Cliente HTTP de administración de usuarios (`/users/**`); todo `backendUserId` es `app_user.id`.
+ *
+ * @remarks Separado de `AuthService` (ADR-0001, punto 4); los errores los avisa `httpErrorAlertInterceptor`.
+ * @see docs/codigo/usuarios.md#contrato-users-api
  */
 @Injectable({ providedIn: 'root' })
 export class UsersApiService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = environment.apiUrl;
 
-  // CU3 paso 5: desbloquea una cuenta bloqueada por intentos fallidos
-  // (`PATCH /users/{id}/unlock`, ver UserAdminController/UserAdminService en
-  // el auth-service real). Requiere sesión activa con el PERMISO
-  // `manage_users` — el backend responde 403 si falta, 401 si el token no es
-  // válido; el llamador (`UserDetail`) traduce el error a la UI. `id` es el
-  // id NUMÉRICO del `app_user` real (`AppUser.backendUserId` en el mock de
-  // `user-management` — no el id 'uXXXX' del mock).
+  /**
+   * `PATCH /users/{id}/unlock` (CU3 paso 5), permiso `manage_users`.
+   *
+   * @returns Observable con el resumen actualizado; falla con 403 sin permiso o 401 con token inválido.
+   */
   unlockUser(backendUserId: number): Observable<UserSummaryDto> {
     return this.http.patch<UserSummaryDto>(`${this.apiUrl}/users/${backendUserId}/unlock`, {});
   }
 
-  // Detalle COMPLETO de un usuario del backend real (`GET /users/{id}`) —
-  // precarga toda la pantalla de `UserDetail` para una cuenta con
-  // `backendUserId` (información personal, organización, cuenta,
-  // `temporaryPassword`). `id` es el id NUMÉRICO del `app_user` real
-  // (`AppUser.backendUserId`), no el id 'uXXXX' del mock.
+  /** `GET /users/{id}`: detalle completo con el que se precarga `UserDetail`. */
   getUserDetail(backendUserId: number): Observable<UserDetailDto> {
     return this.http.get<UserDetailDto>(`${this.apiUrl}/users/${backendUserId}`);
   }
 
-  // CU3 pasos 1-2: alta de usuario (`POST /users`) — devuelve la contraseña
-  // temporal UNA sola vez, ver `NewUserResult`. 409 `EMAIL_ALREADY_REGISTERED`,
-  // 400 `INVALID_ROLE`/`INVALID_USER_STATUS`, 403 `ROLE_ASSIGNMENT_FORBIDDEN`
-  // llegan como error del Observable (ver `auth-errors.ts`) — el llamador
-  // (`UserManagementService.createUser`) no necesita traducirlos a mano: el
-  // `httpErrorAlertInterceptor` ya muestra la alerta correspondiente.
+  /**
+   * `POST /users` (CU3 pasos 1-2).
+   *
+   * @returns Observable con el alta y su contraseña temporal; falla con 409 `EMAIL_ALREADY_REGISTERED`, 400 `INVALID_ROLE`/`INVALID_USER_STATUS` o 403 `ROLE_ASSIGNMENT_FORBIDDEN`.
+   * @see docs/codigo/usuarios.md#alta-de-usuario
+   */
   createUser(request: CreateUserRequest): Observable<NewUserResult> {
     return this.http
       .post<NewUserResponseDto>(`${this.apiUrl}/users`, request)
       .pipe(map((res) => ({ ...res, roles: res.roles as RoleId[] })));
   }
 
-  // Pantalla "Administración de usuarios" (`GET /users`, paginado/filtrado
-  // en el SERVIDOR) — `UserManagementService.syncFromBackend()` la usa para
-  // reconciliar el mock local con el estado real (roles/permisos/estado/
-  // último acceso) de cada cuenta con `backendUserId`, y para detectar
-  // cuentas reales que este mock todavía no conoce.
+  /** `GET /users`: una página, filtrada y paginada en el servidor. */
   listUsers(params: UserListParams = {}): Observable<UserListPage> {
     let httpParams = new HttpParams().set('page', String(params.page ?? 0)).set('size', String(params.size ?? USERS_PAGE_SIZE));
     if (params.search) httpParams = httpParams.set('search', params.search);
@@ -271,20 +241,12 @@ export class UsersApiService {
     return this.http.get<UserListPage>(`${this.apiUrl}/users`, { params: httpParams });
   }
 
-  // Todas las cuentas, recorriendo las páginas de `GET /users` (el backend
-  // pagina con `page` desde 0; el tamaño por defecto allá es 20). Pide de a
-  // `size` (100) y sigue pidiendo mientras `totalPages` indique más — así la
-  // lista no se trunca el día que haya más de 100 usuarios. Las páginas se
-  // piden en serie (la siguiente depende del `totalPages` de la anterior).
-  //
-  // OJO — el backend (DEV) hace `PageRequest.of(page, size)` SIN `Sort` y con
-  // `DISTINCT`: el orden de las filas no está garantizado entre peticiones, así
-  // que recorrer varias páginas puede repetir cuentas y omitir otras (probado:
-  // páginas de 10 sobre 27 cuentas devolvieron 21 distintas). Por eso las
-  // páginas se juntan por `id` (sin duplicados) y, si al final faltan cuentas
-  // respecto de `totalElements`, se pide UNA sola página de ese tamaño — un
-  // solo `SELECT` es una instantánea consistente. Con ≤ 100 cuentas (una
-  // página) nunca se llega a ese respaldo.
+  /**
+   * Todas las cuentas de `GET /users`, recorriendo las páginas en serie y sin duplicados.
+   *
+   * @remarks El backend pagina sin orden estable; si faltan cuentas, se repite con una sola página de `totalElements`.
+   * @see docs/codigo/usuarios.md#paginacion-users
+   */
   listAllUsers(filters: Omit<UserListParams, 'page' | 'size'> = {}, size = USERS_PAGE_SIZE): Observable<UserSummaryDto[]> {
     const fetchPage = (page: number) => this.listUsers({ ...filters, page, size });
     return fetchPage(0).pipe(
@@ -304,57 +266,66 @@ export class UsersApiService {
     );
   }
 
-  // CU3 paso 3: edición administrativa (`PATCH /users/{id}`) — devuelve
-  // `UserSummaryDto`, NO el detalle completo: no repite los campos que se
-  // acaban de mandar (nombre, dirección, organización...), solo el estado
-  // compartido con el resto de `/users` (roles, permisos, estado,
-  // subsidiarias/ubicaciones SIN CAMBIOS — este endpoint no las toca,
-  // mustChangePassword, emailVerified). El llamador
-  // (`UserManagementService.updateUserProfile`) combina ambas fuentes.
+  /**
+   * `PATCH /users/{id}` (CU3 paso 3).
+   *
+   * @returns Observable con `UserSummaryDto`, que no repite los campos enviados; falla con 400 `INVALID_LOCATION`/`INVALID_CATALOG_ITEM`.
+   * @see docs/codigo/usuarios.md#edicion-de-perfil
+   */
   updateUser(backendUserId: number, request: UpdateUserRequest): Observable<UserSummaryDto> {
     return this.http.patch<UserSummaryDto>(`${this.apiUrl}/users/${backendUserId}`, request);
   }
 
-  // CU3 paso 4: cambio de estado (`PATCH /users/{id}/status`) — `status` va
-  // en minúsculas tal cual lo espera `ChangeStatusRequest` ('active' |
-  // 'inactive' | 'blocked', el backend normaliza y valida — ver
-  // ChangeStatusRequest.java); coincide 1:1 con `UserStatus` de este
-  // frontend, sin traducir. Distinto de `UserSummaryDto.status` en la
-  // RESPUESTA, que llega en mayúsculas (nombre del enum, p. ej. 'LOCKED')
-  // — ver `backendStatusToLocal`.
+  /**
+   * `PATCH /users/{id}/status` (CU3 paso 4); envía `status` en minúsculas, igual que {@link UserStatus}.
+   *
+   * @returns Observable con `UserSummaryDto`, cuyo `status` llega en mayúsculas (ver `backendStatusToLocal`).
+   */
   changeStatus(backendUserId: number, status: UserStatus): Observable<UserSummaryDto> {
     return this.http.patch<UserSummaryDto>(`${this.apiUrl}/users/${backendUserId}/status`, { status });
   }
 
-  // CU3 paso 6: verificación manual de correo (`POST /users/{id}/verify-email`)
-  // — el backend fuerza `emailVerified=true` sin validar ningún token
-  // pendiente (ver EmailVerificationResponse).
+  /** `POST /users/{id}/verify-email` (CU3 paso 6): el backend marca el correo sin validar token. */
   verifyEmail(backendUserId: number): Observable<EmailVerificationResponse> {
     return this.http.post<EmailVerificationResponse>(`${this.apiUrl}/users/${backendUserId}/verify-email`, {});
   }
 
-  // `PATCH /users/{id}/roles` — guarda roles y/o permisos de una persona (ver
-  // `UpdateUserRolesRequest`). Responde `UserSummaryDto` con los roles y
-  // permisos nuevos. 400 `INVALID_ROLE`/`INVALID_PERMISSION`, 403
-  // `ROLE_ASSIGNMENT_FORBIDDEN`, 404 `USER_NOT_FOUND`.
+  /**
+   * `PATCH /users/{id}/roles`, exige `manage_roles` también para cambiar solo permisos.
+   *
+   * @returns Observable con `UserSummaryDto`; falla con 400 `INVALID_ROLE`/`INVALID_PERMISSION`, 403 `ROLE_ASSIGNMENT_FORBIDDEN` o 404 `USER_NOT_FOUND`.
+   * @see docs/codigo/usuarios.md#roles-asignados
+   */
   updateUserRoles(backendUserId: number, request: UpdateUserRolesRequest): Observable<UserSummaryDto> {
     return this.http.patch<UserSummaryDto>(`${this.apiUrl}/users/${backendUserId}/roles`, request);
   }
 
-  // `POST /users/{id}/close-sessions` — revoca todos los refresh tokens vigentes
-  // de la persona (puede volver a entrar; el access token ya emitido vive hasta
-  // 15 min). Responde `{ id, activeSessions: 0 }`. 404 `USER_NOT_FOUND`.
+  /**
+   * `POST /users/{id}/close-sessions`: revoca los refresh tokens vigentes.
+   *
+   * @returns Observable con `{ id, activeSessions: 0 }`; falla con 404 `USER_NOT_FOUND`.
+   * @see docs/codigo/usuarios.md#acciones-administrativas
+   */
   closeUserSessions(backendUserId: number): Observable<CloseSessionsResponse> {
     return this.http.post<CloseSessionsResponse>(`${this.apiUrl}/users/${backendUserId}/close-sessions`, {});
   }
 
-  // `POST /users/{id}/reset-password` — ver `ResetPasswordResponse`. 404 `USER_NOT_FOUND`.
+  /**
+   * `POST /users/{id}/reset-password`.
+   *
+   * @returns Observable con la nueva contraseña temporal; falla con 404 `USER_NOT_FOUND`.
+   * @see docs/codigo/usuarios.md#acciones-administrativas
+   */
   resetUserPassword(backendUserId: number): Observable<ResetPasswordResponse> {
     return this.http.post<ResetPasswordResponse>(`${this.apiUrl}/users/${backendUserId}/reset-password`, {});
   }
 
-  // `DELETE /users/{id}` — ver `DeleteUserResponse`. Un administrador no puede darse
-  // de baja a sí mismo (409 `CANNOT_DELETE_SELF`).
+  /**
+   * `DELETE /users/{id}`: baja lógica.
+   *
+   * @returns Observable que falla con 409 `CANNOT_DELETE_SELF` o 404 `USER_NOT_FOUND`.
+   * @see docs/codigo/usuarios.md#acciones-administrativas
+   */
   deleteUser(backendUserId: number): Observable<DeleteUserResponse> {
     return this.http.delete<DeleteUserResponse>(`${this.apiUrl}/users/${backendUserId}`);
   }

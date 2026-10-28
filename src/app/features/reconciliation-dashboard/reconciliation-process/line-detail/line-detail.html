@@ -1,0 +1,137 @@
+<div class="line-detail">
+  <!-- POS | Banco -->
+  <section class="line-cards">
+    <ng-template #sideCard let-title="title" let-data="data" let-emptyText="emptyText">
+      <nz-card [nzBodyStyle]="{ padding: '24px', height: '100%' }">
+        <div class="process-source">
+          <span class="bank-badge">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 10 12 4l9 6" />
+              <path stroke-linecap="round" d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18" />
+            </svg>
+          </span>
+          <strong class="process-source__title">{{ title }}</strong>
+        </div>
+
+        @if (data; as side) {
+          <dl class="line-fields">
+            <div class="line-field">
+              <dt>Referencia</dt>
+              <dd class="font-mono">{{ side.reference }}</dd>
+            </div>
+            <div class="line-field">
+              <dt>Monto</dt>
+              <dd class="font-mono">{{ side.amount | money }}</dd>
+            </div>
+            <div class="line-field">
+              <dt>Concepto</dt>
+              <dd>{{ side.concept }}</dd>
+            </div>
+            <div class="line-field">
+              <dt>Método de pago</dt>
+              <dd>{{ side.paymentMethod }}</dd>
+            </div>
+          </dl>
+        } @else {
+          <span class="text-muted">{{ emptyText }}</span>
+        }
+      </nz-card>
+    </ng-template>
+
+    <ng-container *ngTemplateOutlet="sideCard; context: { title: 'POS', data: row().pos, emptyText: 'No hay una venta en el POS para esta línea.' }" />
+    <ng-container
+      *ngTemplateOutlet="sideCard; context: { title: 'Banco (Movimientos)', data: bank(), emptyText: 'No hay un movimiento en el banco para esta línea.' }"
+    />
+  </section>
+
+  <!-- Diferencia (1/3) y notas (2/3) -->
+  <section class="line-top">
+    <div class="line-top__difference">
+      <nz-card [class]="'status-card status-card-' + variant()" [nzBodyStyle]="{ padding: '16px 20px' }">
+        <div class="line-difference">
+          <span class="line-difference__value font-mono">{{ difference() | money }}</span>
+          <span class="line-difference__label">Diferencia</span>
+        </div>
+      </nz-card>
+      <!-- @if (!isMatched()) {
+        <span class="line-top__comment">{{ row().comment }}</span>
+      } -->
+    </div>
+
+    <div class="line-top__notes">
+      <label class="line-notes__label" for="line-notes">Notas</label>
+      <textarea
+        id="line-notes"
+        nz-input
+        rows="4"
+        [placeholder]="isMatched() || resolution() ? '' : 'Elige Ajustar monto o Reconciliar para escribir el motivo.'"
+        [value]="noteValue()"
+        [disabled]="!noteEnabled()"
+        (input)="note.set($any($event.target).value)"
+        (blur)="noteTouched.set(true)"
+      ></textarea>
+      @if (showNoteError()) {
+        <span class="line-notes__error">{{ noteError() }}</span>
+      }
+    </div>
+  </section>
+
+  @if (resolution(); as done) {
+    <p class="line-resolution">{{ actionLabel[done.type] }}.</p>
+  } @else if (!isMatched()) {
+    <!-- Acciones de la línea -->
+    <section class="line-actions">
+      <button nz-button type="button" [disabled]="!canManage()" (click)="markPending()">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3 2" />
+        </svg>
+        Marcar pendiente
+      </button>
+      <button
+        nz-button
+        type="button"
+        [nzType]="mode() === 'ajuste' ? 'primary' : 'default'"
+        [disabled]="!canManage()"
+        (click)="choose('ajuste')"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+        </svg>
+        Ajustar monto
+      </button>
+      <button
+        nz-button
+        type="button"
+        [nzType]="mode() === 'reconciliacion' ? 'primary' : 'default'"
+        [disabled]="!canManage()"
+        (click)="choose('reconciliacion')"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+        </svg>
+        Reconciliar
+      </button>
+    </section>
+
+    @if (mode() === 'ajuste') {
+      <app-candidate-list />
+    } @else if (mode() === 'reconciliacion') {
+      <section class="line-import">
+        <app-bank-file-dropzone [file]="file()" (selected)="onFileSelected($event)" />
+        <app-statement-result [reading]="reading()" [result]="statement()" />
+      </section>
+    }
+
+    @if (mode() !== 'none') {
+      <footer class="line-footer">
+        <button nz-button nzType="primary" type="button" [disabled]="!canConfirm()" (click)="confirm()">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m5 12 5 5 9-10" />
+          </svg>
+          {{ mode() === 'ajuste' ? 'Confirmar ajuste' : 'Confirmar reconciliación' }}
+        </button>
+      </footer>
+    }
+  }
+</div>

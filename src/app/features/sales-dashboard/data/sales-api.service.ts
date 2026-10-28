@@ -4,11 +4,15 @@ import { EMPTY, Observable, expand, reduce } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { SKIP_HTTP_ERROR_ALERT } from '../../../core/interceptors/http-error-alert.interceptor';
 
-// Contrato de `GET /sales` (Core Service, Guia_Integracion_Frontend §8.1).
-// Una fila = un documento (factura o nota crédito). Los importes llegan tal como
-// están guardados: en una nota crédito son positivos.
+/** Tipo de documento de una fila de `GET /sales`. */
 export type SaleDocumentType = 'INVOICE' | 'CREDIT_NOTE';
 
+/**
+ * Fila de `GET /sales` (Guia_Integracion_Frontend §8.1): un documento, factura o nota crédito.
+ *
+ * @remarks Los importes llegan como están guardados: en una nota crédito son positivos.
+ * @see docs/codigo/ventas.md#api-de-ventas
+ */
 export interface SaleListItem {
   id: number;
   folio: string; // prefijo + folio
@@ -25,9 +29,11 @@ export interface SaleListItem {
   total: number;
 }
 
-// Filtros: `store`, `tenderMedia` y `status` son IDS de los combos (login /
-// `GET /sales/catalogs/...`), no códigos ni nombres. `page` empieza en 1;
-// `pageSize` de 1 a 100.
+/**
+ * Filtros de `GET /sales`; `page` empieza en 1 y `pageSize` va de 1 a 100.
+ *
+ * @remarks `store`, `tenderMedia` y `status` son ids de los combos, no códigos ni nombres.
+ */
 export interface SalesListParams {
   dateFrom?: string; // yyyy-MM-dd
   dateTo?: string;
@@ -39,6 +45,7 @@ export interface SalesListParams {
   pageSize?: number;
 }
 
+/** Página de `GET /sales`. */
 export interface SalesListPage {
   data: SaleListItem[];
   total: number; // todas las páginas
@@ -46,20 +53,25 @@ export interface SalesListPage {
   pageSize: number;
 }
 
+/** Máximo `pageSize` que acepta `GET /sales`. */
 export const SALES_MAX_PAGE_SIZE = 100;
 
-// --- `POST /sales/capture` (Capture Service, permiso `capture_sales`) ---
-// Captura SÍNCRONA desde Facturiza de una o varias tiendas y un día o rango
-// (hasta 31 tiendas × días). Idempotente: repetirla no duplica documentos. El
-// front la usa para UN día y UNA tienda (botón "Reprocesar").
+/**
+ * Cuerpo de `POST /sales/capture` (Capture Service, permiso `capture_sales`).
+ *
+ * @remarks Captura síncrona e idempotente; el front la pide para un día y una tienda.
+ * @see docs/codigo/ventas.md#reprocesar
+ */
 export interface CaptureRequest {
   ubicacionIds: number[];
   dateFrom: string; // yyyy-MM-dd
   dateTo?: string; // inclusive; omitido = solo dateFrom
 }
 
-// OK = completo; INCOMPLETE = faltan o fallaron documentos, o conflicto de folio;
-// ERROR = Facturiza no respondió o se interrumpió; RUNNING = ya se estaba capturando.
+/**
+ * `OK` completo; `INCOMPLETE` faltan o fallaron documentos, o hay conflicto de folio;
+ * `ERROR` Facturiza no respondió o se interrumpió; `RUNNING` ya se estaba capturando.
+ */
 export type CaptureStatus = 'OK' | 'INCOMPLETE' | 'ERROR' | 'RUNNING';
 
 interface CaptureCounts {
@@ -71,7 +83,7 @@ interface CaptureCounts {
   capturedAmount: number;
 }
 
-// Resultado de un día de una tienda (una corrida de la bitácora).
+/** Resultado de un día de una tienda (una corrida de la bitácora). */
 export interface CaptureDayResult extends CaptureCounts {
   captureLogId: number; // 0 si ya se estaba capturando (no se volvió a capturar)
   ubicacionId: number;
@@ -81,6 +93,7 @@ export interface CaptureDayResult extends CaptureCounts {
   errorMessage: string | null;
 }
 
+/** Resultado de una tienda en el rango pedido. */
 export interface CaptureLocationResult extends CaptureCounts {
   ubicacionId: number;
   dateFrom: string;
@@ -90,8 +103,7 @@ export interface CaptureLocationResult extends CaptureCounts {
   days: CaptureDayResult[];
 }
 
-// Respuesta de `POST /sales/capture`: 200 si todo quedó OK, 207 si es mixto y
-// 502 (¡con este mismo cuerpo!) si Facturiza no respondió en ninguna captura.
+/** Respuesta de `POST /sales/capture`: 200 todo OK, 207 mixto y 502 (con este mismo cuerpo) si Facturiza no respondió. */
 export interface CaptureBatchResult extends CaptureCounts {
   dateFrom: string;
   dateTo: string;
@@ -102,19 +114,22 @@ export interface CaptureBatchResult extends CaptureCounts {
 }
 
 /**
- * `GET /sales` — listado paginado de ventas del Core Service (permiso
- * `view_dashboard`). Solo lee lo ya capturado; traer ventas nuevas de Facturiza
- * es `POST /sales/capture` (Capture Service).
+ * Cliente de `GET /sales` (Core Service, permiso `view_dashboard`) y `POST /sales/capture`.
+ *
+ * @remarks `GET /sales` solo lee lo ya capturado; traer ventas de Facturiza es `POST /sales/capture`.
+ * @see docs/codigo/ventas.md#api-de-ventas
  */
 @Injectable({ providedIn: 'root' })
 export class SalesApiService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = environment.apiUrl;
 
-  // `POST /sales/capture`. Los errores no pasan por la alerta genérica del
-  // interceptor (`SKIP_HTTP_ERROR_ALERT`): el 502 trae un `CaptureBatchResult`
-  // válido y los 400/404/409 llegan como `ProblemDetail` cuyo `detail` explica el
-  // motivo; quien llama los muestra con `describeCaptureResult`.
+  /**
+   * Captura desde Facturiza sin la alerta genérica (`SKIP_HTTP_ERROR_ALERT`).
+   *
+   * @returns Observable con el resultado; falla con `HttpErrorResponse` (502 con resultado, o `ProblemDetail`) que quien llama traduce con `describeCaptureError`.
+   * @see docs/codigo/ventas.md#reprocesar
+   */
   capture(request: CaptureRequest): Observable<CaptureBatchResult> {
     return this.http.post<CaptureBatchResult>(`${this.apiUrl}/sales/capture`, request, {
       context: new HttpContext().set(SKIP_HTTP_ERROR_ALERT, true),
@@ -125,9 +140,12 @@ export class SalesApiService {
     return this.http.get<SalesListPage>(`${this.apiUrl}/sales`, { params: toHttpParams(params) });
   }
 
-  // Recorre TODAS las páginas con los mismos filtros (páginas de 100, el máximo
-  // del backend) — para la exportación CSV, que debe incluir todo lo filtrado y no
-  // solo la página visible (no existe `GET /sales/export` todavía).
+  /**
+   * Recorre todas las páginas de los filtros en páginas de {@link SALES_MAX_PAGE_SIZE}.
+   *
+   * @remarks Alimenta la exportación CSV; el backend no tiene `GET /sales/export`.
+   * @see docs/codigo/ventas.md#exportacion
+   */
   listAll(filters: Omit<SalesListParams, 'page' | 'pageSize'>): Observable<SaleListItem[]> {
     const fetchPage = (page: number) => this.list({ ...filters, page, pageSize: SALES_MAX_PAGE_SIZE });
     return fetchPage(1).pipe(

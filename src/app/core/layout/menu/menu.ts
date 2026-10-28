@@ -5,15 +5,10 @@ import { AccessControlService } from '../../auth/access-control.service';
 import { AuthService } from '../../auth/auth.service';
 
 /**
- * Menú lateral del layout principal — navegación entre los módulos de nivel
- * superior (antes vivía como texto plano en `app-header__nav`, ver
- * MASTER.md "Patrón: navegación entre módulos"). Contraído muestra solo
- * iconos; expandido agrega la etiqueta de cada pantalla.
+ * Menú lateral: navegación entre módulos y "Cerrar sesión" al pie.
  *
- * También aloja, al fondo, "Cerrar sesión" — paleta de colores y modo
- * oscuro vivieron aquí brevemente y se movieron al menú del avatar en el
- * Header (`core/layout/header`, junto con "Perfil"), que es donde ahora
- * vive toda acción de sesión/preferencias del usuario logeado.
+ * @remarks Contraído muestra solo iconos; expandido agrega la etiqueta. Estado en {@link MenuService}.
+ * @see docs/codigo/layout-y-tema.md#menu-lateral
  */
 @Component({
   selector: 'app-menu',

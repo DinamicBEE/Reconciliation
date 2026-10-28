@@ -246,9 +246,7 @@
         <nz-tab nzTitle="Información general">
           <nz-card class="tab-card" [nzBodyStyle]="{ padding: '24px' }">
             <div class="tab-card__sections">
-              <!-- Sección 1: datos personales — misma estructura siempre
-                   (icono+etiqueta arriba, valor/input abajo); isEditing() solo
-                   cambia el NODO del valor, nunca el layout alrededor. -->
+              <!-- Sección 1: datos personales -->
               <div class="tab-card__section">
                 <h3 class="tab-card__section-title">Información personal</h3>
                 <form [formGroup]="infoForm">
@@ -559,8 +557,7 @@
                 </form>
               </div>
 
-              <!-- Sección 2: organización — antes su propia pestaña, fusionada
-                   aquí (ver MASTER.md). -->
+              <!-- Sección 2: organización -->
               <div class="tab-card__section">
                 <h3 class="tab-card__section-title">Organización</h3>
                 <form [formGroup]="orgForm">
@@ -838,11 +835,7 @@
                       }
                     </div>
 
-                    <!-- Contraseña inicial generada por el BACKEND (key
-                         `temporaryPassword` de GET /users/{id}) — solo se
-                         muestra si llega y no está vacía. Siempre de solo
-                         lectura, también en modo edición: el frontend nunca
-                         la define. -->
+                    <!-- Contraseña temporal del backend: siempre de solo lectura -->
                     @if (temporaryPassword(); as temporaryPassword) {
                       <div class="info-field">
                         <span class="info-field__head">
@@ -878,8 +871,7 @@
                 </form>
               </div>
 
-              <!-- Sección 3: cuenta — siempre de solo lectura (Estado usa su
-                   propio chip editable, StatusChip, sin relación con isEditing()). -->
+              <!-- Sección 3: cuenta (solo lectura; el estado usa StatusChip) -->
               <div class="tab-card__section">
                 <h3 class="tab-card__section-title">Cuenta</h3>
                 <div class="info-fields">
@@ -940,12 +932,7 @@
               </div>
             </div>
 
-            <!-- Un solo botón para AMBAS secciones editables (Información
-                 personal + Organización) — al guardar, se combinan los 2
-                 formularios y se envían juntos en una sola llamada
-                 (`onSaveProfile()` → `UserManagementService.updateUserProfile`),
-                 no por partes. "Cuenta" no tiene forma editable, así que no
-                 participa. -->
+            <!-- Guardado único de datos personales y organización -->
             @if (isEditing()) {
               <div class="tab-card__save-bar">
                 <button

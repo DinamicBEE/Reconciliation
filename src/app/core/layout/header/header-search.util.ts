@@ -1,11 +1,11 @@
 import { PermissionKey, RoleId } from '../../../shared/models/access.model';
 
-// Registro de pantallas buscables desde el Header — cada una declara el
-// permiso que hace falta para verla (`AccessControlService.hasPermission`,
-// ver `header.ts`); sin `permission`, la pantalla es visible para
-// cualquier usuario autenticado (hoy solo "Perfil"). El propio Header
-// filtra por permiso ANTES de llamar a `searchPages` — este archivo solo
-// declara el catálogo completo.
+/**
+ * Pantalla buscable desde el Header.
+ *
+ * @remarks Sin `permission`, visible para cualquier usuario autenticado; `Header` filtra por permiso antes de {@link searchPages}.
+ * @see docs/codigo/layout-y-tema.md#header
+ */
 export interface SearchablePage {
   label: string;
   path: string;
@@ -14,6 +14,7 @@ export interface SearchablePage {
   role?: RoleId; // además del permiso, exclusiva de este rol (ver permissionGuard)
 }
 
+/** Catálogo completo de pantallas buscables (solo rutas sin parámetros). */
 export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Dashboard', path: '/dashboard', keywords: ['resumen', 'ventas', 'inicio'], permission: 'view_dashboard' },
   {
@@ -53,9 +54,11 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Perfil', path: '/perfil', keywords: ['cuenta', 'yo', 'información general'] },
 ];
 
-// Función pura y testeable — sin estado, sin DI (ver MASTER.md, criterio de
-// "función de derivación pura"). Sin resultados con query vacío: la lista
-// de coincidencias solo debe aparecer mientras el usuario está escribiendo.
+/**
+ * Filtra las pantallas cuyo label o keyword contiene `query`, sin distinguir mayúsculas.
+ *
+ * @returns Lista vacía si `query` está vacío: los resultados solo aparecen mientras se escribe.
+ */
 export function searchPages(pages: SearchablePage[], query: string): SearchablePage[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];

@@ -27,13 +27,10 @@ interface RoleRow {
 }
 
 /**
- * "Roles y permisos" — un rol por fila (`GET /roles`, vía `AccessCatalogService`)
- * con los permisos que trae por defecto y las personas que lo tienen
- * (`UserManagementService.allUsers`, la misma colección de "Administración de
- * usuarios", sincronizada con `GET /users` al entrar). Exclusiva del rol ADMIN
- * (`permissionGuard` con `data.role`). Desde aquí se da de alta un rol nuevo, se
- * abre su edición (`/gestion-de-roles/:code`) y se da de baja (`DELETE
- * /roles/{code}`, con confirmación; deshabilitado mientras tenga usuarios).
+ * "Roles y permisos": un rol por fila con sus permisos por defecto y las personas que lo tienen.
+ *
+ * @remarks Baja con `DELETE /roles/{code}`, deshabilitada mientras el rol tenga usuarios.
+ * @see docs/codigo/roles-y-permisos.md#pantalla-roles-y-permisos
  */
 @Component({
   selector: 'app-roles-permissions',

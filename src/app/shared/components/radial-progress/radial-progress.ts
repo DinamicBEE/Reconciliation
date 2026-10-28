@@ -8,6 +8,8 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 /**
  * Anillo de progreso que llena el 100% de su contenedor (ancho y alto) — el
  * tamaño real lo decide quien lo use vía CSS en el contenedor padre.
+ *
+ * @see docs/codigo/componentes-y-utilidades.md#radial-progress
  */
 @Component({
   selector: 'app-radial-progress',

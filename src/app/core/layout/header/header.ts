@@ -22,10 +22,9 @@ import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color
 import { SEARCHABLE_PAGES, SearchablePage, searchPages } from './header-search.util';
 
 /**
- * Header del layout principal (`Shell`). Extraído de `shell.html`/`.ts` para
- * aislar acciones + card de usuario en su propio componente — la
- * navegación entre módulos vive en `core/layout/menu` (Menu), no aquí.
- * `Shell` orquesta `<app-menu>` + `<app-header>` + `<router-outlet>`.
+ * Header del layout: búsqueda de pantallas, notificaciones y menú del avatar.
+ *
+ * @see docs/codigo/layout-y-tema.md#header
  */
 @Component({
   selector: 'app-header',
@@ -48,9 +47,7 @@ export class Header {
   // --- Búsqueda de pantallas ---------------------------------------------
   protected readonly searchOpen = signal(false);
   protected readonly query = signal('');
-  // Filtra por permiso ANTES de buscar por texto — un resultado que el
-  // usuario no puede abrir es peor que no mostrarlo (mismo criterio que el
-  // Menu lateral, ver AccessControlService).
+  // Filtra por permiso antes de buscar: no se ofrece una pantalla que el usuario no puede abrir.
   protected readonly results = computed(() =>
     searchPages(
       SEARCHABLE_PAGES.filter(
@@ -101,8 +98,7 @@ export class Header {
   }
 
   // --- Usuario logeado -------------------------------------------------
-  // Solo datos de la sesión (`AuthUser`, backend real): `core` no lee el
-  // registro mock de `user-management` (ADR-0001, puntos 2 y 5).
+  // Solo datos de la sesión (`AuthUser`): `core` no lee el mock de user-management (ADR-0001).
   protected readonly fullName = computed(() => this.auth.currentUser()?.displayName ?? '');
 
   // Roles REALES de la sesión (`AuthUser.roles`) con el nombre de `GET /roles`
@@ -136,9 +132,7 @@ export class Header {
     this.paletteExpanded.update((open) => !open);
   }
 
-  // Cierra el menú al hacer click fuera de él — el avatar y el propio menú
-  // (incl. el grid de paleta anidado) están dentro de `#avatarMenuRoot`, así
-  // que un click ahí adentro nunca debe cerrarlo.
+  // Un click fuera de `#avatarMenuRoot` (avatar, menú y grid de paleta) cierra el menú.
   @HostListener('document:click', ['$event'])
   protected onDocumentClick(event: MouseEvent): void {
     if (!this.avatarMenuOpen()) return;

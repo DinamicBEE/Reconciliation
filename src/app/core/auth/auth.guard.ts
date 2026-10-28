@@ -3,12 +3,11 @@ import { CanActivateFn, Router } from '@angular/router';
 import { AccessControlService } from './access-control.service';
 import { AuthService } from './auth.service';
 
-// Protege todo lo que cuelga de Shell (dashboard y lo que venga después).
-// Sin sesión → redirige a /login. Con sesión pero con cambio obligatorio de
-// contraseña pendiente → redirige a /cambiar-password (fuera de Shell, ver
-// app.routes.ts) ANTES de dejar pasar a ninguna pantalla real — ese flujo
-// tiene su propio guard en sentido contrario (`mustChangePasswordGuard`),
-// así que no hay riesgo de loop entre los dos.
+/**
+ * Protege las rutas de `Shell`: sin sesión lleva a `/login` y con cambio de contraseña pendiente a `/cambiar-password`.
+ *
+ * @see docs/codigo/sesion-y-acceso.md#guards
+ */
 export const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const access = inject(AccessControlService);

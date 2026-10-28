@@ -6,24 +6,22 @@ import { environment } from '../../../environments/environment';
 import { PermissionDef, PermissionKey, RoleDef, RoleId } from '../../shared/models/access.model';
 import { AuthService } from './auth.service';
 
-// `GET /roles` — catálogo de roles con los permisos que traen por defecto
-// (solo lectura: se cargan por migración). Exige `manage_users` o `manage_roles`.
+/** Rol de `GET /roles` con sus permisos por defecto (catálogo cargado por migración). */
 export interface RoleDto {
   code: string;
   name: string;
   defaultPermissions: string[];
 }
 
-// `GET /permissions` — catálogo de permisos; `module` es el título del grupo en
-// la pantalla "Seguridad y acceso". Exige `manage_users` o `manage_roles`.
+/** Permiso de `GET /permissions`. */
 export interface PermissionDto {
   code: string;
   description: string;
+  /** Título del grupo en la pantalla "Seguridad y acceso". */
   module: string;
 }
 
-// Permisos del backend que dan acceso a los catálogos (`GET /roles`, `GET
-// /permissions`: "manage_users o manage_roles", ver la guía de endpoints).
+// Cualquiera de los dos permite `GET /roles` y `GET /permissions`.
 const CATALOG_PERMISSIONS: PermissionKey[] = ['manage_users', 'manage_roles'];
 
 interface AccessCatalogs {
@@ -34,26 +32,10 @@ interface AccessCatalogs {
 const EMPTY_CATALOGS: AccessCatalogs = { roles: [], permissions: [] };
 
 /**
- * Catálogos REALES de roles y permisos (`GET /roles`, `GET /permissions`).
+ * Catálogos de roles y permisos del backend (`GET /roles`, `GET /permissions`), única fuente de listas de roles y permisos del portal.
  *
- * REGLA GENERAL (mismo criterio que `CatalogService` con subsidiarias/ubicaciones):
- * toda lista de roles o de permisos del portal — selects de rol, filtro de la
- * tabla, grid de permisos, etiquetas — sale de aquí; no existe ni debe volver
- * a existir un arreglo `ROLES`/`PERMISSIONS` propio del front. Un rol o permiso
- * nuevo que el backend agregue por migración aparece solo.
- *
- * Los dos endpoints exigen `manage_users` o `manage_roles`. Para quien no los
- * tiene (Contabilidad, Tesorería, Costos) el catálogo NO se pide (daría 403) y
- * queda vacío: no hay pantalla de ese usuario que lo necesite salvo las
- * etiquetas de rol del encabezado/perfil, que caen a una versión legible del
- * código (`roleLabel`) — ver MASTER.md.
- *
- * Vive en `core/auth` (ADR-0001): lo consumen el layout (etiqueta de rol del
- * header) y varias features. Los dos GET de catálogo se piden aquí mismo; el
- * CRUD de roles es de `RolesApiService` (`user-management/data`).
- *
- * Se carga solo: un `rxResource` observa la sesión y pide ambos catálogos al
- * iniciar sesión (si hay permiso); al cerrarla vuelven a vacío.
+ * @remarks Se cargan al iniciar sesión solo con `manage_users` o `manage_roles`; sin ellos quedan vacíos.
+ * @see docs/codigo/sesion-y-acceso.md#catalogos-de-acceso
  */
 @Injectable({ providedIn: 'root' })
 export class AccessCatalogService {
@@ -61,15 +43,13 @@ export class AccessCatalogService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = environment.apiUrl;
 
-  // ¿La sesión actual puede consultar los catálogos?
+  /** Indica si la sesión tiene permiso para pedir los catálogos. */
   readonly canLoad = computed(() => {
     const granted = this.auth.currentUser()?.permissions ?? [];
     return CATALOG_PERMISSIONS.some((p) => granted.includes(p));
   });
 
-  // ADR-0002, punto 3: un `rxResource` en vez de `effect` + `subscribe`. Pide al
-  // iniciar sesión con permiso; sin permiso (o sin sesión) `params` es
-  // `undefined`, el resource queda en reposo y el catálogo vuelve a vacío.
+  // `params` `undefined` (sin sesión o sin permiso) deja el resource en reposo (ADR-0002, punto 3).
   private readonly catalogs = rxResource<AccessCatalogs, true | undefined>({
     params: () => (this.canLoad() ? true : undefined),
     stream: () =>
@@ -93,7 +73,7 @@ export class AccessCatalogService {
     this.roles().map((r) => ({ value: r.id, label: r.label })),
   );
 
-  // Permisos agrupados por `module` (orden de llegada) — el grid de "Seguridad y acceso".
+  /** Permisos agrupados por `module`, en orden de llegada (grid de "Seguridad y acceso"). */
   readonly permissionGroups = computed<{ group: string; items: PermissionDef[] }[]>(() => {
     const byGroup = new Map<string, PermissionDef[]>();
     for (const permission of this.permissions()) {
@@ -103,25 +83,30 @@ export class AccessCatalogService {
     return [...byGroup.entries()].map(([group, items]) => ({ group, items }));
   });
 
-  // Vuelve a pedir ambos catálogos (p. ej. tras un fallo de red o tras crear,
-  // editar o dar de baja un rol).
+  /** Vuelve a pedir ambos catálogos (tras un fallo o tras cambiar un rol). */
   load(): void {
     this.catalogs.reload();
   }
 
-  // Nombre del rol según el catálogo; sin catálogo (sesión sin permiso para
-  // pedirlo) o con un código que no está en él, una versión legible del código.
+  /**
+   * Nombre del rol según el catálogo.
+   *
+   * @returns Una versión legible del código si el catálogo está vacío o no lo contiene.
+   */
   roleLabel(id: RoleId | string): string {
     return this.roles().find((r) => r.id === id)?.label ?? humanizeCode(id);
   }
 
+  /** Descripción del permiso; una versión legible del código si no está en el catálogo. */
   permissionLabel(key: PermissionKey | string): string {
     return this.permissions().find((p) => p.key === key)?.label ?? humanizeCode(key);
   }
 
-  // Unión de los `defaultPermissions` de cada rol — punto de partida al cambiar
-  // los roles de una persona (la regla "cambio de rol → permisos por defecto"
-  // la aplica el front y envía el resultado final; el backend lo guarda tal cual).
+  /**
+   * Unión de los `defaultPermissions` de los roles indicados.
+   *
+   * @remarks El front aplica "cambio de rol → permisos por defecto"; el backend guarda el resultado tal cual.
+   */
   defaultPermissionsForRoles(roleIds: readonly RoleId[]): PermissionKey[] {
     const set = new Set<PermissionKey>();
     for (const roleId of roleIds) {

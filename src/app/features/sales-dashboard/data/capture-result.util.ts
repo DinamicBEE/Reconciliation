@@ -1,17 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { CaptureBatchResult, CaptureDayResult } from './sales-api.service';
 
-// Función pura y testeable — sin estado, sin DI (ver MASTER.md, "Estructura de
-// carpetas"). Traduce lo que respondió `POST /sales/capture` a un aviso para la
-// persona: el resultado (200 OK / 207 parcial / 502 con cuerpo) o el error
-// (`ProblemDetail` de 400/404/409, 403 sin permiso, 0 sin conexión).
-
+/** Nivel del aviso de "Reprocesar" (tipo de `NzMessageService`). */
 export type CaptureMessageLevel = 'success' | 'warning' | 'error';
 
+/** Aviso para la persona tras `POST /sales/capture`. */
 export interface CaptureMessage {
   level: CaptureMessageLevel;
   text: string;
-  // true = conviene recargar la tabla (se guardaron documentos nuevos).
+  /** `true` si se guardaron documentos nuevos y conviene recargar la tabla. */
   reload: boolean;
 }
 
@@ -30,6 +27,12 @@ function summary(result: CaptureBatchResult): string {
   }.`;
 }
 
+/**
+ * Traduce el cuerpo de `POST /sales/capture` (200 OK, 207 parcial o 502 con cuerpo) a un aviso.
+ *
+ * @param place - Lugar y fecha reprocesados, ya redactados para el texto.
+ * @see docs/codigo/ventas.md#reprocesar
+ */
 export function describeCaptureResult(result: CaptureBatchResult, place: string): CaptureMessage {
   const reload = result.insertedCount > 0;
   const detail = firstDay(result)?.errorMessage;
@@ -54,6 +57,11 @@ export function describeCaptureResult(result: CaptureBatchResult, place: string)
   }
 }
 
+/**
+ * Traduce un error de `POST /sales/capture` (502 con resultado, 409, 403, 0 o `ProblemDetail`) a un aviso.
+ *
+ * @see docs/codigo/ventas.md#reprocesar
+ */
 export function describeCaptureError(err: unknown, place: string): CaptureMessage {
   if (err instanceof HttpErrorResponse) {
     // 502: Facturiza no respondió en ninguna captura — trae el resultado completo.

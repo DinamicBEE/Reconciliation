@@ -1,7 +1,5 @@
-// Resumen global en una sola card: varias sumas relacionadas en fila (no son
-// KPIs independientes — ver MASTER.md, "Patrón de layout: resumen global").
-// Promovido desde tender-detail.scss al aparecer un segundo consumidor
-// (difference-management), mismo criterio ya aplicado con _kpi-card.scss.
+// Tira de métricas relacionadas en una sola card (MASTER.md "Patrón de layout: resumen global").
+// Ver docs/codigo/estilos.md#partial-summary
 
 .summary-card {
   border-radius: 8px;

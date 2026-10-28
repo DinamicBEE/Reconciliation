@@ -237,7 +237,7 @@ describe('AccessCatalogService', () => {
       expect(service.loading()).toBe(false);
       expect(service.roles()).toEqual([]);
 
-      // Al pasar a reposo (`params` = undefined) Angular NO aborta la carga en
+      // Al pasar a reposo (`params` = undefined) Angular no aborta la carga en
       // curso: la petición sigue en vuelo, pero su respuesta se descarta.
       roles.flush(ROLES);
       permissions.flush(PERMISSIONS);

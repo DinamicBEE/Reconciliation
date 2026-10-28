@@ -37,11 +37,10 @@ import { CaptureMessage, describeCaptureError, describeCaptureResult } from './d
 const RECONCILIATION_STATUSES = new Set<string>(['conciliado', 'desconciliado', 'por_conciliar']);
 
 /**
- * "Resumen de venta" — tabla sobre `GET /sales` (Core Service) con paginación en
- * el servidor. Filtros: rango de fechas, tienda (ubicaciones del login), medio de
- * pago y estado (`SalesCatalogService`, ids del backend) y búsqueda por folio,
- * documento o cliente. El detalle completo de una venta (`GET /sales/{id}`) aún
- * no existe: el drawer muestra lo que trae la fila del listado.
+ * "Resumen de venta": tabla de `GET /sales` con filtros, exportación y "Reprocesar".
+ *
+ * @remarks Sin `GET /sales/{id}`, el Drawer muestra lo que trae la fila del listado.
+ * @see docs/codigo/ventas.md#resumen-de-venta
  */
 @Component({
   selector: 'app-sales-dashboard',
@@ -78,23 +77,20 @@ export class SalesDashboard {
   protected readonly pageSizeOptions = SALES_PAGE_SIZE_OPTIONS;
   protected readonly exporting = signal(false);
 
-  // Tiendas: las ubicaciones que trae el LOGIN (`AuthUser.ubicaciones`, vía
-  // CatalogService). Su id es el `store` de `GET /sales`.
+  // Ubicaciones del login (`CatalogService`); su id es el `store` de `GET /sales`.
   protected readonly storeOptions = computed<{ value: StoreFilter; label: string }[]>(() => [
     { value: 'all', label: this.country.vocabulary.allLocations },
     ...this.catalog.ubicaciones().map((u) => ({ value: u.id, label: u.nombre })),
   ]);
 
-  // Empresas: las subsidiarias que trae el LOGIN. `GET /sales` aún no filtra por
-  // subsidiaria (ni las ubicaciones del login traen la suya): el select queda
-  // deshabilitado con su motivo en el tooltip.
+  // Subsidiarias del login; el select va deshabilitado porque `GET /sales` no filtra
+  // por subsidiaria (ver docs/codigo/ventas.md#resumen-de-venta).
   protected readonly subsidiariaOptions = computed<{ value: SubsidiariaFilter; label: string }[]>(() => [
     { value: 'all', label: 'Todas las empresas' },
     ...this.catalog.subsidiarias().map((s) => ({ value: s.id, label: s.nombre })),
   ]);
 
-  // Medios de pago y estados de conciliación REALES del Core Service
-  // (`GET /sales/catalogs/tender-media` y `/reconciliation-statuses`).
+  // `GET /sales/catalogs/tender-media` y `/reconciliation-statuses`.
   protected readonly salesCatalog = inject(SalesCatalogService);
 
   protected readonly statusOptions = computed<{ value: StatusFilter; label: string }[]>(() => [
@@ -163,12 +159,9 @@ export class SalesDashboard {
     return media.mixed ? `${media.description} +${media.paymentCount - 1}` : media.description;
   }
 
-  // Botón "Exportar" — exporta TODO lo que cumplen los filtros (recorre las
-  // páginas de `GET /sales`; no existe `GET /sales/export`) como CSV, con BOM
-  // UTF-8 para que Excel respete los acentos.
+  // CSV de todo lo filtrado, con BOM UTF-8 para que Excel respete los acentos.
   protected exportCsv(): void {
-    // Matriz 7.16 del DED: exportar requiere `export_reports` propio; el botón
-    // del template ya se oculta sin él, este guard es defensa en profundidad.
+    // Defensa en profundidad: el botón ya se oculta sin `export_reports` (matriz 7.16 del DED).
     if (!this.access.hasPermission('export_reports') || this.exporting()) return;
 
     this.exporting.set(true);
@@ -195,16 +188,10 @@ export class SalesDashboard {
     });
   }
 
-  // Botón "Reprocesar" del toolbar — `POST /sales/capture` de UN día y UNA tienda:
-  // solo llega a ejecutarse cuando `service.reprocessTarget()` no es null (mismas
-  // condiciones que `[disabled]` en la plantilla). `nzOnOk` como Promise deja el
-  // botón "Confirmar" en carga hasta que el backend responde (la captura es
-  // síncrona y puede tardar). El resultado se avisa con el detalle del backend
-  // (`describeCaptureResult`/`describeCaptureError`) y, si entraron documentos
-  // nuevos, se recarga la tabla.
+  // `nzOnOk` como Promise deja "Reprocesar" en carga mientras dura la captura síncrona.
+  // Ver docs/codigo/ventas.md#reprocesar.
   protected onReprocessClick(): void {
-    // Requiere `capture_sales` (AccessControlService.canReprocessSales); el botón
-    // ya se oculta sin él, este guard es defensa en profundidad.
+    // Defensa en profundidad: el botón ya se oculta sin `capture_sales`.
     if (!this.access.canReprocessSales()) return;
     const target = this.service.reprocessTarget();
     if (!target) return;

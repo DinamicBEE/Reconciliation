@@ -5,21 +5,22 @@ import { environment } from '../../../../environments/environment';
 import { AccessControlService } from '../../../core/auth/access-control.service';
 import { AuthService } from '../../../core/auth/auth.service';
 
-// `GET /sales/catalogs/tender-media` — medios de pago por código del POS.
-// `pendingReview = true`: el código llegó en una venta sin estar sembrado y el
-// equipo aún no lo revisa. `dianCode` (DEV d9556b5): código del medio de pago en
-// el catálogo 12 de la DIAN (10 Efectivo, 48 Tarjeta Crédito, 49 Tarjeta Débito,
-// ZZZ Otro…), según la homologación Simphony → DIAN; `null` si el medio aún no
-// está homologado. Opcional: un backend anterior no lo manda.
+/**
+ * Entrada de `GET /sales/catalogs/tender-media`: un medio de pago por código del POS.
+ *
+ * @see docs/codigo/ventas.md#catalogos-de-filtros
+ */
 export interface TenderMediaOption {
   id: number;
   code: string;
   description: string;
+  /** `true` si el código llegó en una venta sin estar sembrado y aún no se revisa. */
   pendingReview: boolean;
+  /** Código del catálogo 12 de la DIAN; `null` sin homologar, ausente en backends anteriores. */
   dianCode?: string | null;
 }
 
-// `GET /sales/catalogs/reconciliation-statuses` — en el orden del catálogo.
+/** Entrada de `GET /sales/catalogs/reconciliation-statuses`, en el orden del catálogo. */
 export interface ReconciliationStatusOption {
   id: number;
   code: string;
@@ -27,19 +28,10 @@ export interface ReconciliationStatusOption {
 }
 
 /**
- * Combos de filtros del Resumen de venta servidos por el Core Service
- * (Guia_Integracion_Frontend §7.2): medios de pago y estados de conciliación.
- * El `id` de cada opción es el valor que recibirá `GET /sales` en sus filtros
- * `tenderMedia` y `status` (ids, no códigos ni nombres).
+ * Combos de medios de pago y estados de conciliación de "Resumen de venta" (Guia_Integracion_Frontend §7.2).
  *
- * Exigen `view_dashboard`: sin ese permiso no se piden (darían 403). Las
- * subsidiarias y ubicaciones/tiendas NO salen de aquí: se llenan con las listas
- * que trae el login (`CatalogService`). `GET /sales/catalogs/stores` no se usa a
- * propósito (decisión de producto, ver docs/analisis-front-vs-back-dev).
- *
- * Carga perezosa (`ensureLoaded`, la llama `SalesDashboard`), una vez por sesión;
- * cada catálogo por separado. Se limpian al cerrar sesión. El aviso de error lo
- * da `httpErrorAlertInterceptor`.
+ * @remarks El `id` de cada opción es el filtro de `GET /sales`; se piden solo con `view_dashboard`.
+ * @see docs/codigo/ventas.md#catalogos-de-filtros
  */
 @Injectable({ providedIn: 'root' })
 export class SalesCatalogService {
@@ -48,12 +40,11 @@ export class SalesCatalogService {
   private readonly access = inject(AccessControlService);
   private readonly apiUrl = environment.apiUrl;
 
-  // Se vuelve `true` la primera vez que `SalesDashboard` llama a `ensureLoaded`.
+  // `true` desde la primera llamada a `ensureLoaded`.
   private readonly requested = signal(false);
 
-  // ADR-0002, punto 3: un `rxResource` por catálogo. Piden una vez solicitados,
-  // con sesión y con `view_dashboard`; al cerrar sesión `params` es `undefined`
-  // y vuelven a vacío sin un `effect` que los limpie.
+  // Un `rxResource` por catálogo (ADR-0002, punto 3): al cerrar sesión `params` es
+  // `undefined` y vuelven a vacío sin un `effect`.
   private readonly tenderMediaResource = this.catalogResource<TenderMediaOption>('tender-media');
   private readonly statusesResource = this.catalogResource<ReconciliationStatusOption>('reconciliation-statuses');
 
@@ -62,7 +53,7 @@ export class SalesCatalogService {
   readonly loading = computed(() => this.tenderMediaResource.isLoading() || this.statusesResource.isLoading());
   readonly loadFailed = computed(() => !!this.tenderMediaResource.error() || !!this.statusesResource.error());
 
-  // Pide los catálogos la primera vez; después solo reintenta los que fallaron.
+  /** Pide los catálogos la primera vez; después solo reintenta los que fallaron. */
   ensureLoaded(): void {
     if (!this.requested()) {
       this.requested.set(true);

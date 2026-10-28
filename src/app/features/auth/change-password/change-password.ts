@@ -10,20 +10,14 @@ import { NzMessageService } from 'ng-zorro-antd/message';
 import { AccessControlService } from '../../../core/auth/access-control.service';
 import { AuthService } from '../../../core/auth/auth.service';
 
-// Mínimo 8, al menos una letra y un dígito — más estricto que el `minLength(6)`
-// de login.ts a propósito: ahí solo se valida "algo se escribió" para poder
-// intentar el login (el backend real decide si es correcta); acá se está
-// DEFINIENDO la contraseña nueva, donde sí aplica una regla real de fuerza.
+// Mínimo 8, con letra y dígito: más estricto que login, que solo exige que se escriba algo.
 const NEW_PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 
 /**
- * Cambio obligatorio de contraseña en el primer inicio de sesión —
- * `mustChangePassword: true` en `AppUser` (dato del backend). Pantalla fuera
- * de Shell (mismo criterio que `login`, ver login.scss): nadie debería ver
- * el header/menú de la app mientras esta obligación siga pendiente.
- * `mustChangePasswordGuard` (ruta) + `authGuard` (todo lo demás) cierran el
- * flujo por los dos lados — ver MASTER.md, "Patrón: refresh token de un
- * solo uso + cambio obligatorio de contraseña".
+ * Cambio obligatorio de contraseña, fuera de `Shell` (sin header ni menú mientras esté pendiente).
+ *
+ * @see docs/codigo/sesion-y-acceso.md#cambio-de-contrasena
+ * @see design-system/conciliation/MASTER.md "Patrón: refresh token de un solo uso + cambio obligatorio de contraseña + bloqueo por intentos fallidos"
  */
 @Component({
   selector: 'app-change-password',
@@ -51,22 +45,12 @@ export class ChangePassword {
   constructor() {
     const { currentPassword, newPassword, confirmPassword } = this.form.controls;
 
-    // Las validaciones cruzadas se agregan DESPUÉS de construir el form (no
-    // se pueden declarar inline arriba: necesitan una referencia a los
-    // otros controles del mismo grupo, que ahí todavía no existen). Van
-    // atadas al control DEPENDIENTE específico — no como validator de
-    // grupo (`fb.group(..., { validators: [...] })`) — porque
-    // `nz-form-control`/`nzErrorTip` solo miran el estado del control
-    // individual que envuelven, nunca el del grupo: un validator de grupo
-    // deja `form.invalid` en `true` (el botón sí se deshabilita) pero jamás
-    // marca inválido al control hijo, así que el mensaje de error nunca
-    // llegaría a mostrarse.
+    // En el control dependiente, no en el grupo: `nzErrorTip` solo lee el control.
+    // Ver docs/codigo/sesion-y-acceso.md#cambio-de-contrasena
     newPassword.addValidators(sameAsValidator(currentPassword, 'sameAsCurrent'));
     confirmPassword.addValidators(sameAsValidator(newPassword, 'mismatch', { invertMatch: true }));
 
-    // Sin esto, escribir en `currentPassword`/`newPassword` no re-evalúa la
-    // validación de los controles que DEPENDEN de ellos — Angular solo
-    // revalida un control cuando cambia SU PROPIO valor.
+    // Angular solo revalida un control cuando cambia su propio valor.
     currentPassword.valueChanges.subscribe(() => newPassword.updateValueAndValidity({ emitEvent: false }));
     newPassword.valueChanges.subscribe(() => confirmPassword.updateValueAndValidity({ emitEvent: false }));
   }
@@ -86,19 +70,14 @@ export class ChangePassword {
       next: () => {
         this.submitting.set(false);
 
-        // AuthService ya apagó `mustChangePasswordHint` en la sesión (fuente
-        // única de la bandera). El registro de `user-management` se pone al
-        // día solo en su siguiente `syncFromBackend` (ADR-0001: esta pantalla
-        // ya no depende de ese feature).
+        // `AuthService` ya apagó `mustChangePasswordHint` en la sesión.
 
         this.message.success('Tu contraseña se actualizó correctamente.');
         this.router.navigateByUrl(this.access.homeRoute());
       },
       error: (err: HttpErrorResponse) => {
         this.submitting.set(false);
-        // 401 INVALID_CREDENTIALS = contraseña actual incorrecta; 400 = el
-        // backend rechazó la nueva (mínimo 8 caracteres). El resto de
-        // códigos de negocio los avisa `httpErrorAlertInterceptor`.
+        // 401: contraseña actual incorrecta; 400: nueva rechazada. El resto lo avisa el interceptor.
         if (err.status === 401) {
           this.formError.set('La contraseña actual es incorrecta.');
         } else if (err.status === 400) {
@@ -113,10 +92,7 @@ export class ChangePassword {
   }
 }
 
-// `invertMatch: true` → inválido cuando SÍ coinciden (mismaAsCurrent: la
-// nueva no puede ser igual a la actual). Sin él → inválido cuando NO
-// coinciden (mismatch: confirmar debe ser IGUAL a la nueva). Un solo
-// factory para las dos reglas en vez de dos funciones casi idénticas.
+// Inválido si coincide con `other`; con `invertMatch`, si no coincide.
 function sameAsValidator(
   other: { value: string },
   errorKey: string,

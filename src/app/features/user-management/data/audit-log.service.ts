@@ -4,17 +4,20 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { AuditLogEntry } from './user-management.model';
 
-// Bitácora (`GET /audit-log`, `GET /users/{id}/audit-log`) — exigen
-// `view_audit_log` (independiente de `manage_users`). `actor` es `null` cuando lo
-// hizo el sistema (bloqueo/desbloqueo automático). Siempre de la más reciente a
-// la más antigua.
+/** Persona citada en la bitácora; `id` es `app_user.id`. */
 export interface AuditPersonDto {
   id: number;
   displayName: string;
 }
 
+/**
+ * Entrada de `GET /audit-log` y `GET /users/{id}/audit-log`, de la más reciente a la más antigua.
+ *
+ * @see docs/codigo/usuarios.md#bitacora
+ */
 export interface AuditLogEntryDto {
   id: number;
+  /** `null` cuando actuó el sistema (bloqueo/desbloqueo automático). */
   actor: AuditPersonDto | null;
   target: AuditPersonDto;
   action: string;
@@ -22,6 +25,7 @@ export interface AuditLogEntryDto {
   createdAt: string;
 }
 
+/** Página cruda de la bitácora del backend. */
 export interface AuditLogPage {
   content: AuditLogEntryDto[];
   page: number;
@@ -30,18 +34,18 @@ export interface AuditLogPage {
   totalPages: number;
 }
 
+/** Filtros y página de la bitácora; `page` empieza en 0 y `size` es 20 por defecto. */
 export interface AuditLogParams {
-  // Solo `GET /audit-log` (el de un usuario ya lo lleva en la ruta).
+  /** Solo para `GET /audit-log`; el de una persona lo lleva en la ruta. */
   userId?: number;
   action?: string;
-  // Texto libre: detalle y nombre o correo de quien actuó o sobre quien se actuó.
+  /** Texto libre sobre el detalle y el nombre o correo de actor y afectado. */
   search?: string;
   page?: number;
   size?: number;
 }
 
-// Una página de la bitácora ya mapeada para la UI. `page` es la del backend
-// (desde 0).
+/** Página de la bitácora mapeada para la UI; `page` es la del backend (desde 0). */
 export interface AuditEntriesPage {
   entries: AuditLogEntry[];
   page: number;
@@ -50,32 +54,30 @@ export interface AuditEntriesPage {
 }
 
 /**
- * Bitácora REAL de administración de usuarios (`GET /audit-log` y `GET
- * /users/{id}/audit-log`) — el backend registra cada acción (alta, edición,
- * estado, roles, contraseña, sesiones, baja...) por su cuenta, así que el front
- * ya NO lleva una bitácora local ni la alimenta desde las mutaciones. Filtros y
- * paginación son del lado del servidor. Ambos endpoints exigen
- * `view_audit_log` (independiente de `manage_users`). Es además el cliente HTTP
- * de esos endpoints (antes en `AuthService`, ADR-0001 punto 4).
+ * Bitácora de administración de usuarios que registra el backend; filtros y paginación en el servidor.
+ *
+ * @remarks Ambos endpoints exigen `view_audit_log`, independiente de `manage_users`.
+ * @see docs/codigo/usuarios.md#bitacora
  */
 @Injectable({ providedIn: 'root' })
 export class AuditLogService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = environment.apiUrl;
 
-  // Historial global ("Historial y auditoría de usuarios").
+  /** `GET /audit-log`: historial global ("Historial y auditoría de usuarios"). */
   listAll(params: AuditLogParams = {}): Observable<AuditEntriesPage> {
     return this.listAuditLog(params).pipe(map(toEntriesPage));
   }
 
-  // Historial de una persona (pestaña "Historial" del detalle).
+  /**
+   * `GET /users/{id}/audit-log`: historial de una persona, también dada de baja.
+   *
+   * @returns Observable con la página; falla con 404 solo si la persona nunca existió.
+   */
   listForUser(backendUserId: number, params: Omit<AuditLogParams, 'userId'> = {}): Observable<AuditEntriesPage> {
     return this.listUserAuditLog(backendUserId, params).pipe(map(toEntriesPage));
   }
 
-  // `GET /audit-log` (historial global) y `GET /users/{id}/audit-log` (de una
-  // persona, también si ya fue dada de baja; 404 solo si nunca existió). Filtros
-  // y paginación del lado del servidor (`page` desde 0, `size` 20 por defecto).
   private listAuditLog(params: AuditLogParams = {}): Observable<AuditLogPage> {
     return this.http.get<AuditLogPage>(`${this.apiUrl}/audit-log`, { params: this.auditHttpParams(params) });
   }

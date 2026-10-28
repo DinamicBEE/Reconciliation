@@ -7,8 +7,7 @@
     </nz-page-header-content>
   </nz-page-header>
 
-  <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
-       tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
+  <!-- Filtros + tabla: MASTER.md "Patrón: card de tabla" -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
     <section class="toolbar">
       <input
@@ -33,8 +32,7 @@
     </section>
 
     <div class="table-bleed">
-      <!-- `nzNoResult` en vez de una fila `@empty`: con datos vacíos nz-table
-           pinta su propio "No hay datos" y el mensaje saldría duplicado. -->
+      <!-- nzNoResult y no @empty: nz-table ya pinta su propio vacío -->
       <nz-table
         #tbl
         [nzData]="service.filteredCatalogs()"

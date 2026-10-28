@@ -10,8 +10,7 @@
     </nz-page-header-extra>
   </nz-page-header>
 
-  <!-- Tabla sin filtros: card con padding 24px, la tabla nunca toca la card —
-       ver MASTER.md "Regla general: tablas". -->
+  <!-- MASTER.md "Regla general: tablas" -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
     <div class="table-bleed">
       <nz-table
@@ -89,11 +88,7 @@
                   <span class="text-muted">Sin usuarios asignados</span>
                 }
               </td>
-              <!-- Acciones: editar (detalle del rol) y eliminar (`DELETE
-                   /roles/{code}`, con confirmación). Eliminar se deshabilita
-                   mientras el rol tenga usuarios (el backend respondería 409
-                   ROLE_IN_USE); el <span> lleva el tooltip porque un botón
-                   `disabled` no dispara hover. -->
+              <!-- El tooltip va en el <span>: un botón disabled no dispara hover -->
               <td class="cell-top text-center" (click)="$event.stopPropagation()">
                 <div class="row-actions">
                   <button

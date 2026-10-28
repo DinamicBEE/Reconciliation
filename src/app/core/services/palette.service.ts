@@ -2,15 +2,17 @@ import { Injectable, effect, inject, signal } from '@angular/core';
 import { ThemeService, ThemeMode } from './theme.service';
 import { hexToHue, hsl } from './color-utils';
 
+/** Acento seleccionable del selector de paleta. */
 export interface PaletteOption {
   name: string;
   hex: string;
 }
 
-// Acentos base — deliberadamente distintos de los colores semánticos
-// (éxito=verde, advertencia=ámbar, error=rojo) para no generar ambigüedad
-// entre "elegí este color" y "este movimiento está en tal estado". Cada uno
-// es la SEMILLA (su matiz/hue) de la que se deriva la paleta completa.
+/**
+ * Acentos base; cada uno es la semilla (su matiz) de una paleta derivada.
+ *
+ * @remarks Distintos de verde/ámbar/rojo para no confundirse con los colores semánticos.
+ */
 export const PALETTE_OPTIONS: PaletteOption[] = [
   { name: 'Azul', hex: '#2563eb' },
   { name: 'Índigo', hex: '#4f46e5' },
@@ -22,11 +24,8 @@ export const PALETTE_OPTIONS: PaletteOption[] = [
 
 const STORAGE_KEY = 'conciliation-palette';
 
-// Tokens que la paleta SÍ controla — marca + superficies. Los tokens
-// semánticos (--color-success/warning/destructive) quedan fuera a
-// propósito: su significado está atado al ESTADO del movimiento
-// (conciliado/pendiente/discrepancia), no al gusto visual del usuario —
-// dejar que la paleta los tiña rompería esa semántica.
+// Tokens que controla la paleta. Los semánticos (success/warning/destructive) quedan fuera:
+// su significado es el estado del movimiento. Ver docs/codigo/layout-y-tema.md#paleta
 const TOKEN_NAMES = [
   '--color-primary',
   '--color-on-primary',
@@ -45,11 +44,8 @@ const TOKEN_NAMES = [
   '--color-chart-donut',
 ] as const;
 
-// Deriva una paleta completa (14 tokens) a partir del matiz de una sola
-// semilla, con fórmulas separadas para claro/oscuro (misma técnica que se
-// usó a mano para la paleta original Banking/Traditional Finance: fondo
-// casi-blanco/casi-negro con un toque del matiz, superficies neutras
-// tenues, marca saturada).
+// Deriva los tokens de TOKEN_NAMES del matiz de la semilla, con fórmulas HSL para claro y oscuro.
+// Ver docs/codigo/layout-y-tema.md#paleta
 function buildPalette(seedHex: string, mode: ThemeMode): Record<string, string> {
   const h = hexToHue(seedHex);
 
@@ -63,9 +59,7 @@ function buildPalette(seedHex: string, mode: ThemeMode): Record<string, string> 
       '--color-on-secondary': '#ffffff',
       '--color-accent': hsl(h, 80, 40),
       '--color-on-accent': '#ffffff',
-      // Fondo más oscuro que la card (antes 98 vs 99 — casi el mismo tono)
-      // para que la card se note como superficie elevada; muted/border
-      // bajan en cadena para seguir siendo distinguibles del nuevo fondo.
+      // Fondo más oscuro que la card (superficie elevada); muted y border bajan en cadena.
       '--color-background': hsl(h, 35, 94),
       '--color-foreground': foreground,
       '--color-card': hsl(h, 15, 99),
@@ -87,9 +81,7 @@ function buildPalette(seedHex: string, mode: ThemeMode): Record<string, string> 
     '--color-on-secondary': hsl(h, 30, 8),
     '--color-accent': hsl(h, 80, 55),
     '--color-on-accent': hsl(h, 30, 8),
-    // Misma idea que en claro pero invertida: la card debe verse más CLARA
-    // que el fondo (antes 8 vs 4 — apenas un salto de 4 puntos), así se lee
-    // como una superficie elevada sobre la página oscura.
+    // En oscuro, la card es más clara que el fondo.
     '--color-background': hsl(h, 45, 3),
     '--color-foreground': foregroundDark,
     '--color-card': hsl(h, 30, 13),
@@ -103,11 +95,10 @@ function buildPalette(seedHex: string, mode: ThemeMode): Record<string, string> 
 }
 
 /**
- * Acento de marca elegido por el usuario. `null` = sin preferencia
- * explícita → se usan los valores por defecto de styles.scss (que ya
- * varían entre claro/oscuro). Al elegir un color, la paleta completa se
- * recalcula cada vez que cambia el tema (para que light/dark tengan su
- * propia derivación, no el mismo hex forzado en ambos).
+ * Acento de marca elegido por el usuario y paleta derivada, aplicada como estilo en `<html>`.
+ *
+ * @remarks `null` usa los valores de `styles.scss`; con semilla, se recalcula al cambiar el modo.
+ * @see docs/codigo/layout-y-tema.md#paleta
  */
 @Injectable({ providedIn: 'root' })
 export class PaletteService {
@@ -126,6 +117,7 @@ export class PaletteService {
     this.selectedState.set(hex);
   }
 
+  /** Quita la semilla y vuelve a los tokens de `styles.scss`. */
   reset(): void {
     this.selectedState.set(null);
   }

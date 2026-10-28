@@ -1,9 +1,7 @@
 import { Catalog, CatalogRow } from './catalogs.model';
 
-// Catálogos que dependen del país — México (SAT, CFDI 4.0). Ver
-// `catalogs-mock.data.ts` y `environment.country`. Los códigos son los de
-// los catálogos oficiales del Anexo 20; solo se incluyen los que usa la
-// operación de venta al público.
+// Catálogos de México (SAT, CFDI 4.0, Anexo 20): solo los códigos que usa la venta al público.
+// Ver docs/codigo/catalogos.md#datos-mock-por-pais.
 
 const REGIMES: CatalogRow[] = [
   ['601', 'General de Ley Personas Morales', 'Moral'],

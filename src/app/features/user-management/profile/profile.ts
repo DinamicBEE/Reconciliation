@@ -18,16 +18,9 @@ import { COUNTRY_PROFILE } from '../../../core/country/active-country';
 import { parseIsoDate, toIsoDate } from '../../../shared/utils/iso-date.util';
 
 /**
- * Perfil del usuario logeado — mismo registro, misma fuente de verdad que
- * `UserDetail` (ver `features/user-management/user-detail`): se resuelve el
- * `AppUser` de la sesión actual (`UserManagementService.currentAppUser`,
- * resuelto por email), nunca datos propios de esta pantalla.
- * "Información general" + "Dirección" son de solo lectura por defecto; el
- * botón "Editar" del header habilita `infoForm` para ambas secciones a la
- * vez y guarda con el MISMO `UserManagementService.updateInfo` que usa
- * `UserDetail.onSaveInfo` — mismo criterio de edición inline (`isEditing`,
- * el `.info-field` cambia de valor a control sin cambiar de estructura, ver
- * MASTER.md).
+ * Perfil propio: `AppUser` de la sesión (`UserManagementService.currentAppUser`) con edición inline.
+ *
+ * @see docs/codigo/usuarios-pantallas.md#perfil-propio
  */
 @Component({
   selector: 'app-profile',
@@ -61,20 +54,14 @@ export class Profile {
 
   protected readonly user = this.userMgmt.currentAppUser;
 
-  // Roles REALES de la sesión con el nombre de `GET /roles` (ver Header).
+  // Roles de la sesión con el nombre de `GET /roles`.
   protected readonly roleLabel = computed(() =>
     (this.auth.currentUser()?.roles ?? []).map((roleId) => this.accessCatalog.roleLabel(roleId)).join(', '),
   );
 
-  // Modo edición de "Información general" + "Dirección" — de solo lectura
-  // por defecto; el botón "Editar" del header lo activa para AMBAS
-  // secciones a la vez (un único `infoForm`, un único "Guardar cambios"),
-  // igual criterio que `UserDetail.isEditing` (ver user-detail.ts).
-  // Email de la sesión como `computed`: solo cambia si cambia la persona (no en
-  // cada refresh de token, que reemplaza el objeto `AuthUser`).
+  // Email de la sesión: cambia con la persona, no con cada refresh de token.
   private readonly sessionEmail = computed(() => this.auth.currentUser()?.username ?? null);
-  // Modo edición: se reinicia al cambiar la persona de sesión (linkedSignal en
-  // vez de un `set` dentro del effect, ADR-0002 punto 6).
+  // Modo edición de ambas secciones; se reinicia al cambiar la persona de sesión.
   protected readonly isEditing = linkedSignal(() => {
     this.sessionEmail();
     return false;
@@ -100,9 +87,8 @@ export class Profile {
   });
 
   constructor() {
-    // Único effect (ADR-0002, punto 6): sincroniza el FormGroup cuando cambia la
-    // persona de sesión. untracked() al leer el service evita re-dispararlo por
-    // cualquier cambio en el registro de usuarios.
+    // Sincroniza el formulario al cambiar la persona; `untracked` evita dispararlo
+    // por cambios en el registro de usuarios.
     effect(() => {
       const email = this.sessionEmail();
       const found = email ? untracked(() => this.userMgmt.findUserByEmail(email)) : null;
@@ -140,9 +126,7 @@ export class Profile {
     this.isEditing.set(true);
   }
 
-  // Descarta cambios sin guardar y vuelve a la vista de solo lectura — sin
-  // esto, "Cancelar edición" dejaría valores a medio escribir visibles la
-  // próxima vez que se entre a editar.
+  // Descarta lo no guardado y vuelve a solo lectura.
   protected onCancelEditClick(): void {
     this.resetForm(this.user());
     this.isEditing.set(false);

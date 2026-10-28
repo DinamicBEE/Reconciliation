@@ -1,10 +1,5 @@
-// Grid de 2 columnas × 2 filas: el menú ocupa la columna izquierda y
-// abarca ambas filas (header + contenido) — por eso "se ve por arriba" del
-// header, mientras que header/contenido comparten la columna derecha.
-// Alto fijo a 100vh (no min-height) para que el menú siempre mida el largo
-// total de la pantalla sin importar qué tan alto sea el contenido — el
-// scroll de contenido queda contenido en `.shell__content`, no en la
-// página completa.
+// Grid 2×2: el menú abarca ambas filas; alto fijo 100vh y el scroll vive en `.shell__content`.
+// Ver docs/codigo/layout-y-tema.md#shell
 .shell {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -19,9 +14,7 @@
   grid-column: 1;
 }
 
-// Sin fondo ni línea divisora a propósito — el contenido visual del header
-// (título, acciones, card de usuario) vive en `app-header`; este wrapper
-// solo reserva su celda del grid.
+// Solo reserva la celda del grid; el contenido vive en `app-header`.
 .shell__header {
   grid-row: 1;
   grid-column: 2;

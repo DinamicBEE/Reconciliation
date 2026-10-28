@@ -84,9 +84,7 @@
 }
 
 // --- Tabla de permisos: look de `nz-descriptions` con borde -----------------
-// Código y descripción sobre `--color-muted` (como las etiquetas de un
-// descriptions), la columna del check sobre `--color-card`. Bordes y radius
-// propios — es una `<table>` plana, no hereda el bridge de `nz-table`.
+// `<table>` plana: no hereda el puente de `nz-table`, por eso lleva bordes y radius propios.
 .permission-table {
   width: 100%;
   border-collapse: separate;

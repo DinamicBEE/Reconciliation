@@ -3,15 +3,19 @@ import { SettlementTransaction, TenderMedia } from '../../../shared/models/recon
 const EXPECTED_COLUMNS = ['referencia', 'descripcion', 'monto', 'fecha'];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Liquidaciones válidas del CSV y un mensaje por cada línea rechazada (con su número de línea). */
 export interface CsvImportResult {
   rows: SettlementTransaction[];
   errors: string[];
 }
 
-// Parser deliberadamente simple (split por coma, sin soporte de comillas ni
-// comas dentro de un campo) — suficiente para el CSV de referencia,
-// referencia/descripcion/monto/fecha. El día que esto sea un import real
-// contra backend, esto se reemplaza por el parseo/validación del servidor.
+/**
+ * Convierte un CSV `referencia,descripcion,monto,fecha` (encabezado opcional) en liquidaciones del tender.
+ *
+ * @remarks Parser simple: separa por coma, sin comillas ni comas dentro de un campo.
+ * @returns Filas válidas y errores por línea; un archivo vacío devuelve un único error.
+ * @see docs/codigo/diferencias.md#importacion-csv
+ */
 export function parseSettlementsCsv(csvText: string, tenderMedia: TenderMedia): CsvImportResult {
   const lines = csvText
     .split(/\r?\n/)

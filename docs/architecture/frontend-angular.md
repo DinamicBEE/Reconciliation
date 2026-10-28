@@ -493,6 +493,18 @@ formato Prettier sin cambios, lint sin errores, y E2E de humo cuando exista.
 | Observabilidad | Solo `provideBrowserGlobalErrorListeners` + consola | Decidir herramienta (D6). Mientras: un `ErrorHandler` propio que no filtre datos sensibles |
 | Revisión | | Checklist del PR: §14.1 |
 
+### 12.1 Comentarios y documentación de código
+
+- La API exportada (servicios, utils, modelos, guards, interceptores, stores) se documenta con
+  TSDoc; el resto, con comentarios de 2 líneas como máximo. SCSS usa `//` (y `///` SassDoc solo
+  para mixins/placeholders compartidos); las plantillas no llevan comentarios salvo marcas de
+  sección de una línea.
+- El porqué extenso, los contratos con el backend tal como los consume el front y las invariantes
+  de mocks viven en [`docs/codigo/<area>.md`](../codigo/README.md) con anclas estables. La
+  historia vive en git y en MASTER.md; las decisiones duraderas, en una ADR (§14.3).
+- Puerta de revisión: `pnpm lint:comments` (detector de `docs/codigo/README.md` §10) no debe
+  sumar hallazgos en un PR (objetivo: 0). Cuando se incorpore lint (tabla de arriba), evaluar automatizarlo.
+
 **Despliegue:** Vercel con `node scripts/set-api-url.mjs && pnpm build` (o `build:co`). El dominio
 del portal debe estar en `CORS_ALLOWED_ORIGINS` del Gateway.
 
@@ -571,7 +583,8 @@ desde la pantalla.
 
 **Checklist de revisión:** respeta §4.2; sin `HttpClient` en componentes; sin secretos; decisiones
 por permiso; errores mostrados una vez; signals para lo que pinta la plantilla; sin `effect` que
-copie estado; pruebas nuevas pasan; `pnpm build` sin warnings nuevos.
+copie estado; comentarios dentro de los límites de `docs/codigo/README.md` (lo extenso, movido a
+`docs/codigo/` y enlazado); pruebas nuevas pasan; `pnpm build` sin warnings nuevos.
 
 ### 14.2 Conectar un endpoint que hoy es mock
 

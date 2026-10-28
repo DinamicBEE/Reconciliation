@@ -1,26 +1,12 @@
 import { SaleTransaction, SettlementTransaction, TenderMedia } from '../models/reconciliation-item.model';
 import { Sale } from '../models/sale.model';
-// Fuente de verdad: el mismo mock de ventas que consume `sales-dashboard`
-// ("Resumen de venta") — la base de TODO lo que se concilia es el sistema
-// POS, no un dataset paralelo inventado para este feature (así era antes:
-// `MOCK_SALES`/`MOCK_SETTLEMENTS` traían sus propios `ORD-*` sin relación
-// real con las ventas que se ven en `/dashboard`, con fechas/montos que no
-// cuadraban entre pantallas). Import cruzado de feature (sales-dashboard)
-// hacia shared/ — única excepción documentada a la regla dura de
-// "Estructura de carpetas" (shared nunca importa de features): mover el
-// mock de ventas completo a shared/ habría tocado archivos que otra sesión
-// tenía en vuelo al escribir esto; queda pendiente como limpieza futura
-// (ver MASTER.md, "Patrón: conciliación por tender media y fecha").
+// Excepción documentada a "shared no importa de features": la fuente es el mock del POS.
+// Ver docs/codigo/ventas.md#liquidaciones-mock.
 import { MOCK_SALES as POS_SALES } from '../../features/sales-dashboard/data/sales-mock.data';
 import { saleTotal } from '../../features/sales-dashboard/data/sale.util';
 
-// Dataset compartido por todo lo que cruza venta vs. liquidación por
-// orderId — "Conciliación" (totales agrupados por tender media/fecha) y
-// "Gestión de diferencias" (candidatos de match manual para una orden
-// puntual). Promovido desde tender-detail/data al aparecer un segundo
-// consumidor, mismo criterio que _summary-strip.scss (ver MASTER.md).
-// Reemplazar por llamadas HTTP reales cuando exista backend — el cruce por
-// orderId lo hace `shared/utils/cross-match.util.ts`, no este archivo.
+// Ventas y liquidaciones mock por medio de pago; el cruce por `orderId` lo hace
+// `shared/utils/cross-match.util.ts`.
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -32,11 +18,7 @@ function groupByTenderMedia<T extends { tenderMedia: TenderMedia }>(rows: T[]): 
   return groups;
 }
 
-// `sale.reference` (folio del pago/liquidación tal como lo conoce el POS —
-// "SPEI0000129981", "RAPPI-LIQ-901", "DIDI-041", "CORTE-0827-01") hace de
-// `orderId`: es la MISMA referencia que ya se ve en la columna "Referencia"
-// de `sales-dashboard` — usar un id distinto aquí (como el viejo `ORD-B001`)
-// era precisamente lo que rompía la trazabilidad entre las dos pantallas.
+// `orderId` = `sale.reference`, la referencia visible en "Resumen de venta" (trazabilidad).
 function toSaleTransaction(sale: Sale): SaleTransaction {
   return {
     id: sale.id,
@@ -47,16 +29,14 @@ function toSaleTransaction(sale: Sale): SaleTransaction {
   };
 }
 
+/**
+ * Lado venta del cruce: las ventas mock de "Resumen de venta" agrupadas por medio de pago.
+ *
+ * @see docs/codigo/ventas.md#liquidaciones-mock
+ */
 export const MOCK_SALES: Record<TenderMedia, SaleTransaction[]> = groupByTenderMedia(POS_SALES.map(toSaleTransaction));
 
-// --- Lado banco: se deriva de `sale.reconciliationStatus` — el MISMO campo
-// que ya pinta la columna "Estado de conciliación" en sales-dashboard, así
-// que una venta "Cruzado" ahí SIEMPRE trae su liquidación aquí, y una
-// "Por liquidar" ahí NUNCA la trae. Ninguna venta se excluye por estar
-// `cancelada` (V-2005 es la única `amount_mismatch` de todo el mock y está
-// cancelada — excluirla habría dejado el estado "Monto distinto" sin ni un
-// solo caso de demostración, y de paso habría desalineado esta tabla de lo
-// que sales-dashboard ya le muestra al usuario para esa misma fila).
+// --- Lado banco: derivado de `sale.reconciliationStatus`; no excluye canceladas ---
 const BATCH_PREFIX: Record<TenderMedia, string> = {
   bbva: 'LOTE-BBVA',
   rappi: 'RAPPI-LIQ',
@@ -79,23 +59,13 @@ function descriptionFor(tenderMedia: TenderMedia, batchId: string): string {
   return `${SETTLEMENT_LABEL[tenderMedia]} — Lote ${batchId}`;
 }
 
-// Una orden liquidada por debajo de lo vendido — 12% corto, determinístico
-// (no un delta hardcodeado por venta), así sigue siendo válido si el total
-// de la venta cambia (descuento/IVA/propina) sin volver a ajustar esto a
-// mano.
+// `amount_mismatch`: liquida el 88 % del total, como proporción para seguir válido si el total cambia.
 const MISMATCH_RATIO = 0.88;
 
-// Ratios del abono partido de V-2007 (ver abajo) — suman 1, el último se
-// calcula por resta (no por su propio ratio) para que la suma cuadre exacto
-// contra el total real de la venta sin arrastrar el redondeo de los otros
-// dos.
+// Abonos de V-2007; el último se calcula por resta para que la suma cuadre exacta.
 const SPLIT_RATIOS: readonly number[] = [0.5, 0.3];
 
-// V-2007 ("pago mixto", ver sales-mock.data.ts) es la única venta que se
-// liquida en más de un depósito — un caso real y frecuente (SPEI puede
-// llegar por abonos), y de paso deja al menos 3 transacciones bancarias
-// bajo un mismo día+medio de pago para poder demostrar el modal "Ver
-// detalles" con más de una fila (ver MASTER.md).
+// Única venta liquidada en varios depósitos (SPEI por abonos); da filas a "Ver detalles".
 const SPLIT_SETTLEMENT_SALE_ID = 'V-2007';
 
 function settlementsForSale(sale: Sale, saleTx: SaleTransaction): SettlementTransaction[] {
@@ -146,17 +116,8 @@ function settlementsForSale(sale: Sale, saleTx: SaleTransaction): SettlementTran
   ];
 }
 
-// Liquidaciones huérfanas — el banco depositó algo sin una venta que lo
-// respalde en el POS (anomalía real: duplicado, comisión mal aplicada, o
-// una venta que nunca se capturó). Fechadas el 16 y el 23 de agosto a
-// propósito: son los DOS únicos días del rango de `sales-dashboard` sin
-// ninguna venta generada (`buildDay` en sales-mock.data.ts salta esas dos
-// fechas), así el grupo que producen es un "Sin venta" limpio — puesto en
-// cualquier otro día habría caído sobre un grupo que YA tenía sus propias
-// ventas de ese medio, mezclando dos anomalías distintas (una venta sin
-// liquidar + un depósito sin orden) en una sola fila "Monto distinto"
-// confusa de leer. Referencias que nunca coinciden con un `sale.reference`
-// real.
+// Depósitos sin venta, el 16 y 23 de agosto (únicos días sin ventas) para dar un
+// grupo "Sin venta" limpio. Ver docs/codigo/ventas.md#liquidaciones-mock.
 const ORPHAN_SETTLEMENTS: SettlementTransaction[] = [
   {
     id: 'L-ORPHAN-BBVA-01',
@@ -196,16 +157,8 @@ const ORPHAN_SETTLEMENTS: SettlementTransaction[] = [
   },
 ];
 
-// 14 liquidaciones extra de RAPPI, sueltas (mismo criterio que
-// ORPHAN_SETTLEMENTS: sin venta que las respalde), fechadas el mismo 23 de
-// agosto sin ventas para no desalinear ningún otro grupo día+medio de pago.
-// Junto con `L-ORPHAN-RAPPI-01` de arriba suman 15 candidatas sueltas de
-// RAPPI — para que "Gestión de diferencias" tenga un caso de demostración
-// real con 15 filas en "Transacciones bancarias candidatas" (scroll interno
-// + filtro por referencia, ver difference-management.scss). Montos
-// generados determinísticamente (mismo criterio que `buildDay` en
-// sales-mock.data.ts — no Math.random()), escalonados dentro de un rango de
-// ticket real.
+// Con `L-ORPHAN-RAPPI-01` suman 15 candidatas sueltas de Rappi el 23 de agosto
+// para la demo de "Gestión de diferencias"; montos determinísticos.
 const LOOSE_RAPPI_COUNT = 14;
 
 function buildLooseRappiSettlements(count: number): SettlementTransaction[] {
@@ -229,6 +182,11 @@ const derivedSettlements: SettlementTransaction[] = POS_SALES.flatMap((sale) => 
   return settlementsForSale(sale, saleTx);
 });
 
+/**
+ * Lado banco del cruce: liquidaciones derivadas de las ventas más depósitos sin venta.
+ *
+ * @see docs/codigo/ventas.md#liquidaciones-mock
+ */
 export const MOCK_SETTLEMENTS: Record<TenderMedia, SettlementTransaction[]> = groupByTenderMedia([
   ...derivedSettlements,
   ...ORPHAN_SETTLEMENTS,

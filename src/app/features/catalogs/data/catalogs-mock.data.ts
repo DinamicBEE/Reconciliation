@@ -4,23 +4,10 @@ import { Catalog, CatalogRow } from './catalogs.model';
 import { CO_FISCAL_CATALOGS, CO_NS_TAX_CODES_CATALOG, CO_TAX_MAP_CATALOG } from './country-catalogs.co';
 import { MX_FISCAL_CATALOGS, MX_NS_TAX_CODES_CATALOG, MX_TAX_MAP_CATALOG } from './country-catalogs.mx';
 
-// Mock de los catálogos cargados — no hay backend todavía (el DED los sirve
-// desde el Core / Ventas Service). Los valores salen del propio DED:
-// tender media, Major/Family Group, prefijos de ubicación y cuentas
-// homologadas (7.21 y 7.23). Los números de cuenta contable, los códigos de
-// establecimiento y los ids de tienda Rappi son ILUSTRATIVOS (el cliente
-// todavía no entrega su plan de cuentas ni sus homologaciones, ver supuestos
-// del DED en la sección 3.1).
-//
-// Lo que depende del país (`environment.country`) vive aparte: los
-// catálogos fiscales de la autoridad (SAT / DIAN), la homologación de
-// impuestos y los códigos de impuesto de NetSuite — ver
-// `country-catalogs.mx.ts` y `country-catalogs.co.ts`. El resto
-// (homologaciones de tender, grupos, ubicaciones, adquirencia, Rappi y los
-// maestros) es el mismo en ambos países.
+// Valores del DED (7.21, 7.23); cuentas, establecimientos e ids Rappi son ilustrativos.
+// Ver docs/codigo/catalogos.md#datos-mock-por-pais.
 
-// Las 8 ubicaciones que expone hoy el API del facturador (DED 7.23), cada
-// una con su prefijo fiscal. Reutilizadas por varias homologaciones.
+// Las 8 ubicaciones del API del facturador (DED 7.23), con su prefijo fiscal.
 const HIPERMAR_PREFIXES = ['HCJE', 'H84E', 'H23E', 'HSBE', 'H69E', 'H26E', 'HPVE', 'HUSE'];
 
 const hipermarName = (prefix: string): string => `Hipermar Fish ${prefix}`;
@@ -35,9 +22,8 @@ const TENDER_MAP: CatalogRow[] = [
   { tender: '205', name: 'Tarjeta Débito', account: '138098 Puente tarjeta débito' },
 ];
 
-// 27 Family Group con mapeo uno a uno (DED 7.23): 1–20 retail, 501–506
-// restaurante y 700 ingresos diferidos, más la cuenta por defecto para
-// grupos no homologados.
+// 27 Family Group uno a uno (DED 7.23): 1–20 retail, 501–506 restaurante, 700
+// ingresos diferidos, más la cuenta por defecto de grupos no homologados.
 const RETAIL_FAMILIES = [
   'Pescados',
   'Mariscos',

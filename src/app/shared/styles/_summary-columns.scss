@@ -1,10 +1,5 @@
-// Patrón "icono + etiqueta + valor" — ver design-system/conciliation/MASTER.md.
-// Promovido desde sales-dashboard.scss ("Resumen de la venta" en el drawer
-// de detalle) al aparecer un segundo consumidor: `user-detail` lo reutiliza
-// en "Información general"/"Organización", con la diferencia de que ahí
-// varios campos son EDITABLES (nz-input/nz-select), no solo texto — de ahí
-// `.summary-field__control`/`.summary-field__error`, que sales-dashboard no
-// necesita (su resumen es de solo lectura).
+// Campo "icono + etiqueta + valor" en una fila; `__control`/`__error` para la variante editable.
+// Ver docs/codigo/estilos.md#partial-summary
 
 .summary-columns {
   display: grid;
@@ -37,10 +32,8 @@
   }
 }
 
-// Misma lista de campos que .summary-col pero SIN el divisor — para cuando
-// no hace falta partir en 2 columnas (p. ej. una sola card con pocos
-// campos). No anidar esto dentro de .summary-columns: el divisor de
-// .summary-col depende de ser :first-child de ESE grid.
+// Lista de campos sin divisor. No anidar en `.summary-columns`: el divisor de `.summary-col`
+// depende de ser su `:first-child`.
 .summary-fields {
   display: flex;
   flex-direction: column;

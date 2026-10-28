@@ -1,0 +1,143 @@
+// Copia la utilidad de _data-table.scss para no cargar el partial (budget de estilos).
+.text-muted {
+  color: var(--color-muted-foreground);
+}
+
+:host {
+  display: block;
+}
+
+.candidates-card {
+  border-radius: 8px;
+}
+
+.candidates-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.candidates-card__filter {
+  width: 220px;
+  flex-shrink: 0;
+}
+
+.candidates-section__title {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+.csv-errors {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+  color: var(--color-destructive);
+  font-size: 12px;
+  list-style: disc;
+  padding-left: 28px;
+  max-height: 250px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  // Máximo 5 tarjetas visibles (~72px + gap de 8px); el resto, con scroll interno.
+  max-height: calc(5 * 72px + 4 * 8px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.candidate-card {
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-muted);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+}
+
+.candidate-card--selected {
+  border-color: var(--color-primary);
+  background-color: color-mix(in srgb, var(--color-primary) 6%, var(--color-card));
+}
+
+.candidate-card__body {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.candidate-card__checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+}
+
+.candidate-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.candidate-card__field--ref,
+.candidate-card__field--amount {
+  flex: 0 0 140px;
+}
+
+.candidate-card__field--desc {
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+
+.candidate-card__field--amount {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.candidate-card__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+}
+
+.candidate-card__value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-card__meta {
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Origen como campo label + tag con flex-basis propio: si no cabe, baja de línea en vez de desbordar.
+.candidate-card__field--origin {
+  flex: 0 1 130px;
+  align-items: flex-start;
+}

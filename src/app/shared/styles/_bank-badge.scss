@@ -1,0 +1,12 @@
+// Icono de banco sobre --color-secondary, legible en claro y oscuro.
+// Ver docs/codigo/estilos.md#partial-tabla-acciones
+.bank-badge {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: var(--color-secondary);
+  color: var(--color-on-secondary);
+}

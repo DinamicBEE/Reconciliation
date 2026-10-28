@@ -1,0 +1,63 @@
+// Card de KPI con color de semáforo; `!important` para ganar al puente de `.ant-card`.
+// MASTER.md "Patrón: card de indicador con semáforo". Ver docs/codigo/estilos.md#partial-kpi-y-estado
+.status-card {
+  .status-card__body {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .status-card__icon {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+  }
+
+  .status-card__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .status-card__label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .status-card__value {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 28px;
+    //color: var(--color-foreground);
+  }
+
+  .status-card__percentage {
+    font-size: 14px;
+    font-weight: 600;
+  }
+}
+
+.status-card-success {
+  color: var(--color-tag-success-fg) !important;
+  background: var(--color-tag-success-bg) !important;
+  border-color: var(--color-tag-success-border) !important;
+}
+
+.status-card-warning {
+  color: var(--color-tag-warning-fg) !important;
+  background: var(--color-tag-warning-bg) !important;
+  border-color: var(--color-tag-warning-border) !important;
+}
+
+.status-card-error {
+  color: var(--color-tag-error-fg) !important;
+  background: var(--color-tag-error-bg) !important;
+  border-color: var(--color-tag-error-border) !important;
+}
+
+.status-card-neutral {
+  color: var(--color-muted-foreground) !important;
+  background: var(--color-muted) !important;
+  border-color: var(--color-border) !important;
+}

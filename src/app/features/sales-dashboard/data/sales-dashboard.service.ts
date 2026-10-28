@@ -4,19 +4,23 @@ import { Observable, catchError, debounceTime, of, switchMap, tap } from 'rxjs';
 import { toIsoDate } from '../../../shared/utils/iso-date.util';
 import { CaptureBatchResult, SaleListItem, SalesApiService, SalesListParams } from './sales-api.service';
 
-// Medio de pago, estado y tienda: `id` REAL de los catálogos — el mismo valor
-// que recibe `GET /sales` (`tenderMedia`, `status`, `store`). La tienda sale de
-// las ubicaciones del login (`CatalogService`); medio y estado, de
-// `SalesCatalogService`.
+/** Id de `SalesCatalogService.tenderMedia` que recibe `GET /sales` como `tenderMedia`. */
 export type TenderMediaFilter = number | 'all';
+/** Id de ubicación del login (`CatalogService`) que recibe `GET /sales` como `store`. */
 export type StoreFilter = number | 'all';
+/** Id de `SalesCatalogService.reconciliationStatuses` que recibe `GET /sales` como `status`. */
 export type StatusFilter = number | 'all';
+/** Rango de fechas completo o `null`. */
 export type DateRangeFilter = [Date, Date] | null;
-// Filtro "Empresa" (subsidiaria) — id del login. `GET /sales` aún NO filtra por
-// subsidiaria (ni las ubicaciones del login traen su subsidiaria), así que el
-// select queda deshabilitado hasta que el backend lo soporte.
+/**
+ * Filtro "Empresa" (id de subsidiaria del login).
+ *
+ * @remarks `GET /sales` aún no filtra por subsidiaria: el select queda deshabilitado.
+ * @see docs/codigo/ventas.md#resumen-de-venta
+ */
 export type SubsidiariaFilter = number | 'all';
 
+/** Tamaños de página del paginador (máximo del backend: 100). */
 export const SALES_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -24,21 +28,17 @@ function isSameDay(a: Date, b: Date): boolean {
   return toIsoDate(a) === toIsoDate(b);
 }
 
-// Tienda + día sobre los que actuaría el botón "Reprocesar" del toolbar.
+/** Tienda y día sobre los que actúa "Reprocesar". */
 export interface ReprocessTarget {
   date: Date;
   storeId: number;
 }
 
 /**
- * Estado de "Resumen de venta" sobre `GET /sales` (Core Service): los filtros
- * del toolbar se traducen a la query del backend y la tabla pagina en el
- * SERVIDOR (`page` base 1, `pageSize` ≤ 100). Cualquier cambio de filtro vuelve
- * a la página 1; la búsqueda espera 300 ms sin teclear antes de consultar. Una
- * consulta nueva cancela la anterior (`switchMap`).
+ * Estado de "Resumen de venta" con paginación en el servidor sobre `GET /sales`.
  *
- * Provisto a nivel de componente (`SalesDashboard.providers`): el estado vive lo
- * que vive la pantalla.
+ * @remarks Provisto en `SalesDashboard.providers`: el estado vive lo que vive la pantalla.
+ * @see docs/codigo/ventas.md#resumen-de-venta
  */
 @Injectable()
 export class SalesDashboardService {
@@ -60,8 +60,7 @@ export class SalesDashboardService {
   readonly loading = signal(false);
   readonly loadFailed = signal(false);
 
-  // Filtros (sin paginación) en el formato de `GET /sales` — los usa también la
-  // exportación, que recorre todas las páginas.
+  /** Filtros sin paginación en el formato de `GET /sales`; también los usa la exportación. */
   readonly filters = computed<Omit<SalesListParams, 'page' | 'pageSize'>>(() => {
     const range = this.dateRange();
     const store = this.storeFilter();
@@ -77,12 +76,10 @@ export class SalesDashboardService {
     };
   });
 
-  // Sube para volver a pedir la página actual con los mismos filtros (p. ej.
-  // después de reprocesar un día y que entren documentos nuevos).
+  // Sube para repetir la consulta actual (p. ej. tras reprocesar).
   private readonly refreshTick = signal(0);
 
-  // Lo que dispara una consulta: los parámetros de `GET /sales` y el contador de
-  // recarga (no viaja al backend; solo fuerza repetir la misma consulta).
+  // `tick` no viaja al backend: solo fuerza repetir la misma consulta.
   private readonly query = computed<{ params: SalesListParams; tick: number }>(() => ({
     params: { ...this.filters(), page: this.page(), pageSize: this.pageSize() },
     tick: this.refreshTick(),
@@ -121,9 +118,7 @@ export class SalesDashboardService {
       });
   }
 
-  // El botón "x" del range-picker (y a veces un cambio a medias de fecha)
-  // emite un array truthy con huecos (`[undefined, undefined]`) en vez de
-  // `null` — normalizarlo aquí evita mandar un rango inválido.
+  /** Normaliza a `null` el `[undefined, undefined]` que emite la "x" del range-picker. */
   setDateRange(range: DateRangeFilter): void {
     this.dateRange.set(range && range[0] && range[1] ? range : null);
     this.page.set(1);
@@ -163,14 +158,12 @@ export class SalesDashboardService {
     this.page.set(1);
   }
 
-  // Todas las filas que cumplen los filtros actuales (no solo la página).
+  /** Todas las filas de los filtros actuales, no solo la página. */
   exportRows(): Observable<SaleListItem[]> {
     return this.api.listAll(this.filters());
   }
 
-  // Botón "Reprocesar" del toolbar: solo tiene sentido cuando los filtros
-  // acotan a UN día específico Y una tienda específica. `null` cuando no se
-  // cumple, consumido directamente por `[disabled]` en la plantilla.
+  /** Destino de "Reprocesar"; `null` salvo que los filtros acoten a un día y una tienda. */
   readonly reprocessTarget = computed<ReprocessTarget | null>(() => {
     const range = this.dateRange();
     const store = this.storeFilter();
@@ -180,14 +173,12 @@ export class SalesDashboardService {
     return { date: range[0], storeId: store };
   });
 
-  // `POST /sales/capture` de UN día y UNA tienda (las condiciones del botón
-  // "Reprocesar"): vuelve a traer de Facturiza las ventas de ese día; es
-  // idempotente (lo que ya existía cuenta como omitido, no se duplica).
+  /** `POST /sales/capture` de un día y una tienda; idempotente (lo existente cuenta como omitido). */
   reprocessDay(target: ReprocessTarget): Observable<CaptureBatchResult> {
     return this.api.capture({ ubicacionIds: [target.storeId], dateFrom: toIsoDate(target.date) });
   }
 
-  // Vuelve a consultar la página actual con los filtros actuales.
+  /** Vuelve a consultar la página actual con los filtros actuales. */
   reload(): void {
     this.refreshTick.update((n) => n + 1);
   }

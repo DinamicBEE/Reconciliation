@@ -1,8 +1,7 @@
 <div class="sales-dashboard">
   <nz-page-header class="page-header" nzTitle="Resumen de venta" />
 
-  <!-- Filtros + tabla en la MISMA card — ver MASTER.md "Patrón: card de
-       tabla" (`.table-card`/`.table-bleed`, shared/styles/_data-table.scss). -->
+  <!-- Filtros + tabla: MASTER.md "Patrón: card de tabla" -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
     <section class="toolbar">
       <nz-range-picker
@@ -12,9 +11,7 @@
         nzFormat="dd/MM/yyyy"
       />
 
-      <!-- "Empresa" (subsidiaria) — arreglo que llega en el login
-           (AuthUser.subsidiarias vía CatalogService), igual que la tienda.
-           Deshabilitado: `GET /sales` aún no filtra por subsidiaria. -->
+      <!-- Filtro "Empresa": deshabilitado, GET /sales no filtra por subsidiaria -->
       <span nz-tooltip nzTooltipTitle="El filtro por empresa estará disponible cuando el listado de ventas lo soporte">
         <nz-select
           class="toolbar__filter"
@@ -71,14 +68,7 @@
 
       <span class="toolbar__spacer"></span>
 
-      <!-- "Reprocesar" = `POST /sales/capture` (vuelve a traer de Facturiza las
-           ventas del día). Visible con el permiso `capture_sales` — ver
-           AccessControlService.canReprocessSales. Solo se habilita con un día
-           específico + una tienda específica seleccionados
-           (`service.reprocessTarget()`, ver sales-dashboard.service.ts) — el
-           <span> lleva el tooltip en vez del <button> porque un botón
-           `disabled` no dispara eventos de hover en Ant Design; así el
-           usuario ve por qué está deshabilitado. -->
+      <!-- Reprocesar: el tooltip va en el <span> porque un botón disabled no dispara hover -->
       @if (access.canReprocessSales()) {
         <span
           nz-tooltip
@@ -99,9 +89,7 @@
         </span>
       }
 
-      <!-- "Exportación del listado de ventas" (matriz 7.16 del DED):
-           permiso propio `export_reports` — decoupled de `view_dashboard`
-           (quien ve la pantalla no necesariamente puede exportar). -->
+      <!-- Exportar: permiso propio export_reports (matriz 7.16 del DED) -->
       @if (access.hasPermission('export_reports')) {
         <button
           nz-button
@@ -121,11 +109,7 @@
       }
     </section>
 
-    <!-- Bleed: se sale del padding de la card (margin negativo, ver
-         _data-table.scss) para que el borde superior toque los bordes
-         izquierdo/derecho de la card, como divisor entre filtros y tabla.
-         Paginación en el SERVIDOR (`GET /sales`): `nzFrontPagination` apagado,
-         `nzTotal` viene del backend. -->
+    <!-- Tabla con paginación en el servidor (GET /sales) -->
     <div class="table-bleed">
       <nz-table
         #tbl
@@ -206,9 +190,7 @@
   </nz-card>
 </div>
 
-<!-- Detalle: con lo que trae la fila de `GET /sales`. El detalle completo
-     (productos, impuestos por línea, pagos, datos fiscales) necesita
-     `GET /sales/{id}`, que el backend aún no expone. -->
+<!-- Drawer de detalle (con los datos de la fila; ver docs/codigo/ventas.md#resumen-de-venta) -->
 <nz-drawer
   [nzVisible]="service.selectedSale() !== null"
   [nzTitle]="service.selectedSale() ? 'Venta ' + service.selectedSale()!.folio : ''"

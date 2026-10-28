@@ -1,0 +1,59 @@
+@if (selectedRun(); as run) {
+  <div class="reconciliation-compare">
+    <nz-page-header class="page-header" nzTitle="Comparativa POS vs. banco" [nzBackIcon]="backIcon" (nzBack)="onBack()">
+      <nz-breadcrumb nz-page-header-breadcrumb>
+        <nz-breadcrumb-item><a routerLink="/conciliacion">Conciliación bancaria</a></nz-breadcrumb-item>
+        <nz-breadcrumb-item>Comparativa POS vs. banco</nz-breadcrumb-item>
+      </nz-breadcrumb>
+    </nz-page-header>
+    <ng-template #backIcon>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+      </svg>
+    </ng-template>
+
+    <nz-card class="summary-card" [nzBodyStyle]="{ padding: '14px 16px' }">
+      <div class="summary-strip" style="--summary-strip-cols: 3">
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Conciliación</span>
+          <span class="summary-strip__value font-mono">{{ run.id }}</span>
+        </div>
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Fecha de creación</span>
+          <span class="summary-strip__value">{{ formatDate(run.createdAt) }}</span>
+        </div>
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Estatus</span>
+          <app-run-status-tag [status]="run.status" />
+        </div>
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Empresa</span>
+          <span class="summary-strip__value">{{ run.companyName }}</span>
+        </div>
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Restaurante</span>
+          <span class="summary-strip__value">{{ run.storeName }}</span>
+        </div>
+        <div class="summary-strip__item">
+          <span class="summary-strip__label">Periodo</span>
+          <span class="summary-strip__value">{{ formatDate(run.periodStart) }} – {{ formatDate(run.periodEnd) }}</span>
+        </div>
+      </div>
+    </nz-card>
+
+    <nz-card class="compare-placeholder" [nzBodyStyle]="{ padding: '48px 24px' }">
+      <div class="compare-placeholder__body">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h13M7 7l3-3M7 7l3 3M17 17H4M17 17l-3-3M17 17l-3 3" />
+        </svg>
+        <strong>Comparativa de movimientos POS vs. banco</strong>
+        <span class="text-muted">Esta vista está pendiente por definir.</span>
+      </div>
+    </nz-card>
+  </div>
+} @else {
+  <p>
+    Esta conciliación no existe.
+    <a routerLink="/conciliacion">Volver a conciliación</a>
+  </p>
+}

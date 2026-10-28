@@ -16,14 +16,10 @@ import { CatalogsService } from './data/catalogs.service';
 type KindFilter = CatalogKind | 'all';
 
 /**
- * Catálogos cargados (CU14 del DED, prueba 30 de la matriz): relación de
- * catálogos fijos de la autoridad fiscal (SAT / DIAN, según el país),
- * homologaciones, catálogos sincronizados desde
- * NetSuite y datos maestros, con su número de registros y fecha de
- * actualización. Abrir una lista muestra su contenido en un Drawer con
- * búsqueda — Drawer y no ruta porque el detalle es de solo lectura, sin
- * flujo propio (ver MASTER.md, "Patrón: Drawer de detalle"). Ninguna acción
- * de modificación, para ningún rol.
+ * "Catálogos cargados" (CU14 del DED): listas fiscales, homologaciones, NetSuite y maestros, de solo lectura.
+ *
+ * @remarks El detalle se abre en un Drawer, no en una ruta: no tiene flujo propio ni acciones de escritura.
+ * @see docs/codigo/catalogos.md#pantalla-catalogos-cargados
  */
 @Component({
   selector: 'app-catalogs',

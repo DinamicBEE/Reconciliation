@@ -144,7 +144,7 @@ patrón que el resto del puente ng-zorro↔tokens. Fijos, no siguen la paleta.
 - 6 acentos base: Azul `#2563eb`, Índigo `#4f46e5`, Violeta `#7c3aed`, Rosa
   `#db2777`, Cian `#0891b2`, Dorado `#eab308` — deliberadamente distintos de
   verde/ámbar/rojo semánticos.
-- Al elegir uno, se deriva una paleta COMPLETA (14 tokens: primary, secondary,
+- Al elegir uno, se deriva una paleta COMPLETA (15 tokens, ver `TOKEN_NAMES` en `palette.service.ts`: primary, secondary,
   accent, background, foreground, card, muted, border, ring, chart-donut +
   sus "on-*") a partir del **matiz (hue)** de ese color, con fórmulas HSL
   distintas para claro/oscuro — no son 6×2 paletas hardcodeadas.
@@ -237,6 +237,22 @@ o una tabla. Dentro de `.card-centered`, el botón de guardar
 horizontalmente en vez de pegarse a la izquierda — sigue siendo el último
 elemento del formulario, así que "abajo de la card" ya lo resuelve el flujo
 normal del documento, sin necesitar un spacer ni una card de altura fija.
+
+### Patrón: card de indicador con semáforo (`.status-card`)
+
+`shared/styles/_status-card.scss` — KPI sobre una `nz-card` rectangular con las 3 variantes de
+color de los tags (`.status-card-success|warning|error`, tokens `--color-tag-*`; el fondo y el borde
+llevan `!important` porque el puente de `.ant-card` también lo usa). Interior: `.status-card__body`
+(icono + columna de dos filas: `__label` y `__value`, con `__percentage` junto al valor). Primer
+consumidor: el resultado de `reconciliation-process`.
+
+### Patrón: leyenda de resultado "icono + texto" (`.status-legend`)
+
+`shared/styles/_status-legend.scss` — pieza para el RESULTADO de una revisión (p. ej. "Archivo
+válido"), distinta del `nz-tag` de estado de una fila: `.status-legend` (pastilla inline-flex,
+icono SVG + texto, 12px/600, gap 6px) + una variante `.status-legend-success|warning|error` que usa
+los mismos tokens `--color-tag-*` que `.ant-tag-success|warning|error`. Se compone con la clase
+estática más el `[class]` de la variante. Primer consumidor: `reconciliation-process`.
 
 ### Patrón: botones — radius uniforme + color atado a la paleta
 
@@ -588,8 +604,8 @@ mismo patrón que `ThemeService`).
   vista. Cambio de comportamiento respecto al layout anterior (que sí
   scrolleaba la página completa), necesario para que el menú mida siempre
   el alto real de la pantalla.
-- **Despegado de los bordes**: `.app-menu` lleva `margin: 4px 0 4px 4px` y
-  `height: calc(100% - 8px)` — **restar los 8px es obligatorio**, si el
+- **Despegado de los bordes**: `.app-menu` lleva `margin: 8px 0 8px 8px` y
+  `height: calc(100% - 16px)` — **restar los 16px es obligatorio**, si el
   alto se deja en `100%` la caja excede el alto de `.shell` y el margen
   inferior queda recortado por su `overflow: hidden` en vez de verse como
   espacio real (bug real encontrado al implementar esto).
@@ -1501,6 +1517,14 @@ bordes). En ambos casos, `.table-card` solo se aplica como clase en el
 
 ## Patrón: conciliación por tender media y fecha (base POS)
 
+> **Supersedido en la TABLA de `/conciliacion`** por "Patrón: conciliaciones
+> (tabla de corridas…)" (más abajo): la tabla ya no lista totales por día +
+> medio de pago. Lo de esta sección que sigue vivo: `sales-settlements.mock-data.ts`,
+> `cross-match.util.ts`, `ResolvedMatchesStore` y `difference-management`
+> (hoy sin entrada desde la tabla). `group-by-tender-day.util.ts`,
+> `ReconciliationOverridesStore` y el modal "Ver detalles" quedaron sin uso en
+> la pantalla (candidatos a la futura comparativa POS vs. banco).
+
 `reconciliation-dashboard` ("Conciliación") dejó de mostrar UNA fila por
 orden — ahora muestra TOTALES agrupados por `tender media + fecha` (un
 banco liquida por lote diario, no orden por orden; comparar sumas de un día
@@ -1783,6 +1807,13 @@ patrón cierra ese hueco.
    cerca de los datos".
 
 ## Patrón: importar movimientos bancarios (carga masiva, no por orden)
+
+> **Retirado de `/conciliacion`**: el botón "Importar" y su modal se
+> reemplazaron por "Nueva conciliación" (ver "Patrón: conciliaciones…"). Siguen
+> en el repo, sin referencias desde la pantalla, `bank-import.util.ts` (parser
+> y simulación de rechazo) y `bank-accounts.mock-data.ts` (cuentas
+> colombianas), por si la importación de archivos bancarios vuelve en la
+> comparativa; `_import-dropzone.scss` sigue en uso por `difference-management`.
 
 Botón "Importar" en `reconciliation-dashboard`, arriba de la tabla y
 alineado a la derecha (`.dashboard__actions`) — icono + label centrados
@@ -3297,6 +3328,150 @@ de celda viven en `shared/styles/_data-table.scss` y el chip en
    `avatarTokensFor`) + nombre como enlace a su detalle, con ellipsis y
    `[attr.title]`.
 8. **Números** siempre `.font-mono`; colores solo con tokens (`var(--color-*)`).
+
+## Patrón: conciliaciones (tabla de corridas + modal "Nueva conciliación" + comparativa)
+
+`/conciliacion` (`features/reconciliation-dashboard/`) lista **conciliaciones** (corridas), no
+totales por día. Una conciliación (`ReconciliationRun`, `data/reconciliation-run.model.ts`) es
+**empresa + restaurante (tienda) + periodo** con su fecha de creación y un estatus.
+
+1. **Tabla** (sigue "Regla general: tablas": `.table-card` con padding 24px, `.toolbar` +
+   `.table-bleed`, `nzSize="middle"`, `.col-truncate` + `title`, indicador en su propia celda
+   `.cell-indicator`). Columnas: **Fecha** (de CREACIÓN, no del periodo), **Empresa**,
+   **Restaurante**, **Periodo** (`dd/MM/yyyy – dd/MM/yyyy`), **Estatus**, **Comentarios** (`ReconciliationRun.comments`, `.col-truncate` + `title`, "—" si está vacío) y **Acciones**. Sin KPIs arriba de la tabla (se retiraron: `ReconciliationService` ya no tiene `tenderMediaStatuses`/tendencias y el `.scss` ya no hace `@use` de `kpi-card`/`status-dot`). Filtros:
+   estatus y rango de la fecha de creación (el placeholder lo dice: "Creada desde/hasta"). La fila
+   entera lleva a la comparativa, igual que "Ver" (la celda de acciones corta la propagación).
+2. **Estatus: `ReconciliationRunStatus` = `conciliado | pendiente | desconciliado`** y su propio
+   tag (`run-status-tag`, success/warning/error). Es DISTINTO de `ReconciliationStatus`
+   (`conciliado | desconciliado | por_conciliar`, el estado por día + medio de pago que pinta
+   `sales-dashboard`): aquí el tercer valor es "Pendiente" y el estado es de la corrida completa.
+3. **Acciones** (iconos + tooltip, `.row-actions`; reglas en `reconciliation-run.util.ts`):
+   **Ver** siempre (→ `/conciliacion/:runId`); **Desconciliar** solo `conciliado`
+   (`canDesconciliar`, confirmación con `NzModalService.confirm()` → `desconciliado`);
+   **Descargar** solo con la conciliación **completada** (`canDownload`: conciliado o
+   desconciliado, NUNCA pendiente) y además con el permiso `export_reports` (como "Exportar" en
+   Resumen de venta). Hoy baja un CSV con los datos generales de la conciliación
+   (`buildRunCsv`) — el detalle de movimientos entra con la comparativa. "Completado" no es un
+   estatus del producto; se interpretó como "ya terminó" = no pendiente.
+4. **Botón "Nueva conciliación"** (`nzType="primary"`, icono de banco + label, regla de botones "icono + label"), en
+   el `.toolbar` a la derecha tras `.toolbar__spacer`. Reemplaza a "Importar" y conserva su
+   permiso (`import_settlements`: no hay uno propio para iniciar conciliaciones).
+5. **Modal "Nueva conciliación"** en dos secciones (`.new-reco`, grid de 2 columnas; 1 en
+   ≤ 640px): **izquierda**, en columna, "Empresa" y "Tienda" (selects) y "Periodo"
+   (`nz-range-picker`) + el botón primario "Iniciar conciliación" (deshabilitado hasta tener los
+   tres); **derecha**, una `nz-card` (`.new-reco__hero`) con borde SÓLIDO `2px
+   var(--color-primary)` — lleva su propio `!important` porque el puente de `.ant-card` también
+   lo usa (mismo gotcha de "Patrón: card base") — y, centrado y en columna, el icono de banco
+   sobre un recuadro `--color-secondary` (trazo `--color-on-secondary`), el título en negritas
+   "Conciliación Bancaria y de ingresos" y el subtítulo "Compara ventas de sistemas POS con
+   archivos bancarios". La separación con el borde del modal es el padding de 24px del propio
+   `.ant-modal-body`. Empresa/Tienda salen de `CatalogService.subsidiarias()/ubicaciones()` (los
+   catálogos reales del login, regla de "Catálogos reales"), con la tienda filtrada por la empresa elegida (la
+   subsidiaria de cada ubicación sale de `OrganizationCatalogService`) y deshabilitada sin empresa. Iniciar crea la conciliación en `pendiente` con
+   `createdAt` = hoy real (local, `toIsoDate`), cierra el modal y navega a `/conciliacion/:runId/proceso` (punto 9). El icono de banco es `.bank-badge` (`shared/styles/_bank-badge.scss`, 64px, radius 16px, `--color-secondary`), compartido con la pantalla de proceso.
+6. **`ReconciliationRunsStore`** (`root`, en memoria, semilla `MOCK_RECONCILIATION_RUNS`): lo leen
+   la tabla y la comparativa, que son rutas con servicios distintos. Sin endpoint todavía.
+7. **Comparativa** (`reconciliation-compare/`, `/conciliacion/:runId`, permiso
+   `view_reconciliation`): pantalla hija (flecha + breadcrumb "Conciliación bancaria › Comparativa
+   POS vs. banco") con el resumen de la conciliación (`.summary-strip`) y un espacio reservado:
+   **la comparativa de movimientos POS vs. banco está pendiente por definir**. Id inexistente →
+   mensaje + enlace de vuelta. La ruta no choca con `/conciliacion/:tenderMedia/diferencias/:orderId`
+   (distinta cantidad de segmentos).
+8. **Fuera de la pantalla desde este cambio**: ya no hay entrada UI a "Gestión de diferencias"
+   (su ruta sigue viva) ni a "Ver detalles" por día.
+9. **Proceso paso a paso** (`reconciliation-process/`, `/conciliacion/:runId/proceso`, permiso
+   `import_settlements`): pantalla hija (flecha + breadcrumb "Conciliación bancaria › Nueva
+   conciliación"; la flecha sale del proceso a la tabla, no es un "Anterior") con `nz-steps` de **3 pasos**, cada uno con título, icono (SVG en `ng-template`) y descripción. Reglas: **solo se
+   cambia de paso con "Siguiente"** (los steps NO son clicables: sin `(nzIndexChange)` ng-zorro no
+   los vuelve botones) y **no hay "Anterior"**; en el paso 3 el botón es "Finalizar" y vuelve a la
+   tabla. La conciliación ya existe (`pendiente`) desde el modal.
+   - **Paso 1 · "Carga de archivos"**: grid de 2 columnas (1 en ≤ 768px), una `nz-card` por archivo
+     (padding 24px, borde/radio/sombra del puente global).
+     - **Card 1 "Archivo Bancario"**: `.bank-badge` + a su derecha "Archivo Bancario" / "Extracto
+       bancario"; debajo, el botón `.import-dropzone` de "Gestión de diferencias" con el label en dos
+       filas (`.import-dropzone__label`: "Arrastra tu archivo aquí" / "o selecciona un archivo" en
+       `--color-primary`, `.import-dropzone__hint`) que acepta arrastrar y soltar (`dragover`/`drop`
+       en `.import-dropzone-row`, realce `.import-dropzone--over`) o elegir con el selector; **solo
+       `.xlsx`** (lo que se suelta se valida igual); debajo, el nombre del archivo con un check verde y
+       "Archivo cargado correctamente".
+     - **Card 2 "Banco (extracto bancario)"**: `.bank-badge` + esa leyenda, fijos desde que aparece
+       el paso. Al cargar el archivo: `nz-spin` ("Revisando el archivo…") mientras se lee; luego, en
+       columna, "Total de registros" (líneas de movimientos, sin el encabezado), "Total de
+       movimientos" (suma de la columna N "VALOR TOTAL", `money`) y "Rango de fechas" (menor–mayor
+       "FECHA DE CANJE"), y debajo la **leyenda del resultado** (icono + texto): "Archivo válido"
+       (`.status-legend-success`); "Archivo inválido" (`-error`: faltan columnas, que se listan
+       TODAS en una lista con scroll, o no hay movimientos); "Campos faltantes" (`-warning`: lista con
+       scroll de TODAS las filas con un campo ilegible, "Fila N: CAMPO") o "Error en el archivo"
+       (`-error`: no se pudo leer). Las filas de resumen solo salen con un archivo válido. Botón de
+       carga y resultado son los componentes `BankFileDropzone` y `StatementResult`
+       (`reconciliation-dashboard/components/`), reutilizados por "Reconciliar".
+     - **Formato por ahora**: el "Reporte Conciliar" de Bancolombia
+       (`bancolombia_Reporte_Conciliar_<AAAAMMDD>_<AAAAMMDD>.xlsx`, 27 columnas A–AA con encabezado,
+       un movimiento por fila). `data/bank-statement.util.ts` (`analyzeBancolombiaReport`, puro) lo
+       revisa; `BankStatementReader` lo lee con `read-excel-file` (import dinámico: fuera del bundle
+       inicial) y es el punto a sustituir cuando haya otro banco/formato. El periodo del archivo es el
+       de la FECHA DE CANJE (coincide con el del nombre), no el de la transacción.
+     - **"Siguiente"** queda deshabilitado hasta que el extracto sea `valid`.
+   - **Paso 2 · "Validación"**: al pulsar "Siguiente" en el paso 1 se "envía" el extracto al back
+     (`ReconciliationProcessApi.submitBankStatement`, SIMULADO con `timer(10 s)`; sin endpoint
+     todavía — reemplazar el cuerpo por el HTTP real). Mientras espera: engranes SVG girando en
+     sentidos opuestos (`.gears`, se detienen con `prefers-reduced-motion` y al terminar), título
+     en negritas "Procesando información...", dos subtítulos en gris ("Estamos unificando los datos
+     del Punto de venta y el banco." / "Esto puede tomar unos segundos.") y un `nz-progress` que
+     sube 10% por segundo hasta el 80%; el resto llega con la respuesta (100%). "Siguiente" queda
+     deshabilitado hasta esa respuesta. `nz-progress` no usa `nzStatus="success"` (pintaría un
+     `nz-icon`, y el proyecto no registra iconos de ng-zorro).
+   - **Resultado (mismo paso, al responder el back)**: la animación de espera se REEMPLAZA por el
+     resultado POS vs. banco, que la respuesta trae YA ARMADO (`SubmitBankStatementResponse.result`,
+     `ReconciliationResult`: conteos, porcentajes y estado de cada línea — el front solo pinta; la
+     simulación vive en `data/reconciliation-result.mock-data.ts` y usa las ventas/liquidaciones
+     compartidas del POS, así cada referencia existe también en "Gestión de diferencias"):
+     - **3 KPI** en fila (1 columna ≤ 768px): `nz-card.status-card` + `.status-card-success|warning|error`
+       (`shared/styles/_status-card.scss`: fondo/borde con los tokens `--color-tag-*`, con `!important`
+       por el puente de `.ant-card`). Interior "icono + columna de dos filas": etiqueta
+       (Coincidencias / Diferencias / Sin coincidencias, en ese orden de semáforo) y `1,120 (90.1%)`.
+     - **Tabla** (regla general de tablas: `.table-card` 24px, `nzSize="middle"`, 10 por página):
+       checkbox (todos / indeterminado / por fila), Fecha, Referencias (referencia + medio de pago como
+       subtítulo), POS y Banco (`money`, "—" si ese lado no existe) y Estado (`ResultStatusTag`:
+       Coincide / Diferencia / Sin coincidencia = success / warning / error). Mapeo de estados:
+       `matched`→coincide, `amount_mismatch`→diferencia, `sale_only`/`settlement_only`→sin coincidencia.
+     - **Marcado de líneas**: las `coincide` se marcan con su checkbox; las `diferencia` y
+       `sin_coincidencia` tienen el checkbox deshabilitado hasta que se registre una acción en su
+       detalle (que además las marca). El checkbox de cabecera marca solo las marcables. **"Siguiente"
+       exige la respuesta del back y TODAS las líneas marcadas**; el pie muestra "N de M líneas
+       marcadas".
+     - **Indicador "Por gestionar"**: cuarta card neutra (`.status-card-neutral`) en la fila de KPI
+       con las líneas cuyo checkbox sigue bloqueado.
+     - **Click en una línea** abre un `nz-drawer` (80%) con `LineDetail`: dos `nz-card` (POS | Banco
+       (Movimientos)) con `.bank-badge` y, en columna, Referencia, Monto, Concepto y Método de pago
+       (los entrega el back por lado). Debajo, en la misma fila, la **diferencia** (un tercio: card de
+       semáforo con el valor grande y la etiqueta "Diferencia" debajo) y **"Notas"** (dos tercios), y
+       bajo ellas los botones. `coincide`: sin acciones y notas de solo lectura. `diferencia`/
+       `sin_coincidencia`: "Marcar pendiente" (registra y cierra), "Ajustar monto" (muestra
+       "Transacciones bancarias candidatas"; con candidatos seleccionados el Monto del banco y la
+       Diferencia pasan a ser su suma, y "Confirmar ajuste") y "Reconciliar" (botón de carga igual al del
+       paso 1, mismo `.xlsx` y misma revisión, y "Confirmar reconciliación"). En los dos últimos las
+       notas se activan y deben ser un motivo real (`validateNote`: mínimo 10 caracteres y dos
+       palabras; un "." o una letra no habilitan el botón). Exigen `manage_differences`. Con la acción
+       ya registrada el detalle es de solo lectura.
+     - **"Descargar"** (pie, antes de "Siguiente", solo con resultado): CSV con BOM de TODAS las
+       líneas de la tabla (`buildResultCsv`: Fecha, Referencia, Medio de pago, POS, Banco, Estado),
+       `conciliacion_<runId>_resultados.csv`.
+   - **Salir con cambios**: `confirmLeaveGuard` (`canDeactivate` de la ruta) pide confirmación
+     (`NzModalService.confirm`, "¿Salir de la conciliación?" — "Los cambios realizados se perderán
+     si regresas a la página de conciliación") cuando hay un archivo cargado, salga por donde
+     salga (flecha, breadcrumb, menú lateral, "atrás" del navegador; el texto dice "sales de esta
+     pantalla" si el destino no es `/conciliacion`). "Finalizar" sale sin preguntar. La conciliación
+     ya creada (`pendiente`) NO se elimina al salir. El componente necesita `NzModalModule` en sus
+     imports para inyectar `NzModalService`.
+   - **Botones "Siguiente"** (todos los pasos) y "Nueva conciliación": `nzType="primary"`, icono
+     antes del label, igual que "Iniciar conciliación".
+   - **Paso 3 · "Resultado"** (al pulsar "Siguiente" con todas las líneas marcadas): un banner
+     de éxito de ancho completo (icono + "¡Conciliación completada!" / "Todos los movimientos han sido
+     conciliados correctamente"), un divisor tenue y 4 métricas en columna (nombre en gris arriba, valor
+     grande en negritas debajo): Total POS, Total banco (vienen del back), Diferencias resueltas y
+     Conciliados con su porcentaje entre paréntesis. "Finalizar" vuelve a la tabla.
+   - El archivo solo se lee en el navegador (vive en un signal del componente); aún no se envía a ningún lado.
 
 ## Pendientes / deuda conocida al cerrar este módulo
 

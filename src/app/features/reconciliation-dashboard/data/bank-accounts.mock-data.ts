@@ -1,3 +1,4 @@
+/** Cuenta bancaria propia a la que se importa un estado de cuenta. */
 export interface BankAccount {
   id: string;
   bankName: string;
@@ -5,14 +6,12 @@ export interface BankAccount {
   accountType: 'Ahorros' | 'Corriente';
 }
 
-// Cuentas bancarias — la app está pensada para conciliaciones en Colombia,
-// por eso el catálogo de bancos es colombiano, aunque el "Medio de pago"
-// (`TenderMedia`) siga siendo el mismo catálogo ya usado en toda la app
-// (BBVA, Rappi, DiDi Food, Efectivo). Son dos catálogos independientes que
-// no se cruzan: uno es CÓMO se cobró la venta (tender media), el otro es A
-// QUÉ CUENTA propia se importa el estado de cuenta bancario — nada impide
-// que la cuenta "BBVA Colombia" reciba liquidaciones de cualquier medio de
-// pago, no solo las marcadas `bbva`.
+/**
+ * Cuentas bancarias mock (bancos de Colombia).
+ *
+ * @remarks Es un catálogo independiente de `TenderMedia`: una cuenta recibe liquidaciones de cualquier medio.
+ * @see docs/codigo/conciliacion.md#datos-mock
+ */
 export const BANK_ACCOUNTS: BankAccount[] = [
   { id: 'CTA-001', bankName: 'Bancolombia', accountNumber: '••• 4821', accountType: 'Ahorros' },
   { id: 'CTA-002', bankName: 'Davivienda', accountNumber: '••• 1190', accountType: 'Corriente' },

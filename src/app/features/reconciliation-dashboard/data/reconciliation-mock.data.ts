@@ -1,10 +1,6 @@
 import { TrendPoint } from '../../../shared/models/reconciliation-item.model';
 
-// Series de 7 días para las gráficas de los KPI — mock ilustrativo. La tabla
-// de movimientos ya no vive aquí: se unificó con el cruce venta vs.
-// liquidación de `shared/mock-data/sales-settlements.mock-data.ts` (ver
-// `reconciliation.service.ts` y MASTER.md, "Patrón: cruce transacción a
-// transacción entre dos fuentes").
+/** Serie ilustrativa de 7 días del porcentaje conciliado (KPI). */
 export const MOCK_RECONCILED_PCT_TREND: TrendPoint[] = [
   { date: '2026-08-20', value: 78 },
   { date: '2026-08-21', value: 80 },
@@ -15,6 +11,7 @@ export const MOCK_RECONCILED_PCT_TREND: TrendPoint[] = [
   { date: '2026-08-26', value: 84 },
 ];
 
+/** Serie ilustrativa de 7 días del monto en diferencias (KPI). */
 export const MOCK_DISCREPANCY_AMOUNT_TREND: TrendPoint[] = [
   { date: '2026-08-20', value: 650 },
   { date: '2026-08-21', value: 920 },

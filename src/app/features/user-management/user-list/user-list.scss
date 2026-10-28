@@ -27,8 +27,7 @@
   border-color: var(--color-secondary) !important;
   color: var(--color-secondary) !important;
 
-  // Mismo criterio de hover que el resto de los botones (.ant-btn-primary/
-  // -dangerous en styles.scss): aclarar con filtro, no cambiar de color.
+  // Hover: aclarar con filtro, no cambiar de color (igual que .ant-btn-primary).
   &:hover,
   &:focus {
     filter: brightness(1.1);
@@ -41,13 +40,7 @@
   gap: 6px;
 }
 
-// Card + bleed de tabla: `.table-card`/`.table-bleed` ahora son el estándar
-// compartido de toda la app (ver shared/styles/_data-table.scss y MASTER.md
-// "Patrón: card de tabla") — esta pantalla ya no necesita su propio radius,
-// fondo de header ni línea vertical: los hereda solo con usar esas dos
-// clases en el .html. `.toolbar__filter--search` se promovió a
-// shared/styles/_toolbar.scss al aparecer sales-dashboard como segundo
-// consumidor.
+// MASTER.md "Patrón: card de tabla"
 
 .checkbox-col {
   width: 44px;
@@ -82,17 +75,8 @@
   color: var(--color-muted-foreground);
 }
 
-// Selector de rol "sin bordes" directo en la fila — mismo control que
-// user-detail (nz-select multiple), pero sin fondo/borde propio para que se
-// lea como parte de la fila y no como un input más. El chevron de apertura
-// ya lo trae nz-select por defecto (no hace falta un icono propio, a
-// diferencia del chip de Estado — ver StatusChip).
-//
-// `width: auto` (no 100%/max-width fijo) para que la caja se ajuste al
-// contenido — así el label y la flecha quedan pegados en vez de la flecha
-// flotando en el extremo derecho de una caja ancha. `nzDropdownMatchSelectWidth`
-// (en el .html) evita que ESTO reduzca también el ancho del panel de
-// opciones: sin él, el panel heredaría el mismo ancho angosto del selector.
+// Selector de rol sin bordes en la fila; width: auto pega label y flecha, y
+// nzDropdownMatchSelectWidth (en el .html) evita que el panel herede ese ancho.
 .role-select {
   display: inline-block;
   width: auto;
@@ -111,18 +95,13 @@
     padding-right: 4px;
   }
 
-  // La "x" de quitar un rol individual no aplica aquí: cambiar de rol se
-  // hace reabriendo el selector y (des)marcando en el panel, no removiendo
-  // el tag a mano — mismo criterio que el chip de Estado (un solo punto de
-  // interacción, no dos).
+  // Sin "x" por tag: el rol se cambia solo desde el panel del selector.
   ::ng-deep .ant-select-selection-item-remove {
     display: none !important;
   }
 }
 
-// `.row-actions` (botones de icono circulares de la columna "Acciones") se
-// promovió a shared/styles/_row-actions.scss al aparecer un segundo
-// consumidor (reconciliation-dashboard) — ver MASTER.md.
+// .row-actions vive en shared/styles/_row-actions.scss.
 
 .user-list__empty {
   text-align: center;

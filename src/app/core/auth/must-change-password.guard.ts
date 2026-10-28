@@ -3,12 +3,12 @@ import { CanActivateFn, Router } from '@angular/router';
 import { AccessControlService } from './access-control.service';
 import { AuthService } from './auth.service';
 
-// Protege /cambiar-password (fuera de Shell, ver app.routes.ts) — la
-// contraparte de `authGuard`, que empuja HACIA acá cuando hace falta.
-// Sin sesión → /login (no tiene sentido cambiar la contraseña de nadie).
-// Con sesión pero SIN el cambio pendiente → de vuelta a `homeRoute()`, no
-// hay razón para estar aquí (evita que alguien la visite a mano por
-// curiosidad, o se quede pegado tras completar el cambio y navegar "atrás").
+/**
+ * Protege `/cambiar-password`: sin sesión lleva a `/login` y sin cambio pendiente a `homeRoute()`.
+ *
+ * @remarks Contraparte de {@link authGuard}; juntos no forman bucles.
+ * @see docs/codigo/sesion-y-acceso.md#guards
+ */
 export const mustChangePasswordGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const access = inject(AccessControlService);

@@ -14,9 +14,7 @@ import { environment } from '../../../environments/environment';
 import { COUNTRY_PROFILES } from './country-profiles';
 import { CountryProfile } from './country.model';
 
-// Resuelve `environment.country` UNA sola vez, al cargar la app. Un valor
-// no soportado detiene el arranque con un mensaje claro en vez de dejar la
-// app a medias con textos o impuestos de otro país.
+// Un país no soportado detiene el arranque en vez de dejar la app a medias.
 function resolveActiveCountry(code: string): CountryProfile {
   const profile = COUNTRY_PROFILES[code as keyof typeof COUNTRY_PROFILES];
   if (!profile) {
@@ -26,18 +24,24 @@ function resolveActiveCountry(code: string): CountryProfile {
   return profile;
 }
 
-// Para funciones puras y datos mock (sin DI), p. ej. `saleTaxAmount` o el
-// armado de comprobantes en `sales-mock.data.ts`. Los componentes usan
-// `COUNTRY_PROFILE` (mismo objeto, vía inyección).
+/**
+ * Perfil del país activo, resuelto una vez al cargar, para código sin DI (funciones puras, mocks).
+ *
+ * @throws Error si `environment.country` no es un país soportado.
+ * @see docs/codigo/configuracion-y-pais.md#perfil-de-pais
+ */
 export const ACTIVE_COUNTRY: CountryProfile = resolveActiveCountry(environment.country);
 
+/** Perfil del país activo para inyectar en componentes y servicios (mismo objeto que {@link ACTIVE_COUNTRY}). */
 export const COUNTRY_PROFILE = new InjectionToken<CountryProfile>('COUNTRY_PROFILE');
 
 const LOCALE_DATA = { 'es-MX': localeEsMx, 'es-CO': localeEsCo } as const;
 
-// Providers de país para `app.config.ts`: perfil, `LOCALE_ID` (formato de
-// números y fechas) y moneda por defecto del pipe `currency`. Marca además
-// `<html lang>` con el locale activo.
+/**
+ * Providers de país: {@link COUNTRY_PROFILE}, `LOCALE_ID`, `DEFAULT_CURRENCY_CODE` y `<html lang>`.
+ *
+ * @see docs/codigo/configuracion-y-pais.md#perfil-de-pais
+ */
 export function provideCountry(profile: CountryProfile = ACTIVE_COUNTRY): EnvironmentProviders {
   registerLocaleData(LOCALE_DATA[profile.locale]);
   return makeEnvironmentProviders([

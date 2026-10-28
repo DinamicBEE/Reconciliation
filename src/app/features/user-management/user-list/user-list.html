@@ -20,9 +20,6 @@
     </nz-page-header-extra>
   </nz-page-header>
 
-  <!-- Filtros + tabla en la MISMA card — el estándar de toda la app, ver
-       MASTER.md "Patrón: card de tabla" (`.table-card`, en
-       shared/styles/_data-table.scss). -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
     <section class="toolbar">
       <input
@@ -47,9 +44,6 @@
       </nz-select>
     </section>
 
-    <!-- Bleed: se sale del padding de la card (margin negativo, ver .scss)
-         para que el borde superior toque los bordes izquierdo/derecho de la
-         card, como divisor entre los filtros y la tabla. -->
     <div class="table-bleed">
       <nz-table #tbl [nzData]="service.filteredUsers()" [nzPageSize]="10" nzSize="middle">
         <thead>
@@ -66,7 +60,6 @@
             <th>Usuario</th>
             <th>Estatus</th>
             <th>Rol</th>
-            <!-- <th>ID</th> -->
             <th>Teléfono</th>
             <th>Última conexión</th>
             <th class="text-center">Acciones</th>
@@ -119,7 +112,6 @@
                 </nz-select>
                 <ng-template #roleOverflowTpl let-omitted>+{{ omitted.length }}</ng-template>
               </td>
-              <!-- <td class="font-mono">{{ user.id }}</td> -->
               <td class="font-mono">{{ user.phone }}</td>
               <td class="font-mono">
                 @if (user.lastAccessAt) {

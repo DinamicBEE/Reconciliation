@@ -1,17 +1,10 @@
-// Parseo/simulación del import masivo de "Importar movimientos bancarios"
-// (modal de reconciliation-dashboard) — mismo formato de archivo que
-// `difference-management/data/csv-import.util.ts`
-// (referencia,descripcion,monto,fecha), pero sin atar el resultado a UNA
-// orden puntual: aquí se procesa el archivo completo y se resume en 3
-// números (incorporados/duplicados/con error), no en filas seleccionables.
-// No se reutiliza `parseSettlementsCsv` porque ese sí construye
-// `SettlementTransaction[]` listos para inyectarse al pool de una orden —
-// este import es un resumen desconectado del resto de la data (ver
-// MASTER.md, "no hay backend real todavía").
+// Importación masiva simulada de movimientos bancarios (`referencia,descripcion,monto,fecha`).
+// Ver docs/codigo/conciliacion.md#importacion-masiva
 
 const EXPECTED_COLUMNS = ['referencia', 'descripcion', 'monto', 'fecha'];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Fila válida del archivo; `lineNumber` es la línea en el archivo (1 = primera). */
 export interface BankImportRow {
   lineNumber: number;
   referencia: string;
@@ -20,16 +13,24 @@ export interface BankImportRow {
   fecha: string;
 }
 
+/** Error de una línea del archivo, con el motivo que se muestra. */
 export interface BankImportLineError {
   line: number;
   reason: string;
 }
 
+/** Filas válidas y errores de un archivo de importación. */
 export interface BankImportParseResult {
   rows: BankImportRow[];
   errors: BankImportLineError[];
 }
 
+/**
+ * Parsea el archivo de importación; el encabezado es opcional.
+ *
+ * @returns Filas válidas y errores por línea; un archivo vacío da un error en la línea 1.
+ * @see docs/codigo/conciliacion.md#importacion-masiva
+ */
 export function parseBankImportFile(text: string): BankImportParseResult {
   const lines = text
     .split(/\r?\n/)
@@ -78,21 +79,19 @@ export function parseBankImportFile(text: string): BankImportParseResult {
   return { rows, errors };
 }
 
+/** Resumen del modal: movimientos incorporados, duplicados y líneas con error. */
 export interface BankImportSummary {
   incorporated: number;
   duplicates: number;
   errors: number;
 }
 
-// Ambas funciones reciben el `BankImportParseResult` YA calculado (no el
-// texto crudo) — el componente parsea el archivo UNA sola vez (lo que
-// también loguea en consola) y reutiliza ese mismo resultado aquí, en vez de
-// volver a leer/parsear el archivo por cada función.
-
-// "Duplicado" se simula contra las referencias que YA existen en
-// `MOCK_SETTLEMENTS` del medio de pago elegido (ver
-// sales-settlements.mock-data.ts) — así el resumen queda anclado a data real
-// de la app en vez de un número inventado sin relación con nada.
+/**
+ * Resume un archivo ya parseado.
+ *
+ * @param existingReferences - Referencias de las liquidaciones mock del medio elegido; coincidir cuenta como duplicado.
+ * @see docs/codigo/conciliacion.md#importacion-masiva
+ */
 export function summarizeBankImport(parsed: BankImportParseResult, existingReferences: ReadonlySet<string>): BankImportSummary {
   let duplicates = 0;
   for (const row of parsed.rows) {
@@ -101,16 +100,18 @@ export function summarizeBankImport(parsed: BankImportParseResult, existingRefer
   return { incorporated: parsed.rows.length - duplicates, duplicates, errors: parsed.errors.length };
 }
 
+/** Rechazo simulado de una importación: línea y motivo. */
 export interface BankImportRejection {
   line: number;
   reason: string;
 }
 
-// Rechazo simulado del intento #2 en adelante (ver reconciliation-dashboard.ts,
-// que decide CUÁNDO llamar a esto — no depende de si el archivo en verdad
-// está mal formado). Si el parser ya encontró un error real se usa ese (más
-// creíble); si el archivo era válido, se sintetiza uno sobre la última línea
-// con datos para no dejar el caso sin un mensaje.
+/**
+ * Arma el rechazo simulado; el componente decide cuándo rechazar.
+ *
+ * @returns El primer error real del parser o, si no hay, uno sintético sobre la última línea con datos.
+ * @see docs/codigo/conciliacion.md#importacion-masiva
+ */
 export function simulateBankImportRejection(parsed: BankImportParseResult): BankImportRejection {
   if (parsed.errors.length > 0) return parsed.errors[0];
 

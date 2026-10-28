@@ -3,6 +3,7 @@ import { Shell } from './core/layout/shell/shell';
 import { authGuard } from './core/auth/auth.guard';
 import { mustChangePasswordGuard } from './core/auth/must-change-password.guard';
 import { permissionGuard } from './core/auth/permission.guard';
+import { confirmLeaveGuard } from './features/reconciliation-dashboard/reconciliation-process/confirm-leave.guard';
 
 export const routes: Routes = [
   {
@@ -10,10 +11,7 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/login/login').then((m) => m.Login),
   },
   {
-    // Fuera de Shell (mismo criterio que /login) — ver change-password.scss.
-    // `authGuard` (Shell) empuja para acá cuando hace falta; este guard es
-    // la contraparte: exige que de verdad haga falta para poder entrar, y
-    // saca a cualquiera que llegue sin la sesión debida.
+    // Fuera de Shell, como /login. Ver docs/codigo/sesion-y-acceso.md#guards
     path: 'cambiar-password',
     canActivate: [mustChangePasswordGuard],
     loadComponent: () => import('./features/auth/change-password/change-password').then((m) => m.ChangePassword),
@@ -23,9 +21,7 @@ export const routes: Routes = [
     component: Shell,
     canActivate: [authGuard],
     children: [
-      // Redirect estático — si el usuario logeado no puede ver /dashboard,
-      // el propio permissionGuard de esa ruta lo rebota a su homeRoute()
-      // real (ver AccessControlService); no hace falta resolverlo aquí.
+      // Sin permiso de /dashboard, su permissionGuard rebota a homeRoute().
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       {
         path: 'dashboard',
@@ -43,6 +39,28 @@ export const routes: Routes = [
           ),
       },
       {
+        // Comparativa POS vs. banco de una conciliación (`CON-0001`).
+        path: 'conciliacion/:runId',
+        canActivate: [permissionGuard],
+        data: { permission: 'view_reconciliation' },
+        loadComponent: () =>
+          import('./features/reconciliation-dashboard/reconciliation-compare/reconciliation-compare').then(
+            (m) => m.ReconciliationCompare,
+          ),
+      },
+      {
+        // Proceso en 4 pasos de una conciliación nueva ("Nueva conciliación").
+        path: 'conciliacion/:runId/proceso',
+        canActivate: [permissionGuard],
+        // Pide confirmación al salir con un archivo cargado (cambios sin guardar).
+        canDeactivate: [confirmLeaveGuard],
+        data: { permission: 'import_settlements' },
+        loadComponent: () =>
+          import('./features/reconciliation-dashboard/reconciliation-process/reconciliation-process').then(
+            (m) => m.ReconciliationProcess,
+          ),
+      },
+      {
         path: 'conciliacion/:tenderMedia/diferencias/:orderId',
         canActivate: [permissionGuard],
         data: { permission: 'view_reconciliation' },
@@ -50,23 +68,20 @@ export const routes: Routes = [
           import('./features/difference-management/difference-management').then((m) => m.DifferenceManagement),
       },
       {
-        // Solo lectura para todos los roles que la ven (CU14 / matriz 7.16
-        // del DED) — no hay acciones de modificación en la pantalla.
+        // Solo lectura para todos los roles (CU14, matriz 7.16 del DED).
         path: 'catalogos',
         canActivate: [permissionGuard],
         data: { permission: 'view_catalogs' },
         loadComponent: () => import('./features/catalogs/catalogs').then((m) => m.Catalogs),
       },
       {
-        // Sin `data.permission` — el propio perfil es visible para
-        // cualquier usuario autenticado, sin importar su rol.
+        // Sin `data.permission`: visible para cualquier usuario autenticado.
         path: 'perfil',
         loadComponent: () => import('./features/user-management/profile/profile').then((m) => m.Profile),
       },
       {
-        // "Roles y permisos": exclusiva del rol ADMIN (`data.role`) — además de
-        // `manage_roles`, que es lo que piden `GET /roles`/`GET /permissions`
-        // (ALTAS también lo tiene, por eso no basta el permiso solo).
+        // `manage_roles` no basta (ALTAS también lo tiene): exige rol ADMIN.
+        // Ver docs/codigo/configuracion-y-pais.md#rutas
         path: 'gestion-de-roles',
         canActivate: [permissionGuard],
         data: { permission: 'manage_roles', role: 'ADMIN' },
@@ -79,8 +94,7 @@ export const routes: Routes = [
         loadComponent: () => import('./features/user-management/roles-permissions/role-create/role-create').then((m) => m.RoleCreate),
       },
       {
-        // Edición de un rol (`GET`/`PATCH`/`DELETE /roles/{code}`) — mismo
-        // componente que el alta, en modo edición por el parámetro :code.
+        // Mismo componente que el alta, en modo edición por `:code`.
         path: 'gestion-de-roles/:code',
         canActivate: [permissionGuard],
         data: { permission: 'manage_roles', role: 'ADMIN' },
@@ -92,16 +106,11 @@ export const routes: Routes = [
         data: { permission: 'manage_users' },
         loadComponent: () => import('./features/user-management/user-list/user-list').then((m) => m.UserList),
       },
-      // 'auditoria' y 'nuevo' antes de ':userId' — si no, ':userId' las
-      // captura primero y nunca se llega a estas dos rutas estáticas.
+      // 'auditoria' y 'nuevo' antes de ':userId', que si no las captura.
       {
         path: 'usuarios/auditoria',
         canActivate: [permissionGuard],
-        // Permiso propio (matriz 7.16 del DED) — antes colapsaba en
-        // 'manage_users' igual que el resto de /usuarios/*; ADMIN y ALTAS
-        // (los únicos con 'manage_users') también tienen 'view_audit_log'
-        // por defecto, así que la población accesible no cambia, pero ahora
-        // el permiso definido para esta pantalla sí se evalúa.
+        // Permiso propio de la matriz 7.16, no `manage_users`.
         data: { permission: 'view_audit_log' },
         loadComponent: () => import('./features/user-management/user-audit/user-audit').then((m) => m.UserAudit),
       },

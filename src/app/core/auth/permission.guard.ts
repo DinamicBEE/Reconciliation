@@ -3,17 +3,12 @@ import { CanActivateFn, Router } from '@angular/router';
 import { PermissionKey, RoleId } from '../../shared/models/access.model';
 import { AccessControlService } from './access-control.service';
 
-// Restringe una ruta hija de Shell a quien tenga el permiso declarado en
-// `route.data['permission']` — complementa a `authGuard` (que solo exige
-// estar logeado, sin importar el rol). Rutas sin `data.permission` (p. ej.
-// `perfil`) quedan abiertas a cualquier usuario autenticado.
-// `route.data['role']` (opcional) exige ADEMÁS ese rol — para pantallas
-// exclusivas de un rol (p. ej. "Roles y permisos", solo ADMIN).
-//
-// Sin el permiso: no bloquea en seco (dejaría al usuario viendo una
-// pantalla en blanco) — redirige a la PRIMERA pantalla que sí puede ver
-// (`AccessControlService.homeRoute()`), mismo criterio que `authGuard`
-// redirige a `/login` en vez de solo devolver `false`.
+/**
+ * Exige `route.data['permission']` y, si se declara, `route.data['role']`; sin ellos la ruta queda abierta.
+ *
+ * @returns `true` o un `UrlTree` a `AccessControlService.homeRoute()`, nunca `false`.
+ * @see docs/codigo/sesion-y-acceso.md#guards
+ */
 export const permissionGuard: CanActivateFn = (route) => {
   const access = inject(AccessControlService);
   const router = inject(Router);

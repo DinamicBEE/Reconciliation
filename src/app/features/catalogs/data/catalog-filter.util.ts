@@ -1,10 +1,6 @@
 import { Catalog, CatalogKind, CatalogRow } from './catalogs.model';
 
-// Funciones puras de filtrado de la pantalla de Catálogos — sin estado ni DI
-// (ver MASTER.md, "función de derivación pura").
-
-// Listado de catálogos: por tipo y por texto libre sobre nombre y
-// descripción.
+/** Filtra catálogos por tipo y por texto libre sobre nombre y descripción. */
 export function filterCatalogs(catalogs: readonly Catalog[], term: string, kind: CatalogKind | 'all'): Catalog[] {
   const q = term.trim().toLowerCase();
   return catalogs.filter((catalog) => {
@@ -14,8 +10,7 @@ export function filterCatalogs(catalogs: readonly Catalog[], term: string, kind:
   });
 }
 
-// Búsqueda DENTRO de una lista (CU14 paso 3: "comprobar si un valor está
-// cargado") — coincide contra cualquier columna de la fila.
+/** Busca dentro de una lista contra cualquier columna (CU14 paso 3: comprobar si un valor está cargado). */
 export function filterCatalogRows(rows: readonly CatalogRow[], term: string): CatalogRow[] {
   const q = term.trim().toLowerCase();
   if (!q) return [...rows];

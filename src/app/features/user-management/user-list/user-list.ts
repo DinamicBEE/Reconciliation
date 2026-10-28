@@ -53,7 +53,7 @@ export class UserList {
 
   protected readonly fullName = fullName;
   protected readonly statusMeta = STATUS_META;
-  // Roles de `GET /roles` (ver AccessCatalogService) — filtro y selector de la fila.
+  // Roles de `GET /roles`: filtro y selector de la fila.
   protected readonly roleOptions = this.accessCatalog.roleOptions;
   protected readonly rolesLoading = this.accessCatalog.loading;
   // Cambiar roles exige `manage_roles` (403 ROLE_ASSIGNMENT_FORBIDDEN si falta).
@@ -70,8 +70,7 @@ export class UserList {
   ];
 
   constructor() {
-    // Reconcilia la lista mock con el backend real (GET /users) al entrar a
-    // la pantalla, best-effort — ver UserManagementService.syncFromBackend.
+    // Sincroniza la lista con `GET /users` al entrar (best-effort).
     this.service.syncFromBackend();
   }
 
@@ -108,26 +107,21 @@ export class UserList {
     this.service.toggleSelect(userId);
   }
 
-  // --- Rol: selector sin bordes directo en la fila, sin confirmación (mismo
-  // criterio inmediato que el resto de acciones rápidas de la lista) ---
+  // --- Rol: selector en la fila, sin confirmación ---
   protected onRoleQuickChange(user: AppUser, roleIds: RoleId[]): void {
     if (roleIds.length === 0) {
       this.message.error('Selecciona al menos un rol.');
       return;
     }
-    // `PATCH /users/{id}/roles` real: el cambio de rol restablece los permisos a
-    // los defaults de los nuevos roles (la regla la aplica el front, el backend
-    // guarda el resultado final). Si falla, `user.roleIds` no cambió y el
-    // selector vuelve a mostrar los roles reales al re-renderizar.
+    // `PATCH /users/{id}/roles` con los permisos por defecto de los nuevos roles.
+    // Ver docs/codigo/usuarios-pantallas.md#lista-de-usuarios
     this.service.changeRoles(user.id, roleIds, this.accessCatalog.defaultPermissionsForRoles(roleIds)).subscribe({
       next: () => this.message.success(`Roles de ${fullName(user)} actualizados.`),
       error: (err: unknown) => this.showMutationError(err),
     });
   }
 
-  // El 403 (falta `manage_roles`), 400 y 404 con código los avisa
-  // `httpErrorAlertInterceptor`; aquí solo la caída de red y los errores locales
-  // del servicio.
+  // Solo red caída (status 0) y errores locales; el resto lo avisa el interceptor.
   private showMutationError(err: unknown): void {
     if (err instanceof HttpErrorResponse) {
       if (err.status === 0) this.message.error('No se pudo conectar con el servidor. Intenta de nuevo.');
@@ -136,10 +130,7 @@ export class UserList {
     this.message.error(err instanceof Error ? err.message : 'No se pudo completar la acción.');
   }
 
-  // --- Estado: el chip emite la intención, la confirmación vive aquí (mismo
-  // patrón en user-detail, ver StatusChip). `PATCH /users/{id}/status` real
-  // (ver `UserManagementService.setStatus`) — el modal se queda abierto/
-  // girando (`nzOnOk` devuelve una Promise) hasta que el backend responde. ---
+  // --- Estado: `PATCH /users/{id}/status` tras confirmar; el modal gira hasta la respuesta ---
   protected onStatusChangeRequest(user: AppUser, next: UserStatus): void {
     const label = STATUS_META[next].label;
     this.modal.confirm({
@@ -154,9 +145,7 @@ export class UserList {
               resolve();
             },
             error: (err: unknown) => {
-              // Errores con respuesta del backend (403 sin permiso, códigos
-              // de negocio) los avisa `httpErrorAlertInterceptor`; aquí solo
-              // la caída de red y los errores locales del servicio.
+              // Solo red caída y errores locales; el resto lo avisa el interceptor.
               if (err instanceof HttpErrorResponse) {
                 if (err.status === 0) this.message.error('No se pudo conectar con el servidor. Intenta de nuevo.');
               } else {
@@ -169,9 +158,7 @@ export class UserList {
     });
   }
 
-  // `POST /users/{id}/reset-password` real: la persona vuelve a su contraseña
-  // temporal, debe cambiarla al entrar y SE CIERRAN todas sus sesiones. El modal
-  // queda girando hasta que el backend responde.
+  // `POST /users/{id}/reset-password`: nueva temporal y cierre de todas las sesiones.
   protected onResetPasswordClick(user: AppUser): void {
     this.modal.confirm({
       nzTitle: 'Restablecer contraseña',
@@ -193,14 +180,12 @@ export class UserList {
     });
   }
 
-  // Nadie puede darse de baja a sí mismo (409 CANNOT_DELETE_SELF) — se deshabilita
-  // el botón de la propia cuenta.
+  // Sin baja propia (409 CANNOT_DELETE_SELF): se deshabilita el botón.
   protected isSelf(user: AppUser): boolean {
     return this.service.currentAppUser()?.id === user.id;
   }
 
-  // `DELETE /users/{id}` real: baja LÓGICA — la cuenta deja de poder entrar y sale
-  // de la lista, pero su historial se conserva y su correo queda libre.
+  // `DELETE /users/{id}`: baja lógica (conserva historial, libera el correo).
   protected onDeleteClick(user: AppUser): void {
     this.modal.confirm({
       nzTitle: 'Eliminar usuario',

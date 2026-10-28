@@ -1,9 +1,5 @@
 import { SaleListItem } from './sales-api.service';
 
-// Función pura y testeable — sin estado, sin DI (ver MASTER.md, "Estructura de
-// carpetas"). Arma el CSV de "Resumen de venta" a partir de las filas de
-// `GET /sales` (todas las páginas de los filtros actuales).
-
 const DOCUMENT_TYPE_LABEL: Record<string, string> = {
   INVOICE: 'Factura',
   CREDIT_NOTE: 'Nota crédito',
@@ -14,6 +10,12 @@ function escapeCsv(value: string | number | null | undefined): string {
   return /[",\n;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+/**
+ * Arma el CSV de "Resumen de venta" con las filas de `GET /sales` (todas las páginas filtradas).
+ *
+ * @param labels - Etiqueta de la columna de ubicación, que depende del país.
+ * @see docs/codigo/ventas.md#exportacion
+ */
 export function buildSaleListCsv(rows: readonly SaleListItem[], labels: { location: string }): string {
   const header = [
     'Folio',

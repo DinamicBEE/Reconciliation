@@ -1,0 +1,69 @@
+@if (reading()) {
+  <div class="statement-loading">
+    <nz-spin nzSimple nzTip="Revisando el archivo…" />
+  </div>
+} @else if (result(); as res) {
+  @if (res.summary; as summary) {
+    <dl class="statement-rows">
+      <div class="statement-row">
+        <dt>Total de registros</dt>
+        <dd class="font-mono">{{ summary.totalRecords | number }}</dd>
+      </div>
+      <div class="statement-row">
+        <dt>Total de movimientos</dt>
+        <dd class="font-mono">{{ summary.totalAmount | money }}</dd>
+      </div>
+      <div class="statement-row">
+        <dt>Rango de fechas</dt>
+        <dd class="font-mono">{{ formatDate(summary.dateFrom) }} – {{ formatDate(summary.dateTo) }}</dd>
+      </div>
+    </dl>
+  }
+
+  <div class="statement-result">
+    <span class="status-legend" [class]="'status-legend-' + variant[res.state]">
+      @switch (res.state) {
+        @case ('valid') {
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="m8 12 3 3 5-6" />
+          </svg>
+        }
+        @case ('missing_fields') {
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3 2 20h20L12 3Z" />
+            <path stroke-linecap="round" d="M12 10v4M12 17.5v.01" />
+          </svg>
+        }
+        @default {
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path stroke-linecap="round" d="m9 9 6 6M15 9l-6 6" />
+          </svg>
+        }
+      }
+      {{ label[res.state] }}
+    </span>
+    @if (res.reason) {
+      <span class="statement-result__reason">{{ res.reason }}</span>
+    }
+
+    @if (res.missingColumns.length > 0) {
+      <ul class="statement-list statement-list--error" aria-label="Columnas faltantes">
+        @for (column of res.missingColumns; track column) {
+          <li>{{ column }}</li>
+        }
+      </ul>
+    }
+
+    @if (res.invalidRows.length > 0) {
+      <ul class="statement-list statement-list--warning" aria-label="Filas con campos inválidos">
+        @for (item of res.invalidRows; track item.row) {
+          <li>Fila {{ item.row }}: {{ item.fields.join(', ') }}</li>
+        }
+      </ul>
+    }
+  </div>
+} @else if (placeholder()) {
+  <span class="text-muted">{{ placeholder() }}</span>
+}

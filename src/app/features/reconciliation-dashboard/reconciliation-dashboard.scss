@@ -1,9 +1,7 @@
-@use '../../shared/styles/kpi-card';
 @use '../../shared/styles/toolbar';
 @use '../../shared/styles/data-table';
-@use '../../shared/styles/status-dot';
 @use '../../shared/styles/row-actions';
-@use '../../shared/styles/import-dropzone';
+@use '../../shared/styles/bank-badge';
 
 .dashboard {
   display: flex;
@@ -11,153 +9,73 @@
   gap: var(--grid-gap);
 }
 
-// Botón "Importar", arriba de la tabla, alineado a la derecha (ver
-// MASTER.md, "Patrón: importar movimientos bancarios").
-.dashboard__actions {
-  display: flex;
-  justify-content: flex-end;
+// Los placeholders "Creada desde / Creada hasta" no caben en los 200px de `.toolbar__filter`.
+.toolbar__filter--range {
+  width: 290px;
 }
 
-// Icono + label centrados como una sola unidad dentro del botón — mismo
-// criterio que .user-list__audit-link/.user-list__add-user.
-.dashboard__import-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
+// --- Modal "Nueva conciliación" -------------------------------------------
+// Formulario a la izquierda y card de presentación a la derecha; una columna si es angosto.
+.new-reco {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
 
-// --- Modal "Importar movimientos bancarios" -------------------------------
-.bank-import {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.bank-import__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.bank-import__label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-foreground);
-}
-
-.bank-import__select {
-  width: 100%;
-}
-
-// Icono + texto (label + nombre de archivo) del botón de importación —
-// `.import-dropzone` (shared/styles/_import-dropzone.scss) ya centra este
-// bloque como una sola unidad; aquí solo se apila el texto en 2 líneas.
-.import-dropzone__text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.import-dropzone__filename {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--color-muted-foreground);
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-// Spinner — mismo criterio de iconografía del proyecto (SVG inline,
-// `stroke="currentColor"`, nunca un icon font/librería): un círculo tenue +
-// un arco que gira, en vez de un `nz-spin` que traería su propio bridge que
-// puentear por un solo consumidor.
-.import-dropzone__spinner {
-  animation: import-dropzone-spin 0.8s linear infinite;
-}
-
-@keyframes import-dropzone-spin {
-  to {
-    transform: rotate(360deg);
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
   }
 }
 
-// --- Resultado del import: icono + valor + label, apilados y centrados ---
-// (a diferencia de `.summary-strip`, que es horizontal con divisores — este
-// resultado no necesita distinguirse visualmente por columnas, solo por
-// color, igual que los `*StatusTag`).
-.import-result {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.new-reco__form {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
-.import-result__item {
+.new-reco__field {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 4px;
-  text-align: center;
 }
 
-.import-result__value {
-  font-family: var(--font-mono);
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.import-result__label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--color-muted-foreground);
-}
-
-// Mismos tokens que `*StatusTag` (`nzColor="success"/"warning"/"error"`,
-// ver "Colores de tag" en MASTER.md) — no los semánticos de relleno sólido
-// (`--color-success`/etc.), para que el resultado se lea con la MISMA
-// paleta que ya asocia el usuario a "Conciliado"/"Por conciliar"/
-// "Desconciliado" en la tabla.
-.import-result__item--success {
-  color: var(--color-tag-success-fg);
-}
-
-.import-result__item--warning {
-  color: var(--color-tag-warning-fg);
-}
-
-.import-result__item--error {
-  color: var(--color-tag-error-fg);
-}
-
-// Medios de pago: lista compacta con indicador de estado (específico de
-// este dashboard — no es parte del patrón genérico de KPI card).
-.tender-status-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.tender-status-list__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.new-reco__label {
   font-size: 13px;
-}
-
-.tender-status-list__label {
-  flex: 1;
+  font-weight: 600;
   color: var(--color-foreground);
 }
 
-.tender-status-list__state {
-  font-size: 12px;
-  font-weight: 600;
+.new-reco__control {
+  width: 100%;
+}
+
+.new-reco__submit {
+  width: 100%;
+  margin-top: 8px;
+}
+
+// `!important` para ganarle al borde global de `.ant-card`, que también lo lleva.
+// MASTER.md "Patrón: card base"
+.new-reco__hero {
+  border: 2px solid var(--color-primary) !important;
+}
+
+.new-reco__hero-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  text-align: center;
+}
+
+.new-reco__hero-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.new-reco__hero-subtitle {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
 }

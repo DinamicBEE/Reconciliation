@@ -1,15 +1,7 @@
 import { AppUser, AppUserAddress } from './user-management.model';
 
-// Semilla de MOCK_USERS SIN los campos de "Información personal
-// adicional"/"Organización" agregados más tarde (fecha de nacimiento, SSN,
-// género, dirección, ID de empleado, fecha de contratación/fin de
-// contrato) — ver `extraProfileFields()` más abajo, que los completa por
-// índice en vez de escribirlos 25 veces a mano. `mustChangePassword` tampoco
-// se declara por usuario aquí — se defaultea a `false` para los 25 al
-// construir `MOCK_USERS`, con UNA excepción a propósito (ver ese bloque).
-// La organización (subsidiarias, ubicaciones, cargos, puestos, departamentos,
-// áreas) y `backendUserId` (puente al backend) tampoco — ver el `.map()` de más
-// abajo: la organización no tiene valores mock, la trae el backend.
+// Semilla sin los campos que se derivan o se fijan al construir `MOCK_USERS`.
+// Ver docs/codigo/usuarios.md#datos-mock.
 type MockUserSeed = Omit<
   AppUser,
   | 'birthDate'
@@ -31,17 +23,8 @@ type MockUserSeed = Omit<
   | 'areaIds'
 >;
 
-// Incluye a 'u0001', 'u0006', 'u0011' y 'u0018' — los mismos 4 usuarios demo
-// (uno por rol) listados en login.html ("Cuentas de demo") — para que el
-// módulo de administración se sienta parte de la misma app y no un dataset
-// desconectado. Su `email` es además el puente hacia la sesión real (ver
-// `UserManagementService.findUserByEmail`/`currentAppUser`):
-// solo se resuelven permisos/nombre/foto para cuentas cuyo email coincide
-// con lo sembrado en coctel-del-mar. El resto son personas ficticias para dar variedad realista
-// de roles/estado/último acceso (incluyendo "nunca ha iniciado sesión") y de
-// los nuevos campos de seguridad. Cargo/puesto/departamento/área ya no se
-// siembran aquí: son ids de los catálogos del Core Service (`GET /catalogs/...`)
-// y llegan con el detalle real (`GET /users/{id}`), ver el `.map()` de abajo.
+// Incluye las cuentas demo de login; su `email` vincula la sesión y debe coincidir con coctel-del-mar.
+// Ver docs/codigo/usuarios.md#datos-mock.
 const MOCK_USERS_SEED: MockUserSeed[] = [
   {
     id: 'u0001',
@@ -125,8 +108,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     lastName: 'López',
     email: 'marina.lopez@conciliacion.mx',
     phone: '+52 55 5678 9012',
-    // Sin foto a propósito — junto con u0007, cubre el caso "sin avatarUrl"
-    // (cae a iniciales + color, ver AppUser.avatarUrl).
+    // Sin foto a propósito: cubre el caso de iniciales + color.
     avatarUrl: null,
     status: 'blocked',
     createdAt: '2025-06-20T09:00:00',
@@ -197,10 +179,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     activeSessions: 0,
     managerId: 'u0001',
   },
-  // --- u0010 en adelante: relleno para validar paginación (nzPageSize=10 en
-  // user-list, ver user-list.html) — 25 usuarios en total dan 3 páginas
-  // (10/10/5), la última parcial. Sin salto a 'u0009': ese id queda
-  // reservado para el usuario eliminado del comentario de abajo.
+  // --- u0010 en adelante: relleno para probar la paginación de la lista (no existe u0009) ---
   {
     id: 'u0010',
     firstName: 'Fernanda',
@@ -524,11 +503,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
     activeSessions: 1,
     managerId: 'u0001',
   },
-  // Cuenta demo de COSTOS (login "Costos", ver login.html) — el único
-  // usuario con ese rol, agregado junto con la pantalla de Catálogos
-  // cargados, que es hoy lo único que ese rol puede ver. Sembrada también en
-  // el backend real (ver BACKEND_USER_ID abajo y MASTER.md, "Actualización:
-  // endpoints de administración de usuarios + manejo de errores").
+  // Cuenta demo de Costos (login "Costos"), la única con ese rol.
   {
     id: 'u0027',
     firstName: 'Laura',
@@ -550,11 +525,7 @@ const MOCK_USERS_SEED: MockUserSeed[] = [
   },
 ];
 
-// Catálogos pequeños solo para derivar los campos de `extraProfileFields` —
-// rotan por índice (determinístico, no `Math.random`: el mismo usuario
-// siempre obtiene los mismos valores entre renders/recargas), mismo
-// criterio que `avatarTokensFor` (avatar-color.util.ts) para el color de
-// avatar por hash de id.
+// Valores para `extraProfileFields`; rotan por índice (no `Math.random`) para no cambiar entre recargas.
 const ADDRESS_POOL: { city: string; state: string; zipCode: string }[] = [
   { city: 'Ciudad de México', state: 'CDMX', zipCode: '03100' },
   { city: 'Guadalajara', state: 'Jalisco', zipCode: '44100' },
@@ -565,12 +536,7 @@ const ADDRESS_POOL: { city: string; state: string; zipCode: string }[] = [
 const STREET_POOL: string[] = ['Av. Reforma', 'Calle Juárez', 'Av. Insurgentes Sur', 'Calle Morelos', 'Av. Hidalgo'];
 const GENDER_POOL: string[] = ['Femenino', 'Masculino', 'Prefiero no decir'];
 
-// Completa los campos que se agregaron DESPUÉS de escribir los 25 usuarios
-// de arriba (fecha de nacimiento, SSN, género, dirección, ID de empleado,
-// fecha de contratación/fin de contrato) — derivados del índice en vez de
-// escribirlos 25 veces a mano; sigue siendo una foto FIJA de datos (no se
-// recalcula en cada acceso, se aplica una sola vez al construir
-// `MOCK_USERS`, ver abajo).
+// Datos personales adicionales, ID de empleado y fechas de contrato, derivados del índice.
 function extraProfileFields(
   index: number,
   createdAt: string,
@@ -596,24 +562,14 @@ function extraProfileFields(
     gender: GENDER_POOL[index % GENDER_POOL.length],
     address,
     employeeId: `EMP-${1000 + index}`,
-    // La fecha de contratación coincide con la de creación de la cuenta —
-    // en este mock no hay razón para que difieran (la cuenta se crea al
-    // contratar a la persona).
+    // La cuenta se crea al contratar a la persona.
     hireDate: createdAt.slice(0, 10),
-    // La mayoría tiene contrato indefinido (null); 1 de cada 7 tiene fecha
-    // de fin, para poder ver ambos casos en la UI.
+    // Uno de cada siete con fin de contrato, para ver ambos casos en la UI.
     contractEndDate: index % 7 === 0 ? '2027-12-31' : null,
   };
 }
 
-// Puente de LOS 26 hacia su `app_user.id` REAL en el backend — ver docker
-// exec directo contra Postgres al sembrarlos (MASTER.md, "Actualización:
-// endpoints de administración de usuarios (CRUD real) + multi-subsidiaria/
-// ubicación"). Ya no queda ninguno "solo mock": los 26 existen también en
-// el backend real. Un usuario creado DESPUÉS de este seed (vía
-// `UserManagementService.createUser`, que ahora llama a `POST /users`) no
-// pasa por aquí — su `backendUserId` llega directo en la respuesta del
-// alta, ver `UsersApiService.createUser`.
+// Id local → `app_user.id` de las 26 cuentas sembradas en el backend; actualizar si se re-siembra.
 const BACKEND_USER_ID: Partial<Record<string, number>> = {
   u0001: 2, // admin@conciliacion.mx
   u0002: 7, // analista@conciliacion.mx
@@ -643,25 +599,19 @@ const BACKEND_USER_ID: Partial<Record<string, number>> = {
   u0027: 6, // laura.pineda@conciliacion.mx
 };
 
+/**
+ * Registro inicial de usuarios (26 cuentas, también sembradas en el backend).
+ *
+ * @see docs/codigo/usuarios.md#datos-mock
+ */
 export const MOCK_USERS: AppUser[] = MOCK_USERS_SEED.map((seed, index) => ({
   ...seed,
   ...extraProfileFields(index, seed.createdAt),
-  // Solo 'u0018' (Gabriela Vargas — cuenta demo "contabilidad", ver
-  // auth-mock.data.ts) arranca con cambio obligatorio de contraseña, para
-  // poder probar ese flujo de "primer inicio de sesión" con una sola de las
-  // 4 cuentas demo sin forzarlo en las otras 3 (ver login.html, "Cuentas de
-  // demo", y MASTER.md "Patrón: refresh token de un solo uso + cambio
-  // obligatorio de contraseña").
+  // Solo la cuenta demo `u0018` prueba el cambio obligatorio de contraseña.
   mustChangePassword: seed.id === 'u0018',
-  // Valor mock de partida; para cualquier cuenta con `backendUserId`,
-  // `user-detail` la sobreescribe con lo que devuelva `GET /users/{id}` en
-  // caliente (ver `UserDetail`, efecto que llama `UsersApiService.getUserDetail`).
+  // `UserDetail` la toma de `GET /users/{id}`.
   temporaryPassword: null,
-  // Organización (subsidiarias, ubicaciones, cargos, puestos, departamentos y
-  // áreas): SIN valores mock — son ids de los catálogos del Core Service
-  // (`GET /catalogs/...`) y los pone el backend: subsidiarias/ubicaciones llegan
-  // con `GET /users` (`syncFromBackend`) y el resto con `GET /users/{id}`
-  // (`UserDetail`). Vacío mientras no hayan llegado.
+  // Sin valores mock: la organización la trae el backend (`GET /users` y `GET /users/{id}`).
   cargoIds: [],
   puestoIds: [],
   departamentoIds: [],

@@ -5,18 +5,19 @@ import { environment } from '../../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 import { CatalogEntry } from '../../shared/models/catalog-entry.model';
 
-// Opción de `GET /catalogs/ubicaciones`: además del nombre trae la subsidiaria a
-// la que pertenece, para filtrar las ubicaciones según las subsidiarias elegidas.
+/** Opción de `GET /catalogs/ubicaciones` con la subsidiaria a la que pertenece. */
 export interface UbicacionCatalogEntry extends CatalogEntry {
   subsidiariaId: number;
 }
 
-// Los 6 catálogos organizacionales del Core Service (Guia_Integracion_Frontend
-// §7.1). La llave es también el nombre del campo de `UserDetailDto` que trae lo
-// asignado a la persona (`cargos`, `puestos`, ...) y, con sufijo `Ids`, el del
-// `PATCH /users/{id}` (`cargoIds`, ...).
+/**
+ * Los 6 catálogos organizacionales del Core Service (Guia_Integracion_Frontend §7.1).
+ *
+ * @remarks Coincide con el campo de `UserDetailDto` (`cargos`) y, con sufijo `Ids`, con el de `PATCH /users/{id}`.
+ */
 export type OrganizationCatalogKind = 'subsidiarias' | 'ubicaciones' | 'cargos' | 'puestos' | 'departamentos' | 'areas';
 
+/** Todos los {@link OrganizationCatalogKind}, en orden de presentación. */
 export const ORGANIZATION_CATALOG_KINDS: readonly OrganizationCatalogKind[] = [
   'subsidiarias',
   'ubicaciones',
@@ -27,25 +28,10 @@ export const ORGANIZATION_CATALOG_KINDS: readonly OrganizationCatalogKind[] = [
 ];
 
 /**
- * Catálogos organizacionales COMPLETOS del Core Service — `GET /catalogs/subsidiarias`,
- * `/ubicaciones`, `/cargos`, `/puestos`, `/departamentos` y `/areas`. Alimentan los
- * combos de alta y de la sección "Organización" del detalle de usuario; cada opción
- * trae el `id` que luego viaja en `POST /users` / `PATCH /users/{id}`.
+ * Catálogos organizacionales completos (`GET /catalogs/...`) para asignar organización a una persona.
  *
- * Distinto de `CatalogService` (mismo directorio): ese expone las subsidiarias/
- * ubicaciones a las que tiene acceso QUIEN inició sesión (vienen en el login) y
- * sigue siendo la fuente de los filtros de pantallas operativas; este es el
- * catálogo global para ASIGNAR organización a otra persona.
- *
- * Permiso: ninguno en particular, basta una sesión válida. Listas cortas, sin
- * paginar, ya filtradas a `enabled = TRUE` y ordenadas por nombre por el backend.
- * En una base nueva cargos/puestos/departamentos/áreas llegan vacíos (`[]`): el
- * cliente aún no entrega las listas reales — la UI debe tolerarlo.
- *
- * Carga perezosa (`ensureLoaded`, la llama la pantalla que los usa) y una sola vez
- * por sesión; cada catálogo se pide por separado (un `rxResource` cada uno) para que la falla de uno no deje
- * vacíos a los otros cinco (el aviso del error lo da `httpErrorAlertInterceptor`).
- * Se limpian al cerrar sesión.
+ * @remarks Distinto de {@link CatalogService} (lo accesible a la sesión). Carga perezosa, un recurso por catálogo.
+ * @see docs/codigo/catalogos.md#catalogos-organizacionales
  */
 @Injectable({ providedIn: 'root' })
 export class OrganizationCatalogService {
@@ -53,12 +39,11 @@ export class OrganizationCatalogService {
   private readonly auth = inject(AuthService);
   private readonly apiUrl = environment.apiUrl;
 
-  // Se vuelve `true` la primera vez que una pantalla llama a `ensureLoaded`.
+  // `true` desde la primera llamada a `ensureLoaded`.
   private readonly requested = signal(false);
 
-  // Un `rxResource` por catálogo (ADR-0002, punto 3): pide cuando ya se solicitó y
-  // hay sesión; al cerrar sesión `params` es `undefined`, el resource queda en
-  // reposo y su valor vuelve a `[]` — sin `effect` que limpie a mano.
+  // Un `rxResource` por catálogo (ADR-0002, punto 3): al cerrar sesión `params` es
+  // `undefined` y el valor vuelve a `[]` sin un `effect`.
   private readonly resources = Object.fromEntries(
     ORGANIZATION_CATALOG_KINDS.map((kind) => [
       kind,
@@ -77,11 +62,11 @@ export class OrganizationCatalogService {
   readonly departamentos = computed(() => this.options('departamentos'));
   readonly areas = computed(() => this.options('areas'));
 
-  // Algún catálogo con una petición en vuelo / que falló en el último intento.
+  /** Algún catálogo con una petición en vuelo (`loading`) o fallida en el último intento (`loadFailed`). */
   readonly loading = computed(() => ORGANIZATION_CATALOG_KINDS.some((kind) => this.resources[kind].isLoading()));
   readonly loadFailed = computed(() => ORGANIZATION_CATALOG_KINDS.some((kind) => !!this.resources[kind].error()));
 
-  // Pide los catálogos la primera vez; después solo reintenta los que fallaron.
+  /** Pide los catálogos la primera vez; después solo reintenta los que fallaron. */
   ensureLoaded(): void {
     if (!this.requested()) {
       this.requested.set(true);
@@ -92,7 +77,7 @@ export class OrganizationCatalogService {
     }
   }
 
-  // Vuelve a pedir los seis (p. ej. tras cargar datos nuevos en el backend).
+  /** Vuelve a pedir los seis (p. ej. tras cargar datos nuevos en el backend). */
   reload(): void {
     if (!this.requested()) {
       this.requested.set(true);
@@ -101,25 +86,28 @@ export class OrganizationCatalogService {
     for (const kind of ORGANIZATION_CATALOG_KINDS) this.resources[kind].reload();
   }
 
-  // Un resource en error lanza al leer `value()`: se usa `hasValue()`.
+  /** @returns Opciones del catálogo; `[]` si no cargó o falló (usa `hasValue()`: `value()` lanza en error). */
   options(kind: OrganizationCatalogKind): readonly CatalogEntry[] {
     const resource = this.resources[kind];
     return resource.hasValue() ? resource.value() : [];
   }
 
+  /** @returns `null` si el id no está en el catálogo cargado. */
   find(kind: OrganizationCatalogKind, id: number): CatalogEntry | null {
     return this.options(kind).find((entry) => entry.id === id) ?? null;
   }
 
-  // Ubicaciones de las subsidiarias indicadas; sin subsidiarias elegidas, todas.
+  /** Ubicaciones de las subsidiarias indicadas; sin subsidiarias elegidas, todas. */
   ubicacionesFor(subsidiariaIds: readonly number[]): readonly UbicacionCatalogEntry[] {
     const all = this.ubicaciones();
     return subsidiariaIds.length ? all.filter((u) => subsidiariaIds.includes(u.subsidiariaId)) : all;
   }
 
-  // Quita de `ubicacionIds` las que no pertenecen a ninguna de `subsidiariaIds` —
-  // para cuando la persona deselecciona una subsidiaria. Sin subsidiarias elegidas
-  // (o sin catálogo cargado) no toca nada.
+  /**
+   * Quita las ubicaciones que no pertenecen a ninguna de `subsidiariaIds` (al deseleccionar una subsidiaria).
+   *
+   * @returns Copia de `ubicacionIds` sin cambios si no hay subsidiarias elegidas o catálogo cargado.
+   */
   pruneUbicaciones(ubicacionIds: readonly number[], subsidiariaIds: readonly number[]): number[] {
     if (!subsidiariaIds.length || !this.ubicaciones().length) return [...ubicacionIds];
     return ubicacionIds.filter((id) => {

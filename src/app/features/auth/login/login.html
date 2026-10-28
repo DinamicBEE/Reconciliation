@@ -1,6 +1,5 @@
 <div class="login-page">
-  <!-- Panel de marca — solo desktop (ver .scss). En mobile se reemplaza por
-       .login-card__mobile-brand, más compacto. -->
+  <!-- Panel de marca (solo desktop; en mobile, .login-card__mobile-brand) -->
   <section class="login-page__brand">
     <div class="login-page__brand-content">
       <svg class="login-page__brand-icon" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -63,7 +62,6 @@
 
       <form nz-form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
         <nz-form-item>
-          <!-- <nz-form-label nzFor="username" nzRequired>Usuario</nz-form-label> -->
           <nz-form-control [nzErrorTip]="usernameErrorTpl">
             <nz-input-wrapper>
               <span nzInputPrefix class="login-form__affix-icon">
@@ -92,7 +90,6 @@
         </ng-template>
 
         <nz-form-item>
-          <!-- <nz-form-label nzFor="password" nzRequired>Contraseña</nz-form-label> -->
           <nz-form-control [nzErrorTip]="passwordErrorTpl">
             <nz-input-password>
               <span nzInputPrefix class="login-form__affix-icon">

@@ -45,20 +45,10 @@ interface PermissionModule {
 }
 
 /**
- * Alta y edición de un rol — nombre + permisos agrupados por módulo (`GET
- * /permissions`, vía `AccessCatalogService`; nunca una lista propia del front).
- * Exclusiva de ADMIN (`permissionGuard` con `data.role`).
+ * Alta (`/gestion-de-roles/nuevo`, `POST /roles`) y edición (`/gestion-de-roles/:code`) de un rol.
  *
- * - `/gestion-de-roles/nuevo` → `POST /roles`. El nombre se valida como el
- *   backend (DEV 95db1f3): no puede repetir el de otro rol ACTIVO, sin distinguir
- *   mayúsculas (409 `ROLE_ALREADY_EXISTS`). El `code` lo deriva el backend del
- *   nombre; si ya está ocupado le agrega `_2`, `_3`…, así que el que se muestra
- *   al crear (`toRoleCode`) es orientativo: el definitivo llega en la respuesta.
- * - `/gestion-de-roles/:code` → precarga con `GET /roles/{code}`, guarda con
- *   `PATCH /roles/{code}` (solo lo que cambió) y da de baja con
- *   `DELETE /roles/{code}`. Editar los permisos se PROPAGA a las personas que
- *   tienen el rol (lo explica la confirmación); la baja se deshabilita mientras
- *   alguien lo tenga asignado (el backend respondería 409 `ROLE_IN_USE`).
+ * @remarks El código mostrado al crear es orientativo: el definitivo llega en la respuesta.
+ * @see docs/codigo/roles-y-permisos.md#alta-y-edicion-de-rol
  */
 @Component({
   selector: 'app-role-create',
@@ -80,8 +70,7 @@ interface PermissionModule {
   styleUrl: './role-create.scss',
 })
 export class RoleCreate {
-  // Ligado a :code de la ruta (withComponentInputBinding) — ausente en
-  // /gestion-de-roles/nuevo (modo alta).
+  /** `:code` de la ruta (`withComponentInputBinding`); ausente en el alta. */
   readonly code = input<string>();
 
   protected readonly catalog = inject(AccessCatalogService);
@@ -97,9 +86,8 @@ export class RoleCreate {
   protected readonly maxLength = ROLE_NAME_MAX_LENGTH;
   protected readonly isEdit = computed(() => !!this.code());
 
-  // Estado del rol que se edita: `GET /roles/{code}` como `rxResource` keyed en
-  // `:code` (ADR-0002, punto 3). Sin código (alta) el resource queda en reposo.
-  // 404 ROLE_NOT_FOUND: el aviso lo da `httpErrorAlertInterceptor`.
+  // `GET /roles/{code}` como `rxResource` (ADR-0002, punto 3); en reposo en el alta.
+  // El 404 `ROLE_NOT_FOUND` lo avisa `httpErrorAlertInterceptor`.
   private readonly roleResource = rxResource({
     params: () => this.code(),
     stream: ({ params }) => this.rolesApi.getRole(params),
@@ -289,9 +277,8 @@ export class RoleCreate {
     });
   }
 
-  // Tras editar los permisos de un rol, el backend los cambió también a las
-  // personas que lo tienen: se recarga el catálogo, la lista de usuarios y —si la
-  // sesión propia tiene el rol— la sesión, para que los permisos se vean ya.
+  // El backend propaga los permisos del rol a quienes lo tienen: se recargan catálogo,
+  // usuarios y, si la sesión propia tiene el rol, la sesión.
   private afterRoleChange(code: string, permissionsChanged: boolean): void {
     this.catalog.load();
     if (!permissionsChanged) return;
@@ -321,8 +308,8 @@ export class RoleCreate {
   }
 }
 
-// Misma comparación que el backend (`existsByNameIgnoreCaseAndEnabledTrue`):
-// sin espacios sobrantes y sin distinguir mayúsculas. Los acentos SÍ cuentan.
+// Misma comparación que el backend (`existsByNameIgnoreCaseAndEnabledTrue`): sin
+// espacios sobrantes ni distinción de mayúsculas; los acentos cuentan.
 function normalizeName(text: string): string {
   return text.trim().toLowerCase();
 }
