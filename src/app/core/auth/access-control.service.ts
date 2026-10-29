@@ -44,13 +44,12 @@ export class AccessControlService {
   /**
    * Primera pantalla accesible, en el orden del menú lateral.
    *
-   * @returns `'/login'` si la sesión no tiene ningún permiso reconocido (evita bucles de redirección).
+   * @returns `'/catalogos'` si no tiene otra: la ve cualquier usuario autenticado (evita bucles de redirección).
    */
   homeRoute(): string {
     if (this.hasPermission('view_dashboard')) return '/dashboard';
     if (this.hasPermission('view_reconciliation')) return '/conciliacion';
-    if (this.hasPermission('view_catalogs')) return '/catalogos';
     if (this.hasPermission('manage_users')) return '/usuarios';
-    return '/login';
+    return '/catalogos';
   }
 }

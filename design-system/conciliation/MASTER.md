@@ -3214,6 +3214,25 @@ cada pantalla.
 Se retiró el link `.back-link` ("Volver a …") y su partial `_back-link.scss`: lo reemplaza la
 flecha del page-header. `/login` y `/cambiar-password` (fuera del shell) quedan como están.
 
+### Actualización: "Catálogos cargados" conectada a `GET /catalogs` y `GET /catalogs/items` (DEV fae5944)
+
+1. **Datos reales:** la tabla sale de `GET /catalogs` (35 catálogos: 6 NetSuite, 2 internos, 27 DIAN) y el
+   Drawer de `GET /catalogs/items`. Se retiraron `catalogs-mock.data.ts`, `country-catalogs.mx|co.ts` y
+   `catalog-filter.util.ts`.
+2. **Tipos del backend:** el filtro y la columna "Tipo" usan `DIAN` / `NETSUITE` / `INTERNAL` ("Catálogo fijo
+   DIAN", "Sincronizado desde NetSuite", "Interno del sistema"); "Origen" muestra `origin` tal cual. El select
+   lleva `[nzDropdownMatchSelectWidth]="false"` para que las opciones no se corten.
+3. **Búsqueda y paginación en el servidor:** la búsqueda de la lista y la del Drawer esperan 300 ms (borrarlas
+   aplica en el acto) y llevan `maxlength="100"` (límite del back). La tabla del Drawer pagina en el servidor
+   (`nzFrontPagination=false`, 10/20/50/100) con `nzScroll.x = max-content` porque cada catálogo trae sus
+   columnas; abrir otro catálogo limpia la búsqueda y vuelve a la página 1.
+4. **Formato por tipo de columna** (`catalog-value.util.ts`): `datetime` → `dd/MM/yyyy HH:mm`, `boolean` →
+   Sí/No, `number` tal cual (códigos e ids, con `.font-mono` y alineado a la derecha), vacío → "—".
+5. **Sin permiso propio:** como en el back, la pantalla la ve cualquier persona con sesión (ruta sin
+   `data.permission`, menú y buscador sin condición). `homeRoute()` cae en `/catalogos` si no hay otra pantalla.
+6. **Error de carga:** `nzNoResult` cambia a "No se pudieron cargar…" y aparece "Reintentar" (icono + label) en
+   el lugar del contador o junto a la búsqueda del Drawer.
+
 ## Patrón: creación de roles (`/gestion-de-roles/nuevo`) + `nz-collapse` estándar
 
 `features/user-management/roles-permissions/role-create/` ("Nuevo rol", pantalla hija de

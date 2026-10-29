@@ -61,7 +61,7 @@ Código: `src/environments/environment.ts`, `environment.co.ts`, `api-url.ts`
 | `conciliacion/:runId` | `view_reconciliation` | Comparativa POS vs. banco de una conciliación (id `CON-0001`, ver `ReconciliationRunsStore`) |
 | `conciliacion/:runId/proceso` | `import_settlements` | Proceso en 3 pasos; `confirmLeaveGuard` pide confirmar al salir con un archivo cargado |
 | `conciliacion/:tenderMedia/diferencias/:orderId` | `view_reconciliation` | Cuatro segmentos: no choca con las de dos y tres |
-| `catalogos` | `view_catalogs` | Solo lectura para todos los roles (CU14, matriz 7.16 del DED) |
+| `catalogos` | — | Solo lectura para cualquier usuario autenticado (CU14); el backend no pide permiso ([catalogos.md](catalogos.md#pantalla-catalogos-cargados)) |
 | `perfil` | — | Abierta a cualquier usuario autenticado |
 | `gestion-de-roles`, `/nuevo`, `/:code` | `manage_roles` + rol `ADMIN` | `ALTAS` también tiene `manage_roles` (lo piden `GET /roles` y `GET /permissions`), por eso no basta el permiso. `:code` reutiliza el componente del alta en modo edición |
 | `usuarios`, `usuarios/nuevo`, `usuarios/:userId` | `manage_users` | |

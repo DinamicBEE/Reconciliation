@@ -27,7 +27,6 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
     label: 'Catálogos cargados',
     path: '/catalogos',
     keywords: ['catalogos', 'listas', 'homologaciones', 'dian', 'netsuite', 'maestros'],
-    permission: 'view_catalogs',
   },
   {
     label: 'Usuarios',

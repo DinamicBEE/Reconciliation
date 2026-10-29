@@ -7,38 +7,52 @@
     </nz-page-header-content>
   </nz-page-header>
 
-  <!-- Filtros + tabla: MASTER.md "Patrón: card de tabla" -->
+  <!-- Filtros + tabla (GET /catalogs): MASTER.md "Patrón: card de tabla" -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
     <section class="toolbar">
       <input
         nz-input
         type="text"
+        maxlength="100"
         class="toolbar__filter toolbar__filter--search"
         placeholder="Buscar catálogo"
         [ngModel]="service.search()"
         (ngModelChange)="service.search.set($event)"
       />
 
-      <nz-select class="toolbar__filter" [ngModel]="service.kindFilter()" (ngModelChange)="service.kindFilter.set($event)">
-        @for (opt of kindOptions; track opt.value) {
+      <nz-select
+        class="toolbar__filter"
+        [nzDropdownMatchSelectWidth]="false"
+        [ngModel]="service.typeFilter()"
+        (ngModelChange)="service.typeFilter.set($event)"
+      >
+        @for (opt of typeOptions; track opt.value) {
           <nz-option [nzValue]="opt.value" [nzLabel]="opt.label" />
         }
       </nz-select>
 
       <span class="toolbar__spacer"></span>
-      <span class="catalogs__count text-muted">
-        {{ service.filteredCatalogs().length }} de {{ service.totalCatalogs() }} catálogos
-      </span>
+      @if (service.loadFailed()) {
+        <button nz-button type="button" (click)="service.reloadList()">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v6h6M20 20v-6h-6M5.5 15a7 7 0 0 0 12.4 2M18.5 9A7 7 0 0 0 6.1 7" />
+          </svg>
+          Reintentar
+        </button>
+      } @else {
+        <span class="catalogs__count text-muted">{{ service.catalogs().length }} catálogos</span>
+      }
     </section>
 
     <div class="table-bleed">
       <!-- nzNoResult y no @empty: nz-table ya pinta su propio vacío -->
       <nz-table
         #tbl
-        [nzData]="service.filteredCatalogs()"
+        [nzData]="service.catalogs()"
         [nzPageSize]="10"
+        [nzLoading]="service.loading()"
         nzSize="middle"
-        nzNoResult="Ningún catálogo coincide con los filtros aplicados."
+        [nzNoResult]="service.loadFailed() ? 'No se pudieron cargar los catálogos.' : 'Ningún catálogo coincide con los filtros aplicados.'"
       >
         <thead>
           <tr>
@@ -51,16 +65,16 @@
           </tr>
         </thead>
         <tbody>
-          @for (catalog of tbl.data; track catalog.id) {
+          @for (catalog of tbl.data; track catalog.code) {
             <tr class="clickable-row" (click)="onRowClick(catalog)">
               <td class="col-truncate" style="--col-max-width: 340px" [attr.title]="catalog.description">
                 <span class="catalogs__name">{{ catalog.name }}</span>
                 <span class="catalogs__description text-muted">{{ catalog.description }}</span>
               </td>
-              <td>{{ kindLabel[catalog.kind] }}</td>
-              <td>{{ catalog.source }}</td>
-              <td class="text-right font-mono">{{ catalog.rows.length | number }}</td>
-              <td class="font-mono">{{ catalog.updatedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+              <td>{{ typeLabel[catalog.type] ?? catalog.type }}</td>
+              <td>{{ catalog.origin }}</td>
+              <td class="text-right font-mono">{{ catalog.records | number }}</td>
+              <td class="font-mono">{{ catalog.lastUpdate ? (catalog.lastUpdate | date: 'dd/MM/yyyy HH:mm') : '—' }}</td>
               <td class="text-center" (click)="$event.stopPropagation()">
                 <div class="row-actions">
                   <button
@@ -94,7 +108,9 @@
   (nzOnClose)="service.closeCatalog()"
 >
   <ng-container *nzDrawerContent>
-    @if (service.selectedCatalog(); as catalog) {
+    @if (service.selectedCatalog(); as selected) {
+      <!-- Encabezado: el del detalle cuando llega (más reciente), si no el de la lista -->
+      @let catalog = service.detail()?.catalog ?? selected;
       <div class="catalog-drawer">
         <section class="catalog-drawer__section">
           <p class="catalog-drawer__description">{{ catalog.description }}</p>
@@ -107,7 +123,7 @@
                 </svg>
                 <span class="info-field__label">Tipo</span>
               </span>
-              <span class="info-field__value">{{ kindLabel[catalog.kind] }}</span>
+              <span class="info-field__value">{{ typeLabel[catalog.type] ?? catalog.type }}</span>
             </div>
 
             <div class="info-field">
@@ -119,7 +135,7 @@
                 </svg>
                 <span class="info-field__label">Origen</span>
               </span>
-              <span class="info-field__value" [attr.title]="catalog.source">{{ catalog.source }}</span>
+              <span class="info-field__value" [attr.title]="catalog.origin">{{ catalog.origin }}</span>
             </div>
 
             <div class="info-field">
@@ -129,7 +145,7 @@
                 </svg>
                 <span class="info-field__label">Registros</span>
               </span>
-              <span class="info-field__value font-mono">{{ catalog.rows.length | number }}</span>
+              <span class="info-field__value font-mono">{{ catalog.records | number }}</span>
             </div>
 
             <div class="info-field">
@@ -140,41 +156,67 @@
                 </svg>
                 <span class="info-field__label">Última actualización</span>
               </span>
-              <span class="info-field__value font-mono">{{ catalog.updatedAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+              <span class="info-field__value font-mono">
+                {{ catalog.lastUpdate ? (catalog.lastUpdate | date: 'dd/MM/yyyy HH:mm') : '—' }}
+              </span>
             </div>
           </div>
         </section>
 
+        <!-- Registros (GET /catalogs/items): búsqueda y paginación en el servidor -->
         <section class="catalog-drawer__section">
-          <input
-            nz-input
-            type="text"
-            class="catalog-drawer__search"
-            placeholder="Buscar un valor en esta lista"
-            [ngModel]="service.rowSearch()"
-            (ngModelChange)="service.rowSearch.set($event)"
-          />
+          <div class="catalog-drawer__toolbar">
+            <input
+              nz-input
+              type="text"
+              maxlength="100"
+              class="catalog-drawer__search"
+              placeholder="Buscar un valor en esta lista"
+              [ngModel]="service.rowSearch()"
+              (ngModelChange)="service.rowSearch.set($event)"
+            />
+            @if (service.detailFailed()) {
+              <button nz-button type="button" (click)="service.reloadDetail()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v6h6M20 20v-6h-6M5.5 15a7 7 0 0 0 12.4 2M18.5 9A7 7 0 0 0 6.1 7" />
+                </svg>
+                Reintentar
+              </button>
+            }
+          </div>
 
+          @let detail = service.detail();
           <div class="table-bleed">
             <nz-table
               #rowsTbl
-              [nzData]="service.filteredRows()"
-              [nzPageSize]="10"
+              [nzData]="detail?.data ?? []"
+              [nzFrontPagination]="false"
+              [nzTotal]="detail?.total ?? 0"
+              [nzPageIndex]="service.page()"
+              [nzPageSize]="service.pageSize()"
+              [nzShowSizeChanger]="true"
+              [nzPageSizeOptions]="pageSizes"
+              [nzLoading]="service.detailLoading()"
+              [nzScroll]="{ x: 'max-content' }"
+              (nzPageIndexChange)="service.page.set($event)"
+              (nzPageSizeChange)="service.changePageSize($event)"
               nzSize="small"
-              nzNoResult="Ningún registro coincide con la búsqueda."
+              [nzNoResult]="service.detailFailed() ? 'No se pudieron cargar los registros.' : 'Ningún registro coincide con la búsqueda.'"
             >
               <thead>
                 <tr>
-                  @for (col of catalog.columns; track col.key) {
-                    <th>{{ col.label }}</th>
+                  @for (col of detail?.columns ?? []; track col.key) {
+                    <th [class.text-right]="col.type === 'number'">{{ col.label }}</th>
                   }
                 </tr>
               </thead>
               <tbody>
-                @for (row of rowsTbl.data; track $index) {
+                @for (row of rowsTbl.data; track row.id) {
                   <tr>
-                    @for (col of catalog.columns; track col.key) {
-                      <td [class.font-mono]="col.mono">{{ row[col.key] }}</td>
+                    @for (col of detail?.columns ?? []; track col.key) {
+                      <td [class.font-mono]="col.type === 'number' || col.type === 'datetime'" [class.text-right]="col.type === 'number'">
+                        {{ formatValue(row, col) }}
+                      </td>
                     }
                   </tr>
                 }

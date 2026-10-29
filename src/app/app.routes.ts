@@ -68,10 +68,8 @@ export const routes: Routes = [
           import('./features/difference-management/difference-management').then((m) => m.DifferenceManagement),
       },
       {
-        // Solo lectura para todos los roles (CU14, matriz 7.16 del DED).
+        // Sin `data.permission`: solo lectura para cualquier usuario autenticado (CU14; el back no pide permiso).
         path: 'catalogos',
-        canActivate: [permissionGuard],
-        data: { permission: 'view_catalogs' },
         loadComponent: () => import('./features/catalogs/catalogs').then((m) => m.Catalogs),
       },
       {
