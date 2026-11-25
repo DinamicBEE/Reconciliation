@@ -75,15 +75,15 @@ Código: `user-management.model.ts` (`STATUS_META`),
 - **Resto de "Organización".** `managerId`, `employeeId`, `hireDate`, `contractEndDate`
   (`null` = indefinido) y los datos personales adicionales no se piden en el alta; se completan
   editando el detalle.
-- **Responsables.** `MANAGER_ROLE_IDS` (`ADMIN`, `ALTAS`) define quién puede ser "Administrador
-  responsable". Contabilidad, Tesorería y Costos quedan fuera a propósito: son roles de un módulo
-  operativo, no de gestión de personas. `managerId` es un id local `uXXXX`; antes de enviarlo se
+- **Responsables.** Puede ser "Administrador responsable" quien tenga `MANAGER_PERMISSION`
+  (`manage_users`, de `GET /users`): por permiso y no por rol, porque los roles los define cada
+  empresa y un DEV limpio no tiene ninguno. `managerId` es un id local `uXXXX`; antes de enviarlo se
   traduce al `backendUserId` del responsable (`supervisorId` en el alta, `managerId` en la
   edición), y al leer el detalle `manager.id` se traduce de vuelta con `findByBackendUserId`. Si el
   responsable no tiene registro local, queda `null`. El componente excluye a la propia persona de
   los candidatos.
 
-Código: `user-management.model.ts` (`MANAGER_ROLE_IDS`, campos de organización),
+Código: `user-management.model.ts` (`MANAGER_PERMISSION`, campos de organización),
 `user-management.service.ts` (`managerCandidates`, `organizationIdsFromDetail`).
 
 <a id="servicio-de-usuarios"></a>
@@ -266,7 +266,8 @@ cliente HTTP de estos endpoints (ADR-0001, punto 4).
 - Filtros (`action`, `search` sobre detalle y nombre o correo de actor/afectado) y paginación del
   lado del servidor: `page` desde 0, `size` 20 por defecto. Orden: más reciente primero.
 - `actor` es `null` cuando actuó el sistema (bloqueo/desbloqueo automático); la UI muestra
-  "Sistema". `target` puede ser una persona ya dada de baja.
+  "Sistema". `target` puede ser una persona ya dada de baja, o `null` cuando la acción no es sobre
+  un usuario (p. ej. `reconciliation_created`, crear una conciliación); la UI muestra "—".
 - `action` llega como texto. `AuditAction` lista los códigos conocidos (guía de endpoints, "Acciones
   que se registran"); un código nuevo se muestra tal cual (`auditActionLabel`).
 

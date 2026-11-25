@@ -19,7 +19,8 @@ export type PermissionKey =
   | 'manage_roles'
   | 'view_audit_log'
   | 'view_catalogs'
-  | 'capture_sales';
+  | 'capture_sales'
+  | 'create_reconciliation';
 
 /** Entrada de `GET /permissions`: `code` → `key`, `description` → `label`, `module` → `group`. */
 export interface PermissionDef {

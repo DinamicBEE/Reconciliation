@@ -54,6 +54,13 @@
   margin: 0;
 }
 
+.catalog-drawer__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
 .catalog-drawer__search {
   width: 100%;
   max-width: 320px;

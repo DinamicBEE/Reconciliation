@@ -1,6 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { Observable, Subject, of, throwError } from 'rxjs';
-import { CaptureBatchResult, SaleListItem, SalesApiService, SalesListPage, SalesListParams } from './sales-api.service';
+import {
+  CaptureBatchResult,
+  SaleDetail,
+  SaleListItem,
+  SalesApiService,
+  SalesListPage,
+  SalesListParams,
+} from './sales-api.service';
 import { SALES_PAGE_SIZE_OPTIONS, SalesDashboardService } from './sales-dashboard.service';
 
 const DEBOUNCE_MS = 300;
@@ -22,6 +29,26 @@ function item(id: number): SaleListItem {
   };
 }
 
+function detail(id: number): SaleDetail {
+  return {
+    id,
+    folio: `A-${id}`,
+    documentType: 'INVOICE',
+    date: '2026-10-20',
+    time: '13:45:00',
+    store: { id: 7, name: 'Centro' },
+    reconciliationStatus: { id: 10, code: 'por_conciliar', description: 'Por conciliar' },
+    reference: null,
+    customer: null,
+    fiscal: null,
+    lines: [],
+    payments: [],
+    adjustments: null,
+    taxes: [],
+    breakdown: null,
+  };
+}
+
 const PAGE: SalesListPage = { data: [item(1), item(2)], total: 42, page: 1, pageSize: 10 };
 
 const NO_FILTERS = {
@@ -39,6 +66,7 @@ describe('SalesDashboardService', () => {
     list: ReturnType<typeof vi.fn<(params: SalesListParams) => Observable<SalesListPage>>>;
     listAll: ReturnType<typeof vi.fn>;
     capture: ReturnType<typeof vi.fn>;
+    detail: ReturnType<typeof vi.fn<(id: number) => Observable<SaleDetail>>>;
   };
 
   beforeEach(() => {
@@ -48,6 +76,7 @@ describe('SalesDashboardService', () => {
       list: vi.fn(() => of(PAGE)),
       listAll: vi.fn(() => of([item(1)])),
       capture: vi.fn(),
+      detail: vi.fn((id: number) => of(detail(id))),
     };
     TestBed.configureTestingModule({
       providers: [SalesDashboardService, { provide: SalesApiService, useValue: api }],
@@ -298,6 +327,131 @@ describe('SalesDashboardService', () => {
       expect(service.selectedSale()).toEqual(item(5));
       service.closeSale();
       expect(service.selectedSale()).toBeNull();
+    });
+  });
+
+  describe('detalle de la venta (GET /sales/{id})', () => {
+    // Publica la respuesta del resource (microtarea) y deja correr el planificador.
+    async function settle(): Promise<void> {
+      TestBed.tick();
+      await vi.advanceTimersByTimeAsync(0);
+      TestBed.tick();
+    }
+
+    it('sin venta abierta no pide el detalle y no hay carga ni error', async () => {
+      await settle();
+
+      expect(api.detail).not.toHaveBeenCalled();
+      expect(service.saleDetail()).toBeNull();
+      expect(service.saleDetailLoading()).toBe(false);
+      expect(service.saleDetailFailed()).toBe(false);
+    });
+
+    it('al abrir una venta pide su detalle por id y lo publica', async () => {
+      service.openSale(item(5));
+      await settle();
+
+      expect(api.detail).toHaveBeenCalledExactlyOnceWith(5);
+      expect(service.saleDetail()).toEqual(detail(5));
+      expect(service.saleDetailLoading()).toBe(false);
+      expect(service.saleDetailFailed()).toBe(false);
+    });
+
+    it('mientras llega está cargando y el detalle es null', async () => {
+      const response = new Subject<SaleDetail>();
+      api.detail.mockReturnValue(response);
+      service.openSale(item(5));
+      await settle();
+
+      expect(service.saleDetailLoading()).toBe(true);
+      expect(service.saleDetail()).toBeNull();
+
+      response.next(detail(5));
+      response.complete();
+      await settle();
+
+      expect(service.saleDetailLoading()).toBe(false);
+      expect(service.saleDetail()?.id).toBe(5);
+    });
+
+    it('si falla marca saleDetailFailed y el detalle queda en null', async () => {
+      api.detail.mockReturnValue(throwError(() => new Error('500')));
+      service.openSale(item(5));
+      await settle();
+
+      expect(service.saleDetailFailed()).toBe(true);
+      expect(service.saleDetail()).toBeNull();
+      expect(service.saleDetailLoading()).toBe(false);
+    });
+
+    it('reloadSaleDetail vuelve a pedir el detalle y limpia el error si responde', async () => {
+      api.detail.mockReturnValueOnce(throwError(() => new Error('500')));
+      service.openSale(item(5));
+      await settle();
+      expect(service.saleDetailFailed()).toBe(true);
+
+      service.reloadSaleDetail();
+      await settle();
+
+      expect(api.detail).toHaveBeenCalledTimes(2);
+      expect(api.detail).toHaveBeenLastCalledWith(5);
+      expect(service.saleDetailFailed()).toBe(false);
+      expect(service.saleDetail()).toEqual(detail(5));
+    });
+
+    it('si la respuesta es de otra venta (id distinto) no la muestra', async () => {
+      api.detail.mockReturnValue(of(detail(99)));
+      service.openSale(item(5));
+      await settle();
+
+      expect(service.saleDetail()).toBeNull();
+    });
+
+    it('al abrir otra venta pide su detalle y no muestra el de la anterior mientras llega', async () => {
+      service.openSale(item(5));
+      await settle();
+      expect(service.saleDetail()?.id).toBe(5);
+
+      const response = new Subject<SaleDetail>();
+      api.detail.mockReturnValue(response);
+      service.openSale(item(6));
+      await settle();
+
+      expect(api.detail).toHaveBeenLastCalledWith(6);
+      expect(service.saleDetail()).toBeNull();
+
+      response.next(detail(6));
+      await settle();
+
+      expect(service.saleDetail()?.id).toBe(6);
+    });
+
+    it('una respuesta tardía de la venta anterior no pisa a la abierta', async () => {
+      const first = new Subject<SaleDetail>();
+      const second = new Subject<SaleDetail>();
+      api.detail.mockReturnValueOnce(first).mockReturnValueOnce(second);
+      service.openSale(item(5));
+      await settle();
+      service.openSale(item(6));
+      await settle();
+
+      second.next(detail(6));
+      await settle();
+      first.next(detail(5));
+      await settle();
+
+      expect(service.saleDetail()?.id).toBe(6);
+    });
+
+    it('al cerrar la venta el detalle vuelve a null sin pedir nada más', async () => {
+      service.openSale(item(5));
+      await settle();
+
+      service.closeSale();
+      await settle();
+
+      expect(service.saleDetail()).toBeNull();
+      expect(api.detail).toHaveBeenCalledTimes(1);
     });
   });
 });

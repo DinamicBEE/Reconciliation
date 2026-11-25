@@ -225,18 +225,23 @@ tabla").
 
 ### Patrón: card centrada (formulario de una sola columna)
 
-`.card-centered` (`user-detail.scss`) — `max-width: 560px; margin: 0 auto;`
-sobre el `<nz-card>`, para cuando una pantalla es UN SOLO formulario sin
-nada al lado. Hoy su único consumidor es la creación de usuario
-(`/usuarios/nuevo`, `isCreate()`) — "Organización" tenía este mismo look
-como tab propia, pero se fusionó dentro de "Información general" y ya no lo
-usa (ver "Patrón: tab con card general…"). No debe estirarse de borde a
-borde como sí hace `.tab-card` (detalle de un usuario existente, ver abajo)
-o una tabla. Dentro de `.card-centered`, el botón de guardar
-(`.user-form__submit`) se centra
-horizontalmente en vez de pegarse a la izquierda — sigue siendo el último
-elemento del formulario, así que "abajo de la card" ya lo resuelve el flujo
-normal del documento, sin necesitar un spacer ni una card de altura fija.
+`.card-centered` (`max-width: 560px; margin: 0 auto;` sobre el `<nz-card>`) servía para una pantalla
+de UN SOLO formulario sin nada al lado. Ya no tiene consumidores: el alta de usuario pasó a un modal
+de dos columnas ("Patrón: modal de alta de usuario") y la clase se retiró de `user-detail.scss`.
+Si reaparece una pantalla así, no debe estirarse de borde a borde como `.tab-card` o una tabla, y su
+botón de guardar va centrado al final del formulario.
+
+### Patrón: modal de alta de usuario (`UserCreateModal`)
+
+Mismo esqueleto que el modal "Nueva conciliación" (ver "Patrón: conciliaciones…"): `nz-modal` sin footer,
+`nzWidth="820px"`, grid de 2 columnas (`.new-user`; 1 en ≤ 640px). **Izquierda**, el formulario en columna
+(etiqueta con icono arriba, control debajo, error en línea con `--color-destructive`) y el botón primario
+"Crear usuario"; **derecha**, una `nz-card` (`.new-user__hero`, borde sólido `2px var(--color-primary)` con
+`!important`, `position: sticky` para no perderse al hacer scroll) con el icono de usuario+ sobre
+`.bank-badge`, el título "Alta de usuario" y su leyenda. `UserList` lo aloja y lo abre con
+`[(open)]="createModalOpen"`; al crear, el modal navega al detalle del usuario nuevo (ahí aparece la contraseña
+temporal) y al cerrarse reinicia el formulario. Un solo `FormGroup` (`form`), con `toSignal` para lo que lee la
+plantilla (app zoneless).
 
 ### Patrón: card de indicador con semáforo (`.status-card`)
 
@@ -518,7 +523,7 @@ introducido.
   izquierda, vía `position: absolute` — mismo criterio de "esquinas
   totalmente redondeadas" que ya usan `.icon-button`/`.palette-swatch`.
   - `SEARCHABLE_PAGES`: registro estático de rutas SIN params (Dashboard,
-    Conciliación, Usuarios, Nuevo usuario, Auditoría de usuarios) — las
+    Conciliación, Usuarios, Auditoría de usuarios) — las
     rutas con `:param` (`difference-management`, `usuarios/:userId`) se
     excluyen a propósito, no tienen un destino único que buscar. `searchPages()`
     es la función pura de filtrado (label + keywords, substring
@@ -618,8 +623,9 @@ mismo patrón que `ThemeService`).
 - **Contraído/expandido**: `MenuService.expanded` controla la clase
   `.app-menu--expanded` (`width: 220px`; contraído son `64px`). Contraído
   solo se ven los iconos (`.app-menu__label` en `display: none`) — cada
-  link lleva `[attr.title]` con el nombre de la pantalla como tooltip
-  nativo cuando está contraído. Un botón `.app-menu__toggle` (chevron que
+  link lleva `nz-tooltip` (`nzTooltipPlacement="right"`) con el nombre de la
+  pantalla, activo solo contraído (`[nzTooltipTitle]` en `null` expandido),
+  más `aria-label` con el mismo nombre. Un botón `.app-menu__toggle` (chevron que
   cambia de dirección según el estado) alterna `MenuService.toggle()`.
 - **Efectos de hover/seleccionado**: son los mismos que ya existían en
   `app-header__nav-link` antes de la migración (`background:
@@ -629,6 +635,20 @@ mismo patrón que `ThemeService`).
   defecto) pasa a `color: var(--color-primary)` específicamente cuando el
   link está activo, para que se note cuál pantalla está seleccionada
   incluso contraído (sin la etiqueta de texto visible).
+- **Pantalla actual no solo por color**: cada link lleva
+  `ariaCurrentWhenActive="page"` y, activo, una barra de 3px al borde inicial
+  (`::before`, `--color-primary`); en `forced-colors: active` la barra pasa a
+  `Highlight` porque el fondo se anula.
+- **Accesibilidad de la estructura**: los links van en `<nav aria-label="Principal">`
+  → `ul > li > a`. "Cerrar sesión" es una acción y vive fuera del `<nav>`. El botón
+  `.app-menu__toggle` tiene nombre fijo ("Menú lateral") + `aria-expanded` +
+  `aria-controls`, con `nz-tooltip` ("Expandir/Contraer menú"). Los SVG llevan
+  `aria-hidden="true"`; el nombre accesible es el `aria-label` del link.
+- **Movimiento**: la transición de `width` solo corre con
+  `prefers-reduced-motion: no-preference`; las de color no se tocan.
+- **Anillo de foco**: `.app-menu__items` lleva `padding: 4px 8px` y
+  `overflow-y: auto` (no `hidden`): con `hidden` se recortaba el anillo
+  (`outline` 2px + `outline-offset` 2px) del primer link.
 
 ### Historial: "Detalle por tender media" (retirado)
 
@@ -757,10 +777,9 @@ aparecer un segundo consumidor: "Resumen de la venta" en el Drawer de
 para este mismo bloque — se cambió a `.info-fields` a pedido explícito, para
 que "Resumen de la venta" se presente con la MISMA estructura que
 Administración de usuarios. `_summary-columns.scss` sigue viva (no quedó
-huérfana): la usa el formulario de creación de usuario (`user-detail` en
-modo `isCreate()`), de una sola columna angosta con campos editables — ver
-"Patrón 'icono + etiqueta + valor' (2 columnas opcional)" más abajo para esa
-estructura horizontal, que es DISTINTA y sigue vigente para ese caso.
+huérfana): la usa el partial compartido para la estructura horizontal — ver
+"Patrón 'icono + etiqueta + valor' (2 columnas opcional)" más abajo; el alta de usuario ya no
+(es un modal con etiqueta arriba, ver "Patrón: modal de alta de usuario").
 
 - Grid de 3 columnas fijas por defecto (`.info-fields`, colapsa a 2 en
   `max-width: 900px` y a 1 en `max-width: 560px`); `.info-fields--cols-4`
@@ -846,10 +865,9 @@ campos partida en 2.
 `shared/styles/_summary-columns.scss` (`.summary-columns`/`.summary-col`/
 `.summary-field*`) — nació en `sales-dashboard.scss` ("Resumen de la venta"
 en el drawer, ver arriba: ya NO es su consumidor, migró a `.info-fields`) y
-sigue viva porque `user-detail` la reutiliza para su `<form>` de creación de
-usuario (`isCreate()`, una sola columna angosta) con campos EDITABLES
-(nz-input/nz-select dentro de `.summary-field__control`, con
-`.summary-field__error` para el mensaje de validación). `.summary-fields` es
+sigue disponible para campos EDITABLES en una fila (nz-input/nz-select dentro de
+`.summary-field__control`, con `.summary-field__error` para el mensaje de validación); hoy ninguna
+pantalla la usa para edición: el alta de usuario migró a un modal. `.summary-fields` es
 la variante SIN el divisor de 2 columnas, para una sola card con pocos
 campos que no necesita partirse.
 
@@ -1043,7 +1061,7 @@ candidatas para completar un cruce automático incompleto:
 ## Patrón: módulo de administración (CRUD + estado + auditoría)
 
 `features/user-management` ("Administración de usuarios", rutas `/usuarios`,
-`/usuarios/nuevo`, `/usuarios/:userId`, `/usuarios/auditoria`). Primer módulo
+`/usuarios/:userId`, `/usuarios/auditoria`; el alta es un modal en `/usuarios`). Primer módulo
 del proyecto que no gira en torno al cruce venta/liquidación — sirve de
 referencia para cualquier futuro módulo de administración (roles, catálogos,
 configuración) con el mismo shape: lista con filtros + alta/edición +
@@ -1078,12 +1096,10 @@ techo fijo" que ya regía con un solo rol.
    ver el MISMO estado — mismo criterio que `AuthService`. Cualquier módulo
    futuro con más de una pantalla operando sobre la misma colección mutable
    necesita este mismo alcance, no `providers` por componente.
-2. **Un componente, dos modos (crear/editar) por presencia de `:userId`**:
-   `/usuarios/nuevo` y `/usuarios/:userId` apuntan al mismo componente
-   (`UserDetail`); `isCreate()` es `computed(() => !this.userId())`. Rutas
-   estáticas (`nuevo`, `auditoria`) DEBEN declararse antes que `:userId` en
-   `app.routes.ts` — si no, el segmento param las captura primero y nunca se
-   llega a ellas.
+2. **Alta en modal, detalle en ruta**: `/usuarios/:userId` es solo detalle/edición (`UserDetail`); el
+   alta es `UserCreateModal`, que `UserList` abre con "Nuevo usuario" (sin ruta propia). Rutas
+   estáticas (`auditoria`) DEBEN declararse antes que `:userId` en `app.routes.ts` — si no, el
+   segmento param las captura primero y nunca se llega a ellas.
 3. **Carga/reset de estado por `effect()` sobre el input de ruta**: mismo
    patrón que `DifferenceManagement` con `tenderMedia()`/`orderId()` — un
    `effect()` en el constructor (no un `computed`, porque tiene
@@ -1752,7 +1768,7 @@ patrón cierra ese hueco.
    `PermissionKey`) y compara contra `AccessControlService.hasPermission()`.
    Se declara por RUTA HIJA en `app.routes.ts` (`dashboard` →
    `view_dashboard`, `conciliacion` y su ruta de detalle →
-   `view_reconciliation`, `usuarios`/`usuarios/nuevo`/`usuarios/:userId`/
+   `view_reconciliation`, `usuarios`/`usuarios/:userId`/
    `usuarios/auditoria` → `manage_users`) — a diferencia de `authGuard`
    (aplicado UNA VEZ en el `Shell` padre, protege todo el árbol como bloque),
    este necesita ir en cada hija porque cada una requiere un permiso
@@ -2560,8 +2576,8 @@ seed/lectura en tiempo de ejecución.
    real como `backendUserId`, los roles/permisos que confirma el backend y
    la `temporaryPassword` que devuelve. Errores (`EMAIL_ALREADY_REGISTERED`,
    `INVALID_ROLE`, `ROLE_ASSIGNMENT_FORBIDDEN`, etc.) los maneja el
-   `httpErrorAlertInterceptor` ya existente — `onCreateSubmit()` no duplica
-   ese manejo, solo apaga el spinner del botón (`submittingCreate`) si falla.
+   `httpErrorAlertInterceptor` ya existente — `UserCreateModal.onSubmit()` no duplica
+   ese manejo, solo apaga el spinner del botón (`submitting`) si falla.
 4. **`UserManagementService.syncFromBackend()` (nuevo)** — llama
    `AuthService.listUsers({ size: 100 })` (`GET /users`) y reconcilia cada
    usuario local que ya tiene `backendUserId` con los datos reales
@@ -2665,7 +2681,7 @@ archivo ni migración de `coctel_midd` se tocó.
    hasta que el backend responde, mismo patrón que ya usaba
    `onUnlockBackendClick`; "Guardar cambios" (perfil) tiene su propio
    `savingProfile` signal para el loading del botón, igual que
-   `submittingCreate` en la creación.
+   `submitting` (`UserCreateModal`) en la creación.
 6. **Verificado end-to-end en navegador** (login real como
    `admin@conciliacion.mx`): cambio de "Cargo o puesto" de Ana Martínez →
    `PATCH /users/7` 200 → persiste tras una recarga dura (no solo en el
@@ -3169,50 +3185,102 @@ Backend `coctel_midd` DEV (rama `feature/catalogs`, Guia_Integracion_Frontend §
    tiene el rol (verificado contra la pila local), así que el botón Eliminar sigue deshabilitado en ese caso.
 6. `TenderMediaOption.dianCode?` (código DIAN del medio de pago, `null` si no está homologado).
 
-## Patrón: encabezado de página (`nz-page-header`) — regla general
+## Patrón: encabezado de página (en el header de la aplicación) — regla general
 
-**Toda pantalla del shell pone su título con `nz-page-header`** (`NzPageHeaderModule`,
-`ng-zorro-antd/page-header`), nunca con un `<h1>` propio ni con un título en el header global (el
-texto "Conciliación Bancaria" del `app-header` se eliminó: el header solo lleva búsqueda,
-notificaciones y el menú del avatar). Los estilos viven una sola vez en `styles.scss` (bloque
-"nz-page-header"): sin padding ni fondo, título en `--font-heading` 18/600, flecha circular con
-hover y breadcrumb en `--color-muted-foreground`. No se repiten reglas de título en el `.scss` de
-cada pantalla.
+**El título de toda pantalla lo pinta `app-header`**, que renderiza un `nz-page-header` a la izquierda de
+la búsqueda, las notificaciones y el avatar. Ninguna pantalla usa `nz-page-header`, ni `<h1>` propios, ni
+`NzPageHeaderModule`/`NzBreadCrumbModule` para su título. Los estilos del `nz-page-header` viven una sola
+vez en `styles.scss` (bloque "nz-page-header"): sin padding ni fondo, título en `--font-heading` 18/600,
+flecha circular con hover y breadcrumb en `--color-muted-foreground`. El header mide 72px como mínimo y,
+con breadcrumb, también cabe en 72px.
 
-1. **Pantalla de primer nivel** (Resumen de venta, Conciliación bancaria, Catálogos cargados,
-   Administración de usuarios, Perfil): solo el título. Las acciones de la pantalla (p. ej.
-   "Historial" y "Nuevo usuario") van en `nz-page-header-extra`; un texto de apoyo, en
-   `nz-page-header-content`.
+1. **Título y pantalla padre: en la ruta** (`app.routes.ts`, `data`). Una pantalla de primer nivel solo
+   declara `title`; una hija añade `parent: { label, path }`, y el header agrega solo la **flecha de
+   volver** (navega a `parent.path` con el `Router`, no `Location.back()`; así el `canDeactivate` de la
+   pantalla sigue aplicando) y el **breadcrumb** `padre › título`.
 
-   ```html
-   <nz-page-header class="page-header" nzTitle="Administración de usuarios">
-     <nz-page-header-extra> …botones… </nz-page-header-extra>
-   </nz-page-header>
+   ```ts
+   data: { permission: 'view_audit_log', title: 'Historial y auditoría de usuarios',
+           parent: { label: 'Administración de usuarios', path: '/usuarios' } }
    ```
 
-2. **Pantalla hija** (Gestión de diferencias, Historial y auditoría, Nuevo usuario y detalle de
-   usuario): estructura **flecha de volver + título**, más el recorrido de pantallas hasta la
-   actual con `nz-breadcrumb nz-page-header-breadcrumb` (padres como enlace, la actual como
-   texto). La flecha usa `[nzBackIcon]` con un `ng-template` con el SVG de siempre (el proyecto
-   no registra iconos de ng-zorro) y `(nzBack)` navega a la pantalla padre con el `Router` —
-   no `Location.back()`, para que no dependa del historial del navegador.
+2. **Lo dinámico, con `PageHeaderService.bind()`** (`core/layout/header/page-header.service.ts`), en el
+   constructor del componente: título que depende de datos (nombre del usuario, "Editar rol"/"Nuevo rol",
+   "Gestión de diferencias — Orden X"), `subtitle` (p. ej. "CON-0011 · tienda · periodo" del proceso de
+   conciliación) y `actions`. Lo que se pasa a `bind` sustituye lo de la ruta y se quita al destruir el
+   componente.
 
-   ```html
-   <nz-page-header class="page-header" nzTitle="Historial y auditoría de usuarios"
-                   [nzBackIcon]="backIcon" (nzBack)="onBack()">
-     <nz-breadcrumb nz-page-header-breadcrumb>
-       <nz-breadcrumb-item><a routerLink="/usuarios">Administración de usuarios</a></nz-breadcrumb-item>
-       <nz-breadcrumb-item>Historial y auditoría de usuarios</nz-breadcrumb-item>
-     </nz-breadcrumb>
-   </nz-page-header>
-   <ng-template #backIcon><svg …flecha izquierda…/></ng-template>
+3. **Botones de la pantalla (`actions`)**: se declaran en la propia pantalla como un
+   `<ng-template #headerActions>…</ng-template>` (con sus `(click)` y condiciones) y se entregan con
+   `viewChild`; el header los pinta a la derecha del título (donde antes iba `nz-page-header-extra`).
+
+   ```ts
+   private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
+   constructor() { this.pageHeader.bind(() => ({ actions: this.headerActions() ?? null })); }
    ```
 
-   Un hijo de un hijo suma un `nz-breadcrumb-item` más por nivel. El texto de cada item es el
-   **título** de esa pantalla (no el nombre del menú).
+4. **Un texto largo de apoyo no va al header**: se queda como un párrafo en el contenido de la pantalla
+   (p. ej. la nota de "Catálogos cargados"). El `subtitle` es una sola línea corta.
 
-Se retiró el link `.back-link` ("Volver a …") y su partial `_back-link.scss`: lo reemplaza la
-flecha del page-header. `/login` y `/cambiar-password` (fuera del shell) quedan como están.
+`/login` y `/cambiar-password` (fuera del shell) quedan como están.
+
+### Actualización: conciliación ligada a sus reportes (rama conciliations, 131475b)
+
+1. **Paso 1:** sobre la zona de carga, campo **"Banco o canal"** (label 13px semibold + `nz-select` de
+   máx. 320px, `nzLoading` mientras llega `GET /reconciliations/banks`). Un solo reporte por ahora.
+   Si la conciliación ya está confirmada, una nota `.process-notice` lo dice y el select queda
+   deshabilitado.
+2. **Paso 2:** el botón primario del pie dice **"Confirmar conciliación"** (icono de escudo) y usa
+   `nzLoading` mientras el backend confirma; con error se queda en el paso 2 con un `message.error`.
+3. **Paso 3:** bajo el banner de éxito, `.completion__note` con el código y cuántas ventas quedaron
+   conciliadas, con diferencia y sin coincidencia.
+4. Las conciliaciones se citan por su **código** `CON-0011` (subtítulo del encabezado, mensajes del
+   alta y de "Desconciliar").
+
+### Actualización: proceso con Bancolombia, detalle de venta y roles por permiso (DEV ef1b0de)
+
+1. **Proceso de conciliación** (`/conciliacion/:runId/proceso`) contra `/reconciliation/bank-reports`:
+   el paso 1 muestra la vista previa del back en el mismo card de resumen ("Reporte de Bancolombia
+   (.xlsx)"); el paso 2 carga, cruza y pinta el resultado del back. Si falla, el card del paso 2 muestra
+   el motivo centrado con "Volver a la carga" (default) y "Reintentar" (primary), ambos icono + label.
+   El subtítulo de cada línea es la franquicia del banco ("MASTERCARD DEBITO NACIONAL").
+2. **Drawer de la venta** (`GET /sales/{id}`): debajo del resumen, secciones con `.sale-drawer__heading`:
+   Cliente y Comprobante fiscal en `.info-fields`; Productos, Pagos, Descuentos y propinas e Impuestos
+   en `nz-table` `nzSize="small"` sin paginación (`nzScroll.x = max-content`, montos `.font-mono` a la
+   derecha). El CUFE parte la línea (`.sale-drawer__cufe`). Carga y error van como `.sale-drawer__note`.
+3. **Roles y permisos** se muestra con `manage_roles` (menú, buscador y ruta), sin exigir el rol ADMIN.
+
+### Actualización: "Conciliación bancaria" conectada a `GET` / `POST /reconciliations` (DEV 01197b1)
+
+1. **Tabla en el servidor:** filas de `GET /reconciliations`, paginación `nzFrontPagination=false`
+   (10/20/50/100), filtros de estatus y fecha de creación enviados al back. Columna nueva **"Ventas"**
+   (`salesCount`, `.font-mono` alineada a la derecha). Si falla la carga: `nzNoResult` "No se pudieron
+   cargar…" y botón "Reintentar" (icono + label) en el toolbar.
+2. **"Nueva conciliación"** se muestra con `create_reconciliation`. El modal pide Empresa, Tienda y Periodo
+   (el banco se elige en el paso 1 del proceso); "Iniciar conciliación" usa `nzLoading`
+   mientras responde y el modal no se cierra con error (aviso con `NzMessageService`: advertencia en 409).
+3. **Desconciliar** sigue solo en la sesión (sin endpoint); los textos citan la conciliación como `#id`.
+4. **Bitácora:** una entrada sin usuario afectado (p. ej. "Conciliación creada") muestra "—" en la
+   columna "Usuario".
+
+### Actualización: "Catálogos cargados" conectada a `GET /catalogs` y `GET /catalogs/items` (DEV fae5944)
+
+1. **Datos reales:** la tabla sale de `GET /catalogs` (35 catálogos: 6 NetSuite, 2 internos, 27 DIAN) y el
+   Drawer de `GET /catalogs/items`. Se retiraron `catalogs-mock.data.ts`, `country-catalogs.mx|co.ts` y
+   `catalog-filter.util.ts`.
+2. **Tipos del backend:** el filtro y la columna "Tipo" usan `DIAN` / `NETSUITE` / `INTERNAL` ("Catálogo fijo
+   DIAN", "Sincronizado desde NetSuite", "Interno del sistema"); "Origen" muestra `origin` tal cual. El select
+   lleva `[nzDropdownMatchSelectWidth]="false"` para que las opciones no se corten.
+3. **Búsqueda y paginación en el servidor:** la búsqueda de la lista y la del Drawer esperan 300 ms (borrarlas
+   aplica en el acto) y llevan `maxlength="100"` (límite del back). La tabla del Drawer pagina en el servidor
+   (`nzFrontPagination=false`, 10/20/50/100) con `nzScroll.x = max-content` porque cada catálogo trae sus
+   columnas; abrir otro catálogo limpia la búsqueda y vuelve a la página 1.
+4. **Formato por tipo de columna** (`catalog-value.util.ts`): `datetime` → `dd/MM/yyyy HH:mm`, `boolean` →
+   Sí/No, `number` tal cual (códigos e ids, con `.font-mono` y alineado a la derecha), vacío → "—".
+5. **Sin permiso propio:** como en el back, la pantalla la ve cualquier persona con sesión (ruta sin
+   `data.permission`, menú y buscador sin condición). `homeRoute()` cae en `/catalogos` si no hay otra pantalla.
+6. **Error de carga:** `nzNoResult` cambia a "No se pudieron cargar…" y aparece "Reintentar" (icono + label) en
+   el lugar del contador o junto a la búsqueda del Drawer.
 
 ## Patrón: creación de roles (`/gestion-de-roles/nuevo`) + `nz-collapse` estándar
 
@@ -3432,30 +3500,47 @@ totales por día. Una conciliación (`ReconciliationRun`, `data/reconciliation-r
        (Coincidencias / Diferencias / Sin coincidencias, en ese orden de semáforo) y `1,120 (90.1%)`.
      - **Tabla** (regla general de tablas: `.table-card` 24px, `nzSize="middle"`, 10 por página):
        checkbox (todos / indeterminado / por fila), Fecha, Referencias (referencia + medio de pago como
-       subtítulo), POS y Banco (`money`, "—" si ese lado no existe) y Estado (`ResultStatusTag`:
-       Coincide / Diferencia / Sin coincidencia = success / warning / error). Mapeo de estados:
+       subtítulo), POS y Banco (`money`; el banco es la suma de sus movimientos, con "N movimientos" y
+       " · ajustado" debajo, y "—" si no hay), Estado (`ResultStatusTag`: Coincide / Diferencia /
+       Sin coincidencia = success / warning / error) y Notas (comentario registrado o "—"). Mapeo de estados:
        `matched`→coincide, `amount_mismatch`→diferencia, `sale_only`/`settlement_only`→sin coincidencia.
      - **Marcado de líneas**: las `coincide` se marcan con su checkbox; las `diferencia` y
        `sin_coincidencia` tienen el checkbox deshabilitado hasta que se registre una acción en su
        detalle (que además las marca). El checkbox de cabecera marca solo las marcables. **"Siguiente"
        exige la respuesta del back y TODAS las líneas marcadas**; el pie muestra "N de M líneas
        marcadas".
+     - **Indicadores como botones**: cada card de KPI (los 3 de semáforo y "Por gestionar") es un botón
+       (`role="button"`, `aria-pressed`, `.status-card--clickable`). Al pulsarlo, sus líneas pasan a ser
+       las primeras de la tabla —las demás siguen después, cada grupo en su orden— y el KPI queda con un
+       anillo (`.status-card--active`); volver a pulsarlo quita el orden. Siempre vuelve a la página 1.
+       "Por gestionar" sigue a las líneas con el checkbox bloqueado, así que se reordena al ir
+       registrando acciones.
      - **Indicador "Por gestionar"**: cuarta card neutra (`.status-card-neutral`) en la fila de KPI
        con las líneas cuyo checkbox sigue bloqueado.
-     - **Click en una línea** abre un `nz-drawer` (80%) con `LineDetail`: dos `nz-card` (POS | Banco
-       (Movimientos)) con `.bank-badge` y, en columna, Referencia, Monto, Concepto y Método de pago
-       (los entrega el back por lado). Debajo, en la misma fila, la **diferencia** (un tercio: card de
-       semáforo con el valor grande y la etiqueta "Diferencia" debajo) y **"Notas"** (dos tercios), y
-       bajo ellas los botones. `coincide`: sin acciones y notas de solo lectura. `diferencia`/
+     - **Click en una línea** abre un `nz-drawer` (80%) con `LineDetail`: dos `nz-card` con `.bank-badge`,
+       **POS (1/3)** (en columna: Referencia, Monto, Concepto y Método de pago) y **Banco (Movimientos)
+       (2/3)**: una venta POS puede tener VARIOS movimientos bancarios (1 a muchos), así que el banco es
+       una `nz-table` (Fecha, Referencia + concepto como subtítulo, Monto; 3 filas visibles y scroll con encabezado fijo) con un chip
+       con el conteo ("3 movimientos"), "Total banco" debajo y una barra "Cubre el X% del monto del POS"
+       (color del semáforo, topada en 100%). Una columna ≤ 1000px. Debajo, en la misma fila, la **diferencia** (un tercio: card de
+       semáforo con el valor grande y la etiqueta "Diferencia" debajo) y **"Notas"** (dos tercios; patrón
+       `.info-field`: icono + "Notas" arriba y el texto abajo, que pasa a ser un input al elegir "Ajustar
+       monto" o "Reconciliar"), y bajo ellas los botones (al fondo de la columna, alineados con la card de diferencia;
+       "Confirmar ajuste" a la derecha de la fila). `coincide`: sin acciones y notas de solo lectura. `diferencia`/
        `sin_coincidencia`: "Marcar pendiente" (registra y cierra), "Ajustar monto" (muestra
-       "Transacciones bancarias candidatas"; con candidatos seleccionados el Monto del banco y la
-       Diferencia pasan a ser su suma, y "Confirmar ajuste") y "Reconciliar" (botón de carga igual al del
-       paso 1, mismo `.xlsx` y misma revisión, y "Confirmar reconciliación"). En los dos últimos las
+       "Transacciones bancarias candidatas"; con los movimientos actuales del banco ya seleccionados y 5 sugeridos
+       sin seleccionar; la tabla del banco lista lo seleccionado y la Diferencia pasa a ser POS − su suma, y "Confirmar ajuste" los guarda junto con la
+       nota: la tabla del paso y el detalle reabierto muestran lo ajustado, y las notas aparecen en la
+       columna "Notas") y "Reconciliar" (botón de carga igual al del
+       paso 1, mismo `.xlsx` y misma revisión; con archivo válido aparece "Confirmar reconciliación" bajo
+       el resumen y, al pulsarlo, resumen y botón se reemplazan por la pantalla de carga
+       `ProcessingIndicator` —engranes + barra, la misma del paso 2—). En los dos últimos las
        notas se activan y deben ser un motivo real (`validateNote`: mínimo 10 caracteres y dos
        palabras; un "." o una letra no habilitan el botón). Exigen `manage_differences`. Con la acción
-       ya registrada el detalle es de solo lectura.
+       ya registrada el detalle es de solo lectura, pero conserva la selección y la nota.
      - **"Descargar"** (pie, antes de "Siguiente", solo con resultado): CSV con BOM de TODAS las
-       líneas de la tabla (`buildResultCsv`: Fecha, Referencia, Medio de pago, POS, Banco, Estado),
+       líneas de la tabla (`buildResultCsv`: Fecha, Referencia, Medio de pago, POS, Banco, Movimientos banco, Estado, Notas;
+       refleja los ajustes),
        `conciliacion_<runId>_resultados.csv`.
    - **Salir con cambios**: `confirmLeaveGuard` (`canDeactivate` de la ruta) pide confirmación
      (`NzModalService.confirm`, "¿Salir de la conciliación?" — "Los cambios realizados se perderán

@@ -5,8 +5,6 @@ import { Router, RouterLink } from '@angular/router';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
-import { NzBreadCrumbModule } from 'ng-zorro-antd/breadcrumb';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
@@ -18,6 +16,7 @@ import { TENDER_MEDIA_LABEL, TenderMedia } from '../../shared/models/reconciliat
 import { MoneyPipe } from '../../core/country/money.pipe';
 import { COUNTRY_PROFILE } from '../../core/country/active-country';
 import { AccessControlService } from '../../core/auth/access-control.service';
+import { PageHeaderService } from '../../core/layout/header/page-header.service';
 
 const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
 
@@ -29,8 +28,6 @@ const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
 @Component({
   selector: 'app-difference-management',
   imports: [
-    NzPageHeaderModule,
-    NzBreadCrumbModule,
     CommonModule,
     MoneyPipe,
     FormsModule,
@@ -50,6 +47,7 @@ const VALID_TENDER_MEDIA = new Set<string>(Object.keys(TENDER_MEDIA_LABEL));
   styleUrl: './difference-management.scss',
 })
 export class DifferenceManagement {
+  private readonly pageHeader = inject(PageHeaderService);
   // Ligados a :tenderMedia/:orderId de la ruta (withComponentInputBinding).
   readonly tenderMedia = input<string>();
   readonly orderId = input<string>();
@@ -59,9 +57,6 @@ export class DifferenceManagement {
   private readonly modal = inject(NzModalService);
   private readonly router = inject(Router);
 
-  protected onBack(): void {
-    void this.router.navigateByUrl('/conciliacion');
-  }
   private readonly country = inject(COUNTRY_PROFILE);
   protected readonly access = inject(AccessControlService);
 
@@ -80,6 +75,7 @@ export class DifferenceManagement {
   });
 
   constructor() {
+    this.pageHeader.bind(() => ({ title: 'Gestión de diferencias — Orden ' + (this.orderId() ?? '') }));
     // Sin `effect` que copie la ruta al servicio (ADR-0002, punto 6).
     this.service.bindOrder(
       this.validTenderMedia,

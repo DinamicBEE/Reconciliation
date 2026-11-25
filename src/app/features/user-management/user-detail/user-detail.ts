@@ -1,13 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
-import { rxResource, takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, linkedSignal, signal, TemplateRef, viewChild } from '@angular/core';
+import { rxResource } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
-import { NzBreadCrumbModule } from 'ng-zorro-antd/breadcrumb';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzSelectModule } from 'ng-zorro-antd/select';
@@ -43,17 +41,16 @@ import { CatalogEntry } from '../../../shared/models/catalog-entry.model';
 import { COUNTRY_PROFILE } from '../../../core/country/active-country';
 import { UserDetailDto, UsersApiService } from '../data/users-api.service';
 import { HttpErrorResponse } from '@angular/common/http';
+import { PageHeaderService } from '../../../core/layout/header/page-header.service';
 
 /**
- * Detalle, edición y alta (`/usuarios/nuevo`) de un usuario.
+ * Detalle y edición de un usuario (`/usuarios/:userId`). El alta es `UserCreateModal`.
  *
  * @see docs/codigo/usuarios-pantallas.md#detalle-carga
  */
 @Component({
   selector: 'app-user-detail',
   imports: [
-    NzPageHeaderModule,
-    NzBreadCrumbModule,
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
@@ -78,7 +75,8 @@ import { HttpErrorResponse } from '@angular/common/http';
   styleUrl: './user-detail.scss',
 })
 export class UserDetail {
-  // `:userId` de la ruta; ausente en `/usuarios/nuevo` (modo alta).
+  private readonly pageHeader = inject(PageHeaderService);
+  private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
   readonly userId = input<string>();
 
   protected readonly service = inject(UserManagementService);
@@ -91,10 +89,6 @@ export class UserDetail {
   private readonly message = inject(NzMessageService);
   private readonly modal = inject(NzModalService);
   private readonly router = inject(Router);
-
-  protected onBack(): void {
-    void this.router.navigateByUrl('/usuarios');
-  }
 
   protected readonly fullName = fullName;
   protected readonly statusMeta = STATUS_META;
@@ -133,8 +127,6 @@ export class UserDetail {
     return this.backendDetail()?.[kind]?.find((entry) => entry.id === id) ?? null;
   }
 
-  // Ubicaciones de las subsidiarias elegidas (todas si no hay ninguna).
-  protected readonly createUbicacionOptions = computed(() => this.catalog.ubicacionesFor(this.createSubsidiariaIds()));
   // Se reinicia a lo guardado cada vez que cambia `user()` (linkedSignal, ADR-0002).
   protected readonly editSubsidiariaIds = linkedSignal<number[]>(() => [...(this.user()?.subsidiariaIds ?? [])]);
   protected readonly editUbicacionOptions = computed(() =>
@@ -147,8 +139,6 @@ export class UserDetail {
     const ubicaciones = this.orgForm.controls.ubicacionIds;
     ubicaciones.setValue(this.catalog.pruneUbicaciones(ubicaciones.value, ids));
   }
-
-  protected readonly isCreate = computed(() => !this.userId());
 
   // Detalle `GET /users/{id}` keyed en `backendUserId`, no en `user()` (evita el ciclo).
   // Ver docs/codigo/usuarios-pantallas.md#detalle-carga
@@ -221,8 +211,8 @@ export class UserDetail {
     };
   }
 
-  // Hay `:userId` pero ningún usuario con ese id (distinto de `isCreate()`).
-  protected readonly notFound = computed(() => !!this.userId() && this.user() === null);
+  // Ningún usuario con ese `:userId` (inexistente o eliminado).
+  protected readonly notFound = computed(() => this.user() === null);
 
   // Pestaña "Historial" (`GET /users/{id}/audit-log`): exige `view_audit_log`.
   // Ver docs/codigo/usuarios-pantallas.md#historial-y-auditoria
@@ -317,25 +307,6 @@ export class UserDetail {
     ubicacionIds: this.fb.control<number[]>([]),
   });
 
-  // --- Alta (solo con `isCreate()`) ---
-  // `required` sobre `roleIds` exige al menos un rol; `managerId` `null` = sin supervisor.
-  protected readonly createForm = this.fb.group({
-    roleIds: this.fb.control<RoleId[]>([], [Validators.required]),
-    subsidiariaIds: this.fb.control<number[]>([]),
-    ubicacionIds: this.fb.control<number[]>([]),
-    managerId: this.fb.control<string | null>(null),
-    active: this.fb.control(true),
-  });
-  // Signals para la plantilla: en zoneless `control.value` no dispara detección de cambios.
-  protected readonly createSubsidiariaIds = toSignal(this.createForm.controls.subsidiariaIds.valueChanges, {
-    initialValue: this.createForm.controls.subsidiariaIds.value,
-  });
-  protected readonly createActive = toSignal(this.createForm.controls.active.valueChanges, {
-    initialValue: this.createForm.controls.active.value,
-  });
-  // `POST /users` en vuelo: deshabilita el botón de alta.
-  protected readonly submittingCreate = linkedSignal<boolean>(() => this.resetOnAccountChange(false));
-
   // --- Borrador de "Seguridad y acceso": se reinicia a lo guardado al cambiar `user()` ---
   protected readonly draftRoleIds = linkedSignal<RoleId[]>(() => [...(this.user()?.roleIds ?? [])]);
   protected readonly draftPermissions = linkedSignal<Set<PermissionKey>>(() => new Set(this.user()?.permissions ?? []));
@@ -347,14 +318,15 @@ export class UserDetail {
   protected readonly savingProfile = signal(false);
 
   constructor() {
-    // Combos de "Organización" (alta y edición) — se piden una vez por sesión.
-    this.catalog.ensureLoaded();
-
-    // Alta: al quitar una subsidiaria se quitan sus ubicaciones elegidas.
-    this.createForm.controls.subsidiariaIds.valueChanges.pipe(takeUntilDestroyed()).subscribe((ids) => {
-      const ubicaciones = this.createForm.controls.ubicacionIds;
-      ubicaciones.setValue(this.catalog.pruneUbicaciones(ubicaciones.value, ids));
+    this.pageHeader.bind(() => {
+      const user = this.user();
+      return {
+        title: user ? this.fullName(user) : 'Usuario',
+        actions: this.headerActions() ?? null,
+      };
     });
+    // Combos de "Organización" — se piden una vez por sesión.
+    this.catalog.ensureLoaded();
 
     // Sincroniza los formularios con `user()`, leído con tracking a propósito.
     // Ver docs/codigo/usuarios-pantallas.md#detalle-formularios
@@ -407,7 +379,6 @@ export class UserDetail {
           subsidiariaIds: [],
           ubicacionIds: [],
         });
-        this.createForm.reset();
       }
     });
   }
@@ -720,47 +691,5 @@ export class UserDetail {
     } catch {
       this.message.error('No se pudo copiar. Selecciona la contraseña y cópiala manualmente.');
     }
-  }
-
-  protected onCreateSubmit(): void {
-    if (this.infoForm.invalid || this.createForm.invalid) {
-      this.infoForm.markAllAsTouched();
-      this.createForm.markAllAsTouched();
-      return;
-    }
-
-    const { firstName, lastName, email, phone } = this.infoForm.getRawValue();
-    const { roleIds, subsidiariaIds, ubicacionIds, managerId, active } = this.createForm.getRawValue();
-    const normalizedEmail = email.trim().toLowerCase();
-    const emailTaken = this.service.allUsers().some((u) => u.email.toLowerCase() === normalizedEmail);
-    if (emailTaken) {
-      this.message.error('Ya existe un usuario con ese correo.');
-      return;
-    }
-
-    this.submittingCreate.set(true);
-    this.service
-      .createUser({
-        firstName,
-        lastName,
-        email,
-        phone,
-        roleIds,
-        status: active ? 'active' : 'inactive',
-        subsidiariaIds,
-        ubicacionIds,
-        managerId,
-      })
-      .subscribe({
-        next: (user) => {
-          this.submittingCreate.set(false);
-          this.message.success(`Usuario ${fullName(user)} creado. Su contraseña temporal aparece en "Organización".`);
-          this.router.navigate(['/usuarios', user.id]);
-        },
-        error: () => {
-          // El interceptor muestra el error (409, 400, 403); aquí solo se reactiva el formulario.
-          this.submittingCreate.set(false);
-        },
-      });
   }
 }

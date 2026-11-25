@@ -1,34 +1,23 @@
 <div class="role-create">
-  <nz-page-header class="page-header" [nzTitle]="isEdit() ? 'Editar rol' : 'Nuevo rol'" [nzBackIcon]="backIcon" (nzBack)="onBack()">
-    <nz-breadcrumb nz-page-header-breadcrumb>
-      <nz-breadcrumb-item><a routerLink="/gestion-de-roles">Roles y permisos</a></nz-breadcrumb-item>
-      <nz-breadcrumb-item>{{ isEdit() ? 'Editar rol' : 'Nuevo rol' }}</nz-breadcrumb-item>
-    </nz-breadcrumb>
-    @if (isEdit()) {
-      <nz-page-header-extra>
-        <!-- El tooltip va en el <span>: un botón disabled no dispara hover -->
-        <span
-          nz-tooltip
-          [nzTooltipTitle]="
-            assignedUsers().length
-              ? 'No se puede eliminar: ' + assignedUsers().length + (assignedUsers().length === 1 ? ' usuario tiene' : ' usuarios tienen') + ' este rol asignado'
-              : ''
-          "
-        >
-          <button nz-button nzDanger type="button" [disabled]="!canDelete()" (click)="onDelete()">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
-            </svg>
-            Eliminar rol
-          </button>
-        </span>
-      </nz-page-header-extra>
-    }
-  </nz-page-header>
-  <ng-template #backIcon>
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-    </svg>
+  <!-- Botones del encabezado (los pinta el header de la aplicación) -->
+  <ng-template #headerActions>
+    <!-- El tooltip va en el <span>: un botón disabled no dispara hover -->
+    <span
+      nz-tooltip
+      [nzTooltipTitle]="
+        assignedUsers().length
+          ? 'No se puede eliminar: ' + assignedUsers().length + (assignedUsers().length === 1 ? ' usuario tiene' : ' usuarios tienen') + ' este rol asignado'
+          : ''
+      "
+    >
+      <button nz-button nzDanger type="button" [disabled]="!canDelete()" (click)="onDelete()">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+        </svg>
+        Eliminar rol
+      </button>
+    </span>
+
   </ng-template>
 
   <!-- Barra de nombre + crear -->

@@ -1,28 +1,34 @@
-import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzInputModule } from 'ng-zorro-antd/input';
+import { NzTableModule } from 'ng-zorro-antd/table';
+import { interval, take } from 'rxjs';
 import { AccessControlService } from '../../../../core/auth/access-control.service';
 import { MoneyPipe } from '../../../../core/country/money.pipe';
-import { TENDER_MEDIA_LABEL } from '../../../../shared/models/reconciliation-item.model';
+import { SettlementTransaction } from '../../../../shared/models/reconciliation-item.model';
 import { CandidateList } from '../../../difference-management/components/candidate-list/candidate-list';
 import { DifferenceManagementService } from '../../../difference-management/data/difference-management.service';
 import { BankFileDropzone } from '../../components/bank-file-dropzone/bank-file-dropzone';
+import { ProcessingIndicator } from '../../components/processing-indicator/processing-indicator';
 import { StatementResult } from '../../components/statement-result/statement-result';
 import { BankStatementReader } from '../../data/bank-statement-reader.service';
 import { BankStatementResult } from '../../data/bank-statement.util';
-import { ReconciliationLineSide, ReconciliationResultRow, ReconciliationResultStatus } from '../../data/reconciliation-result.model';
+import { ReconciliationBankMovement, ReconciliationResultRow, ReconciliationResultStatus } from '../../data/reconciliation-result.model';
+import { bankTotal, movementFromSettlement, settlementFromMovement } from '../../data/reconciliation-result.util';
 import { validateNote } from './note.util';
 
 /** Acción con la que se resuelve una línea: marcarla pendiente, ajustar el monto o reconciliar con un archivo. */
 export type LineActionType = 'pendiente' | 'ajuste' | 'reconciliacion';
 
-/** Acción registrada sobre una línea y el motivo que escribió la persona. */
+/** Acción registrada sobre una línea: el motivo y, al ajustar, los movimientos del banco elegidos. */
 export interface LineResolution {
   rowId: string;
   type: LineActionType;
   comment: string;
+  movements?: ReconciliationBankMovement[];
 }
 
 /** Etiqueta visible de cada {@link LineActionType}. */
@@ -38,6 +44,10 @@ const VARIANT: Record<ReconciliationResultStatus, string> = {
   sin_coincidencia: 'error',
 };
 
+// "Reconciliar": la espera simulada del back dura 10 ticks de 500 ms.
+const RECONCILE_TICK_MS = 500;
+const RECONCILE_TICKS = 10;
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -51,14 +61,16 @@ function round2(value: number): number {
 @Component({
   selector: 'app-line-detail',
   imports: [
-    NgTemplateOutlet,
+    DatePipe,
     NzButtonModule,
     NzCardModule,
     NzInputModule,
+    NzTableModule,
     MoneyPipe,
     CandidateList,
     BankFileDropzone,
     StatementResult,
+    ProcessingIndicator,
   ],
   providers: [DifferenceManagementService],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -84,30 +96,43 @@ export class LineDetail {
   protected readonly statement = signal<BankStatementResult | null>(null);
   protected readonly reading = signal(false);
   private readSeq = 0;
+  private readonly destroyRef = inject(DestroyRef);
+  protected readonly reconciling = signal(false);
+  protected readonly reconcileProgress = signal(0);
 
   protected readonly actionLabel = LINE_ACTION_LABEL;
   protected readonly isMatched = computed(() => this.row().status === 'coincide');
   protected readonly canManage = computed(() => this.access.hasPermission('manage_differences'));
 
-  // Con candidatos seleccionados, el monto del banco y la diferencia salen de su suma.
-  private readonly selecting = computed(() => this.mode() === 'ajuste' && this.service.selectedCount() > 0);
+  // Al ajustar, el monto del banco y la diferencia salen de la suma de lo seleccionado (aunque sea nada).
+  private readonly selecting = computed(() => this.mode() === 'ajuste');
 
-  protected readonly bank = computed<ReconciliationLineSide | null>(() => {
-    const base = this.row().bank;
-    if (!this.selecting()) return base;
-    const amount = this.service.selectedSettledAmount();
-    const method = TENDER_MEDIA_LABEL[this.row().tenderMedia];
-    return base ? { ...base, amount } : { reference: '—', concept: '—', paymentMethod: method, amount };
-  });
-
-  protected readonly difference = computed(() =>
-    this.selecting() ? round2((this.row().pos?.amount ?? 0) - this.service.selectedSettledAmount()) : this.row().difference,
+  private readonly selectedMovements = computed<ReconciliationBankMovement[]>(() =>
+    this.service
+      .candidates()
+      .filter((candidate) => this.service.isSelected(candidate.settlement.id))
+      .map((candidate) => movementFromSettlement(candidate.settlement)),
   );
+
+  // Movimientos del banco a la vista: los ajustados y guardados, los elegidos en vivo o los del back.
+  protected readonly movements = computed<readonly ReconciliationBankMovement[]>(() => {
+    const saved = this.resolution();
+    if (saved?.type === 'ajuste' && saved.movements) return saved.movements;
+    return this.selecting() ? this.selectedMovements() : this.row().bank;
+  });
+  protected readonly bankAmount = computed(() => bankTotal(this.movements()));
+  protected readonly difference = computed(() => round2((this.row().pos?.amount ?? 0) - this.bankAmount()));
+
+  // Qué parte del POS cubre el banco (0 sin POS); la barra se topa en 100.
+  protected readonly coverage = computed(() => {
+    const pos = this.row().pos?.amount ?? 0;
+    return pos > 0 ? Math.round((this.bankAmount() / pos) * 1000) / 10 : 0;
+  });
 
   protected readonly variant = computed(() => (this.difference() === 0 ? 'success' : VARIANT[this.row().status]));
 
   // Solo se edita con una acción elegida y sin resolución previa.
-  protected readonly noteEnabled = computed(() => this.mode() !== 'none' && this.resolution() === null);
+  protected readonly noteEnabled = computed(() => this.mode() !== 'none' && this.resolution() === null && !this.reconciling());
   protected readonly noteValue = computed(() => {
     if (this.isMatched()) return this.row().comment;
     return this.resolution()?.comment ?? this.note();
@@ -127,6 +152,16 @@ export class LineDetail {
       computed(() => this.row().tenderMedia),
       computed(() => this.row().reference),
     );
+    // Sin medio de pago (cruce del banco) no hay liquidaciones simuladas que sembrar.
+    this.service.bindSeed(
+      computed(() => this.seedOf(this.row().bank)),
+      computed(() => this.seedOf(this.row().candidates)),
+    );
+  }
+
+  private seedOf(movements: readonly ReconciliationBankMovement[]): SettlementTransaction[] {
+    const tenderMedia = this.row().tenderMedia;
+    return tenderMedia ? movements.map((movement) => settlementFromMovement(movement, tenderMedia)) : [];
   }
 
   protected markPending(): void {
@@ -135,6 +170,7 @@ export class LineDetail {
   }
 
   protected choose(mode: 'ajuste' | 'reconciliacion'): void {
+    if (this.reconciling()) return;
     this.mode.set(mode);
   }
 
@@ -154,9 +190,28 @@ export class LineDetail {
     if (mode === 'none' || !this.canConfirm()) return;
     const comment = this.note().trim();
     if (mode === 'ajuste') {
+      const movements = this.selectedMovements();
       this.service.setNote(comment);
       if (!this.service.save()) return;
+      this.resolved.emit({ rowId: this.row().id, type: mode, comment, movements });
+      return;
     }
-    this.resolved.emit({ rowId: this.row().id, type: mode, comment });
+    this.startReconciliation(comment);
+  }
+
+  // Simula la espera del back y, al terminar, registra la reconciliación.
+  private startReconciliation(comment: string): void {
+    if (this.reconciling()) return;
+    this.reconcileProgress.set(0);
+    this.reconciling.set(true);
+    interval(RECONCILE_TICK_MS)
+      .pipe(take(RECONCILE_TICKS), takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (tick) => this.reconcileProgress.set(((tick + 1) * 100) / RECONCILE_TICKS),
+        complete: () => {
+          this.reconciling.set(false);
+          this.resolved.emit({ rowId: this.row().id, type: 'reconciliacion', comment });
+        },
+      });
   }
 }

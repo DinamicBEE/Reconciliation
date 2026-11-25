@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { rxResource, takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { Observable, catchError, debounceTime, of, switchMap, tap } from 'rxjs';
 import { toIsoDate } from '../../../shared/utils/iso-date.util';
 import { CaptureBatchResult, SaleListItem, SalesApiService, SalesListParams } from './sales-api.service';
@@ -45,6 +45,23 @@ export class SalesDashboardService {
   private readonly api = inject(SalesApiService);
 
   readonly selectedSale = signal<SaleListItem | null>(null);
+
+  // `GET /sales/{id}` de la venta abierta; el resumen de la fila se ve mientras llega.
+  private readonly detailResource = rxResource({
+    params: () => this.selectedSale()?.id,
+    stream: ({ params: id }) => this.api.detail(id),
+  });
+  /** Detalle de la venta abierta; `null` mientras llega, si falló o si es de otra venta. */
+  readonly saleDetail = computed(() => {
+    const detail = this.detailResource.hasValue() ? this.detailResource.value() : undefined;
+    return detail && detail.id === this.selectedSale()?.id ? detail : null;
+  });
+  readonly saleDetailLoading = this.detailResource.isLoading;
+  readonly saleDetailFailed = computed(() => !!this.detailResource.error());
+
+  reloadSaleDetail(): void {
+    this.detailResource.reload();
+  }
 
   readonly dateRange = signal<DateRangeFilter>(null);
   readonly subsidiariaFilter = signal<SubsidiariaFilter>('all');

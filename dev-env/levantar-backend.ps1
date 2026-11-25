@@ -4,11 +4,21 @@
 #   ... -Reseed                                                                       # solo vuelve a aplicar la siembra
 #
 # No modifica el repo del backend: usa SU docker-compose.yml tal cual (--project-directory) con las variables
-# de dev-env/.env y un nombre de proyecto propio (coctel_dev_v4) => volumen propio (coctel_dev_v4_coctel_postgres_data).
+# de dev-env/.env y un nombre de proyecto propio (coctel_dev_v7) => volumen propio (coctel_dev_v7_coctel_postgres_data).
 # El sufijo sube cada vez que DEV modifica la migración V1 (Flyway rechaza una base creada con el V1 anterior):
 # v2 = V2-V4 fusionadas en V1 + catálogos + capture/core; v3 = tabla app_user_special_permission (roles CRUD);
-# v4 = tiendas reales, homologación DIAN, capture_state y auditoría en texto (541c538). Los contenedores de una pila anterior con los mismos nombres (proyecto coctel_dev, docker run
+# v4 = tiendas reales, homologación DIAN, capture_state y auditoría en texto (541c538);
+# v5 = catálogos cargados (catalog_registry + catálogos DIAN), ns_id, usuario de integración NetSuite y netsuite-service
+# (fae5944); v6 = esquema en inglés (employee, location, job_title...), conciliaciones, catálogos de NetSuite y
+# reconciliation-service (ef1b0de); v7 = rama conciliations: conciliación ligada a sus reportes, 6 bancos/canales,
+# estatus diferencia y sin_coincidencia (131475b). Los contenedores de una pila anterior con los mismos nombres (proyecto coctel_dev, docker run
 # manual, ...) se ELIMINAN — solo los contenedores: sus volúmenes y datos quedan intactos para volver atrás.
+#
+# -BackendDir apunta a otra copia del back (p. ej. una exportación limpia de origin/DEV) sin tocar ..\coctel_midd.
+#
+# Orden: base + migración -> siembra -> resto de servicios. La siembra va ANTES del auth-service: con app_user sin
+# cuentas (la V1 solo crea netsuite@cocteldelmar.local, id 1) su AdminUserSeeder crearía un administrador con el
+# id 2, que es el de admin@conciliacion.mx en la siembra.
 #
 # El Gateway queda en http://localhost:<GATEWAY_PORT> (8080 por defecto; proxy.conf.js lee el mismo valor de dev-env/.env).
 param(
@@ -17,7 +27,7 @@ param(
   [switch]$Reseed
 )
 $ErrorActionPreference = 'Stop'
-$project = 'coctel_dev_v4'
+$project = 'coctel_dev_v7'
 $backend = (Resolve-Path $BackendDir).Path
 $envFile = Join-Path $PSScriptRoot '.env'
 if (-not (Test-Path $envFile)) { Copy-Item (Join-Path $PSScriptRoot '.env.example') $envFile; Write-Host "Creado $envFile desde .env.example" }
@@ -48,7 +58,8 @@ if ($Reseed) { Invoke-Seed; exit 0 }
 #    manual). Solo el contenedor: su volumen de datos no se toca.
 $existing = @(docker ps -a --format '{{.Names}}')
 $names = 'coctel-del-mar-postgres', 'coctel-del-mar-db-migration', 'coctel-del-mar-auth-service', 'coctel-del-mar-capture-service',
-  'coctel-del-mar-core-service', 'coctel-del-mar-sales-service', 'coctel-del-mar-gateway'
+  'coctel-del-mar-core-service', 'coctel-del-mar-netsuite-service', 'coctel-del-mar-reconciliation-service',
+  'coctel-del-mar-sales-service', 'coctel-del-mar-gateway'
 foreach ($name in $names) {
   if ($existing -notcontains $name) { continue }
   $labels = (docker inspect $name | ConvertFrom-Json)[0].Config.Labels
@@ -59,11 +70,27 @@ foreach ($name in $names) {
   }
 }
 
-# 2. Construir y levantar (db-migration crea el esquema y termina; luego auth, capture, core y gateway).
-& docker @compose up -d --build
+# 2. Construir; levantar solo postgres + db-migration (crea el esquema y termina) y esperar a que acabe bien.
+& docker @compose build
+if ($LASTEXITCODE -ne 0) { throw 'docker compose build falló.' }
+& docker @compose up -d db-migration
+if ($LASTEXITCODE -ne 0) { throw 'docker compose up db-migration falló.' }
+Write-Host 'Esperando a db-migration...'
+for ($i = 0; $i -lt 100; $i++) {
+  $state = docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' coctel-del-mar-db-migration
+  if ($state -like 'exited*') { break }
+  Start-Sleep -Seconds 3
+}
+if ($state -ne 'exited 0') { throw "db-migration no terminó bien ($state): docker logs coctel-del-mar-db-migration" }
+
+# 3. Sembrar cuentas demo, roles, catálogos organizacionales y ventas de prueba (antes del auth-service, ver arriba).
+Invoke-Seed
+
+# 4. Levantar el resto (auth, capture, core, netsuite, reconciliation y gateway).
+& docker @compose up -d
 if ($LASTEXITCODE -ne 0) { throw 'docker compose up falló.' }
 
-# 3. Esperar al Gateway (un POST vacío a /auth/login responde 400 cuando ya enruta).
+# 5. Esperar al Gateway (un POST vacío a /auth/login responde 400 cuando ya enruta).
 Write-Host "Esperando al Gateway en :$gatewayPort..."
 $ok = $false
 for ($i = 0; $i -lt 60; $i++) {
@@ -72,8 +99,5 @@ for ($i = 0; $i -lt 60; $i++) {
   } catch { if ($_.Exception.Response) { $ok = $true; break } }
   Start-Sleep -Seconds 3
 }
-if (-not $ok) { throw 'El Gateway no respondió a tiempo (docker compose -p coctel_dev logs gateway).' }
-
-# 4. Sembrar cuentas demo, roles, subsidiarias/ubicaciones, catálogos organizacionales y ventas de prueba.
-Invoke-Seed
+if (-not $ok) { throw "El Gateway no respondió a tiempo (docker compose -p $project logs gateway)." }
 Write-Host "Listo: Gateway en http://localhost:$gatewayPort - admin@conciliacion.mx / Conciliacion2026"

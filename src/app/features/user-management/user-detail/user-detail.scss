@@ -1,8 +1,7 @@
 @use '../../../shared/styles/data-table';
-@use '../../../shared/styles/summary-columns';
 @use '../../../shared/styles/info-fields';
 
-// Sin max-width: el ancho legible de cada campo lo pone .user-form (420px).
+// Las pestañas y sus cards usan todo el ancho de la pantalla.
 .user-detail {
   display: flex;
   flex-direction: column;
@@ -70,46 +69,12 @@ nz-tabs,
   border-top: 1px solid var(--color-border);
 }
 
-.user-form {
-  display: flex;
-  flex-direction: column;
-  max-width: 420px;
-}
-
-// Formularios de una sola card (alta): centrados en vez de estirarse.
-.card-centered {
-  max-width: 560px;
-  margin: 0 auto;
-
-  // Botón de guardar/crear centrado.
-  .user-form__submit {
-    align-self: center;
-  }
-}
-
-.user-form__submit {
-  margin-top: 4px;
-  align-self: flex-start;
-}
-
 .user-form__actions {
   display: flex;
   gap: 12px;
   margin-top: 4px;
 }
 
-.user-form__hint {
-  font-size: 12px;
-  margin: -4px 0 12px;
-}
-
-.status-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
 
 // La estructura .info-field/.info-fields vive en shared/styles/_info-fields.scss;
 // aquí solo el layout del avatar junto al grid.

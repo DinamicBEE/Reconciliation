@@ -36,7 +36,7 @@
    formularios de información/organización de `UserDetail` ya usaban `NonNullableFormBuilder` o
    `FormControl` con `nonNullable`. Única desviación corregida: el **alta de usuario** mezclaba
    `infoForm` con `ngModel` + signals (roles, subsidiarias, ubicaciones, supervisor, estado) y
-   validaba "al menos un rol" a mano con un toast. Ahora es `createForm` tipado con
+   validaba "al menos un rol" a mano con un toast. Ahora es un `FormGroup` tipado (`createForm`, hoy `UserCreateModal.form`) con
    `Validators.required` en `roleIds`, error en línea con el patrón de MASTER, poda de ubicaciones
    por `valueChanges` y lecturas de plantilla con `toSignal` (zoneless).
 2. **Filtros con `ngModel`:** todos están ligados a signals o setters de su servicio (resumen de
@@ -52,7 +52,7 @@
 
 Verificado: `pnpm build`, `pnpm test:ci` (120) y el alta en la app contra el back local (errores
 en línea, rol requerido, poda de ubicaciones, switch de estado y reinicio al volver a
-`/usuarios/nuevo`).
+`/usuarios/nuevo`, ruta reemplazada después por el modal de alta).
 
 ## Alternativas consideradas
 

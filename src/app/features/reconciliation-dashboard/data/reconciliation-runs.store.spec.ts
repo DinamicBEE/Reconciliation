@@ -1,13 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { NewReconciliationRunInput } from './reconciliation-run.model';
+import { MOCK_RECONCILIATION_RUNS } from './reconciliation-runs.mock-data';
 import { ReconciliationRunsStore } from './reconciliation-runs.store';
-
-const INPUT: NewReconciliationRunInput = {
-  companyName: 'Coctel del Mar',
-  storeName: 'Cóctel del Mar Chapinero',
-  periodStart: '2026-10-01',
-  periodEnd: '2026-10-15',
-};
 
 describe('ReconciliationRunsStore', () => {
   let store: ReconciliationRunsStore;
@@ -22,12 +15,18 @@ describe('ReconciliationRunsStore', () => {
     TestBed.resetTestingModule();
   });
 
-  describe('runs', () => {
-    it('expone la semilla ordenada por fecha de creación desc y luego por id desc', () => {
-      const runs = store.runs();
+  const seed = () => store.upsert(MOCK_RECONCILIATION_RUNS);
 
-      expect(runs).toHaveLength(10);
-      expect(runs.map((r) => r.id)).toEqual([
+  it('arranca vacío: sin datos simulados', () => {
+    expect(store.runs()).toEqual([]);
+    expect(store.find('CON-0001')).toBeNull();
+  });
+
+  describe('runs', () => {
+    beforeEach(seed);
+
+    it('ordena por fecha de creación desc y luego por id desc', () => {
+      expect(store.runs().map((r) => r.id)).toEqual([
         'CON-0010',
         'CON-0009',
         'CON-0008',
@@ -41,21 +40,55 @@ describe('ReconciliationRunsStore', () => {
       ]);
     });
 
-    it('a igual fecha de creación, el id mayor va primero', () => {
-      const runs = store.runs();
-      const same = runs.filter((r) => r.createdAt === '2026-09-09');
+    it('a igual fecha de creación, el id mayor va primero (comparación numérica)', () => {
+      store.upsert([
+        { ...MOCK_RECONCILIATION_RUNS[0], id: '9', createdAt: '2026-12-01' },
+        { ...MOCK_RECONCILIATION_RUNS[0], id: '10', createdAt: '2026-12-01' },
+      ]);
 
-      expect(same.map((r) => r.id)).toEqual(['CON-0005', 'CON-0004']);
+      expect(store.runs().slice(0, 2).map((r) => r.id)).toEqual(['10', '9']);
     });
 
-    it('nunca deja una fecha más antigua antes de una más reciente', () => {
-      const dates = store.runs().map((r) => r.createdAt);
+    it('ordena instantes ISO con hora del más reciente al más antiguo', () => {
+      store.upsert([
+        { ...MOCK_RECONCILIATION_RUNS[0], id: '100', createdAt: '2026-12-01T08:00:00Z' },
+        { ...MOCK_RECONCILIATION_RUNS[0], id: '101', createdAt: '2026-12-01T18:00:00Z' },
+      ]);
 
-      expect(dates).toEqual([...dates].sort().reverse());
+      expect(store.runs().slice(0, 2).map((r) => r.id)).toEqual(['101', '100']);
+    });
+  });
+
+  describe('upsert', () => {
+    it('guarda las corridas recibidas', () => {
+      seed();
+
+      expect(store.runs()).toHaveLength(10);
+    });
+
+    it('reemplaza una corrida con el mismo id sin duplicarla', () => {
+      seed();
+      const updated = { ...MOCK_RECONCILIATION_RUNS[6], status: 'conciliado' as const, salesCount: 999 };
+
+      store.upsert([updated]);
+
+      expect(store.runs()).toHaveLength(10);
+      expect(store.find('CON-0007')).toEqual(updated);
+    });
+
+    it('una lista vacía no cambia nada', () => {
+      seed();
+      const before = store.runs();
+
+      store.upsert([]);
+
+      expect(store.runs()).toBe(before);
     });
   });
 
   describe('find', () => {
+    beforeEach(seed);
+
     it('devuelve la conciliación con ese id', () => {
       expect(store.find('CON-0003')).toMatchObject({
         id: 'CON-0003',
@@ -75,63 +108,9 @@ describe('ReconciliationRunsStore', () => {
     });
   });
 
-  describe('create', () => {
-    it('nace pendiente y conserva los datos del modal', () => {
-      const created = store.create(INPUT, new Date(2026, 10, 5));
+  describe('markDesconciliado y withLocalStatus', () => {
+    beforeEach(seed);
 
-      expect(created).toEqual({
-        ...INPUT,
-        id: 'CON-0011',
-        createdAt: '2026-11-05',
-        status: 'pendiente',
-        comments: '',
-      });
-    });
-
-    it('asigna un id consecutivo tras el máximo existente', () => {
-      const first = store.create(INPUT, new Date(2026, 10, 5));
-      const second = store.create(INPUT, new Date(2026, 10, 5));
-
-      expect(first.id).toBe('CON-0011');
-      expect(second.id).toBe('CON-0012');
-    });
-
-    it('usa la fecha LOCAL del `now` inyectado, sin cruzar de día por UTC', () => {
-      // 23:59 locales: en UTC-5/-6 `toISOString()` ya sería el día siguiente.
-      expect(store.create(INPUT, new Date(2026, 10, 5, 23, 59, 59)).createdAt).toBe('2026-11-05');
-      // 00:01 locales: en UTC+ `toISOString()` sería el día anterior.
-      expect(store.create(INPUT, new Date(2026, 0, 1, 0, 1)).createdAt).toBe('2026-01-01');
-    });
-
-    it('rellena con ceros mes y día de un solo dígito', () => {
-      expect(store.create(INPUT, new Date(2027, 2, 3)).createdAt).toBe('2027-03-03');
-    });
-
-    it('la nueva conciliación aparece primero en `runs`', () => {
-      const created = store.create(INPUT, new Date(2026, 10, 5));
-
-      expect(store.runs()).toHaveLength(11);
-      expect(store.runs()[0]).toEqual(created);
-    });
-
-    it('queda localizable con `find`', () => {
-      const created = store.create(INPUT, new Date(2026, 10, 5));
-
-      expect(store.find(created.id)).toEqual(created);
-    });
-
-    it('sin `now` usa la fecha de hoy', () => {
-      vi.useFakeTimers();
-      try {
-        vi.setSystemTime(new Date(2026, 11, 24, 12));
-        expect(store.create(INPUT).createdAt).toBe('2026-12-24');
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-  });
-
-  describe('markDesconciliado', () => {
     it('cambia solo esa conciliación a desconciliado', () => {
       const before = store.runs();
 
@@ -152,6 +131,24 @@ describe('ReconciliationRunsStore', () => {
       expect(store.runs().find((r) => r.id === 'CON-0009')?.status).toBe('desconciliado');
     });
 
+    it('se superpone a lo que vuelve a llegar del backend', () => {
+      store.markDesconciliado('CON-0001');
+
+      store.upsert([{ ...MOCK_RECONCILIATION_RUNS[0], status: 'conciliado' }]);
+
+      expect(store.find('CON-0001')?.status).toBe('desconciliado');
+    });
+
+    it('withLocalStatus aplica el desconciliado de la sesión a cualquier corrida con ese id', () => {
+      const run = MOCK_RECONCILIATION_RUNS[1];
+      expect(store.withLocalStatus(run)).toBe(run);
+
+      store.markDesconciliado(run.id);
+
+      expect(store.withLocalStatus(run)).toEqual({ ...run, status: 'desconciliado' });
+      expect(run.status).toBe('conciliado');
+    });
+
     it('con un id inexistente no modifica nada', () => {
       const before = store.runs();
 
@@ -162,15 +159,16 @@ describe('ReconciliationRunsStore', () => {
   });
 
   describe('aislamiento entre pruebas', () => {
-    it('una conciliación creada en una prueba no persiste en la siguiente (parte 1)', () => {
-      store.create(INPUT, new Date(2026, 10, 5));
+    it('lo guardado en una prueba no persiste en la siguiente (parte 1)', () => {
+      seed();
       store.markDesconciliado('CON-0001');
 
-      expect(store.runs()).toHaveLength(11);
+      expect(store.runs()).toHaveLength(10);
     });
 
-    it('una conciliación creada en una prueba no persiste en la siguiente (parte 2)', () => {
-      expect(store.runs()).toHaveLength(10);
+    it('lo guardado en una prueba no persiste en la siguiente (parte 2)', () => {
+      expect(store.runs()).toEqual([]);
+      seed();
       expect(store.find('CON-0001')?.status).toBe('conciliado');
     });
   });

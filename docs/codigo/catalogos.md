@@ -58,41 +58,38 @@ Código: `src/app/shared/models/catalog-entry.model.ts`.
 <a id="pantalla-catalogos-cargados"></a>
 ## Pantalla "Catálogos cargados"
 
-- CU14 del DED (sección 7.14, prueba 30 de la matriz): relación de catálogos fijos de la autoridad
-  fiscal (SAT o DIAN según el país), homologaciones, catálogos sincronizados desde NetSuite y datos
-  maestros de la carga inicial por plantilla, con su número de registros y fecha de actualización.
-- Solo lectura para todos los roles: el portal no tiene mantenimiento de catálogos (DED 2.2) y las
-  correcciones se piden por soporte (DED 7.17), por eso ni el modelo ni el servicio tienen
-  operaciones de escritura. Hoy lee de `MOCK_CATALOGS`; cuando exista backend las listas llegarán
-  del Core / Ventas Service.
-- El detalle de una lista se abre en un Drawer con búsqueda, no en una ruta, porque no tiene flujo
-  propio. La búsqueda dentro de la lista (CU14 paso 3: comprobar si un valor está cargado) coincide
-  contra cualquier columna y se reinicia al abrir otra lista.
-- Cada catálogo define sus columnas (`CatalogColumn`) porque cada lista tiene su forma; el número
-  de registros se deriva de `rows.length`.
+- CU14 del DED (sección 7.14, prueba 30 de la matriz): relación de los catálogos que el backend
+  registra en `catalog_registry` (Core Service), con su número de registros habilitados y fecha de
+  última actualización. Dos endpoints: `GET /catalogs?search&type` (lista) y
+  `GET /catalogs/items?code&search&page&pageSize` (detalle paginado).
+- Tipos del backend: `DIAN` (fijos del Layout de facturación electrónica), `NETSUITE` (los alimenta
+  la sincronización `POST /netsuite/...`) e `INTERNAL` (propios del sistema). Reemplazan la
+  clasificación anterior del front (fiscal, homologación, NetSuite, dato maestro), que no existe en
+  el backend. La columna "Origen" muestra `origin` tal como llega.
+- Solo lectura para todos: el portal no tiene mantenimiento de catálogos (DED 2.2) y las
+  correcciones se piden por soporte (DED 7.17). El backend acepta altas y ediciones con
+  `manage_catalogs`, pero el front no las usa mientras el DED no cambie.
+- Sin permiso propio: el backend solo pide sesión válida, así que la ruta, el menú y la búsqueda del
+  header no exigen permiso. `view_catalogs` no existe en el backend; con él, ningún usuario real
+  vería la pantalla. Por lo mismo `homeRoute()` cae en `/catalogos` cuando no hay otra pantalla.
+- Búsqueda y filtro de tipo van al servidor (`search`, `type`; con "Todos los tipos" no se envía
+  `type`). La búsqueda espera 300 ms tras teclear; borrarla aplica en el acto. El backend rechaza
+  más de 100 caracteres (400), por eso los campos llevan `maxlength="100"`.
+- El detalle se abre en un Drawer, no en una ruta, porque no tiene flujo propio. Hay catálogos
+  grandes (códigos postales, municipios), así que la búsqueda (CU14 paso 3, contra cualquier
+  columna) y la paginación son del servidor. `page` es un `linkedSignal` que vuelve a 1 al abrir
+  otro catálogo o cambiar la búsqueda; la búsqueda se reinicia al abrir otro catálogo.
+- Cada catálogo trae sus columnas (`key`, `label`, `type`) y cada registro un campo por `key`.
+  `formatCatalogValue` da formato por tipo: `datetime` como fecha, `boolean` como Sí/No y `number`
+  tal cual (suelen ser códigos o ids, no cantidades); un vacío se muestra como "—".
+- `detail` se descarta si la respuesta es de otro catálogo, para no pintar las columnas del anterior
+  mientras llega el nuevo. El encabezado del Drawer usa el del detalle cuando llega y, mientras,
+  el de la fila de la lista.
 - `CatalogsService` se provee en el componente (ADR-0002, punto 4): el estado no sobrevive a salir
-  de la pantalla.
+  de la pantalla. Los avisos de error los da `httpErrorAlertInterceptor`; la pantalla además muestra
+  "Reintentar".
 - La tabla usa `nzNoResult` y no una fila `@empty`: con datos vacíos `nz-table` ya pinta su propio
   mensaje y saldría duplicado.
 
 Código: `src/app/features/catalogs/catalogs.*`, `data/catalogs.service.ts`,
-`data/catalogs.model.ts`, `data/catalog-filter.util.ts`.
-
-<a id="datos-mock-por-pais"></a>
-## Mock de catálogos por país
-
-- Los valores salen del DED: tender media, Major/Family Group, prefijos de ubicación y cuentas
-  homologadas (7.21 y 7.23). Los números de cuenta contable, los códigos de establecimiento y los
-  ids de tienda Rappi son ilustrativos: el cliente aún no entrega su plan de cuentas ni sus
-  homologaciones (supuestos del DED, sección 3.1).
-- Lo que depende del país activo (`environment.country`) vive aparte: catálogos fiscales de la
-  autoridad, homologación de impuestos y códigos de impuesto de NetSuite
-  (`country-catalogs.mx.ts`, `country-catalogs.co.ts`). México usa los catálogos oficiales del
-  Anexo 20 del CFDI 4.0, solo con los códigos que usa la venta al público. El resto
-  (homologaciones de tender, grupos, ubicaciones, adquirencia, Rappi y maestros) es igual en ambos
-  países.
-- Las 8 ubicaciones (`HIPERMAR_PREFIXES`) son las que expone el API del facturador (DED 7.23), cada
-  una con su prefijo fiscal, y se reutilizan en varias homologaciones.
-
-Código: `src/app/features/catalogs/data/catalogs-mock.data.ts`,
-`country-catalogs.mx.ts`, `country-catalogs.co.ts`.
+`data/catalogs.model.ts`, `data/catalog-value.util.ts`.

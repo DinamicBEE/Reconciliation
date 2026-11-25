@@ -3,7 +3,6 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
@@ -30,6 +29,7 @@ import {
 } from './data/sales-dashboard.service';
 import { SaleListItem } from './data/sales-api.service';
 import { buildSaleListCsv } from './data/sale-list-export.util';
+import { cardLabel, customerDocumentLabel, dianCodesLabel, taxLabel } from './data/sale-detail.util';
 import { MoneyPipe } from '../../core/country/money.pipe';
 import { SalesCatalogService } from './data/sales-catalog.service';
 import { CaptureMessage, describeCaptureError, describeCaptureResult } from './data/capture-result.util';
@@ -45,7 +45,6 @@ const RECONCILIATION_STATUSES = new Set<string>(['conciliado', 'desconciliado', 
 @Component({
   selector: 'app-sales-dashboard',
   imports: [
-    NzPageHeaderModule,
     CommonModule,
     MoneyPipe,
     FormsModule,
@@ -152,6 +151,12 @@ export class SalesDashboard {
     const code = sale.reconciliationStatus.code;
     return (RECONCILIATION_STATUSES.has(code) ? code : 'por_conciliar') as ReconciliationStatus;
   }
+
+  // Formato del detalle (`GET /sales/{id}`).
+  protected readonly customerDocument = customerDocumentLabel;
+  protected readonly dianCodesLabel = dianCodesLabel;
+  protected readonly cardLabel = cardLabel;
+  protected readonly taxLabel = taxLabel;
 
   protected tenderMediaText(sale: SaleListItem): string {
     const media = sale.tenderMedia;

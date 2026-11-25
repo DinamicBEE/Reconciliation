@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
@@ -15,20 +14,25 @@ import { toIsoDate } from '../../shared/utils/iso-date.util';
 import { AccessControlService } from '../../core/auth/access-control.service';
 import { CatalogService } from '../../core/services/catalog.service';
 import { OrganizationCatalogService } from '../../core/services/organization-catalog.service';
-import { DateRangeFilter, ReconciliationService, StatusFilter } from './data/reconciliation.service';
+import { describeCreateReconciliationError } from './data/reconciliation-api.service';
+import {
+  DateRangeFilter,
+  RECONCILIATION_PAGE_SIZES,
+  ReconciliationService,
+  StatusFilter,
+} from './data/reconciliation.service';
 import { ReconciliationRun } from './data/reconciliation-run.model';
 import { buildRunCsv, canDesconciliar, canDownload } from './data/reconciliation-run.util';
 import { RunStatusTag } from './run-status-tag/run-status-tag';
 
 /**
- * Tabla de conciliaciones (corridas) y modal "Nueva conciliación".
+ * Tabla de conciliaciones (`GET /reconciliations`) y modal "Nueva conciliación" (`POST /reconciliations`).
  *
  * @see docs/codigo/conciliacion.md#tabla-de-conciliacion
  */
 @Component({
   selector: 'app-reconciliation-dashboard',
   imports: [
-    NzPageHeaderModule,
     CommonModule,
     FormsModule,
     RouterLink,
@@ -57,6 +61,7 @@ export class ReconciliationDashboard {
 
   protected readonly canDesconciliar = canDesconciliar;
   protected readonly canDownload = canDownload;
+  protected readonly pageSizes = RECONCILIATION_PAGE_SIZES;
 
   protected readonly statusOptions: { value: StatusFilter; label: string }[] = [
     { value: 'all', label: 'Todos los estatus' },
@@ -73,17 +78,17 @@ export class ReconciliationDashboard {
     this.service.setDateRange(value as DateRangeFilter);
   }
 
-  // Irreversible en la sesión: se confirma antes.
+  // Irreversible en la sesión y solo en el front (el backend aún no tiene endpoint): se confirma antes.
   protected onDesconciliarClick(run: ReconciliationRun): void {
     if (!canDesconciliar(run)) return;
     this.modal.confirm({
       nzTitle: 'Desconciliar',
-      nzContent: `¿Desconciliar la conciliación <b>${run.id}</b> de <b>${run.storeName}</b> (${this.formatPeriod(run)})? Pasará a "Desconciliado".`,
+      nzContent: `¿Desconciliar la conciliación <b>${run.code}</b> de <b>${run.storeName}</b> (${this.formatPeriod(run)})? Pasará a "Desconciliado".`,
       nzOkText: 'Desconciliar',
       nzOkDanger: true,
       nzOnOk: () => {
         this.service.markDesconciliado(run);
-        this.message.success(`La conciliación ${run.id} se marcó como desconciliada.`);
+        this.message.success(`La conciliación ${run.code} se marcó como desconciliada.`);
       },
     });
   }
@@ -129,9 +134,10 @@ export class ReconciliationDashboard {
   protected readonly newCompanyId = signal<number | null>(null);
   protected readonly newStoreId = signal<number | null>(null);
   protected readonly newPeriod = signal<[Date, Date] | null>(null);
+  protected readonly creating = signal(false);
 
   protected readonly canStart = computed(
-    () => this.newCompanyId() !== null && this.newStoreId() !== null && this.newPeriod() !== null,
+    () => this.newCompanyId() !== null && this.newStoreId() !== null && this.newPeriod() !== null && !this.creating(),
   );
 
   protected openNewModal(): void {
@@ -146,6 +152,7 @@ export class ReconciliationDashboard {
   }
 
   protected closeNewModal(): void {
+    if (this.creating()) return;
     this.newModalOpen.set(false);
     this.newCompanyId.set(null);
     this.newStoreId.set(null);
@@ -157,19 +164,30 @@ export class ReconciliationDashboard {
     this.newPeriod.set(value && value[0] && value[1] ? value : null);
   }
 
+  // `POST /reconciliations`: con error el modal sigue abierto para corregir el periodo o la tienda.
   protected startReconciliation(): void {
-    const companyId = this.newCompanyId();
     const storeId = this.newStoreId();
     const period = this.newPeriod();
-    if (companyId === null || storeId === null || !period) return;
+    if (!this.canStart() || storeId === null || !period) return;
 
-    const run = this.service.create({
-      companyName: this.catalog.findSubsidiaria(companyId)?.nombre ?? `#${companyId}`,
-      storeName: this.catalog.findUbicacion(storeId)?.nombre ?? `#${storeId}`,
-      periodStart: toIsoDate(period[0]),
-      periodEnd: toIsoDate(period[1]),
-    });
-    this.closeNewModal();
-    this.router.navigate(['/conciliacion', run.id, 'proceso']);
+    this.creating.set(true);
+    this.service
+      .create({ storeId, periodStart: toIsoDate(period[0]), periodEnd: toIsoDate(period[1]) })
+      .subscribe({
+        next: (run) => {
+          this.creating.set(false);
+          this.closeNewModal();
+          this.service.reload();
+          const sales = run.salesCount === 1 ? '1 venta' : `${run.salesCount} ventas`;
+          this.message.success(`Conciliación ${run.code} creada con ${sales}.`);
+          // El proceso pide `import_settlements`; sin él se queda en la tabla.
+          if (this.access.hasPermission('import_settlements')) this.router.navigate(['/conciliacion', run.id, 'proceso']);
+        },
+        error: (err: unknown) => {
+          this.creating.set(false);
+          const { level, text } = describeCreateReconciliationError(err);
+          this.message.create(level, text, { nzDuration: 8000 });
+        },
+      });
   }
 }

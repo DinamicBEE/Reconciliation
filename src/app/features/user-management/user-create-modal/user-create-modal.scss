@@ -1,0 +1,91 @@
+@use '../../../shared/styles/bank-badge';
+
+// Formulario a la izquierda y card de presentación a la derecha; una columna si es angosto.
+.new-user {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.new-user__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.new-user__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.new-user__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.new-user__icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.new-user__error {
+  font-size: 12px;
+  color: var(--color-destructive);
+}
+
+.new-user__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.new-user__hint {
+  font-size: 12px;
+  margin: 0;
+}
+
+.new-user__submit {
+  width: 100%;
+}
+
+// `!important` para ganarle al borde global de `.ant-card`. MASTER.md "Patrón: card base"
+.new-user__hero {
+  border: 2px solid var(--color-primary) !important;
+  align-self: start;
+  position: sticky;
+  top: 0;
+}
+
+.new-user__hero-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  min-height: 240px;
+  text-align: center;
+}
+
+.new-user__hero-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.new-user__hero-subtitle {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}

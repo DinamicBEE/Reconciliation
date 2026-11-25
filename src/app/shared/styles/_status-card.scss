@@ -61,3 +61,19 @@
   background: var(--color-muted) !important;
   border-color: var(--color-border) !important;
 }
+
+// KPI que funciona como botón (filtro): se ve activo con un anillo del color del semáforo.
+.status-card--clickable {
+  cursor: pointer;
+  transition: transform 120ms ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible,
+  &.status-card--active {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+}

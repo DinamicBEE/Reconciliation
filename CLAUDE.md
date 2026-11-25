@@ -40,11 +40,12 @@ Cada vez que se **actualice un documento** de `docs/` (PDF, Excel, etc.; los `.m
 4. **No tocar** los documentos que vienen del backend (p. ej. la guía de
    endpoints del equipo de back): se respaldan como están, no se editan.
 
-## Regla: títulos de pantalla (`nz-page-header`)
+## Regla: títulos de pantalla (header de la aplicación)
 
-Todo título de pantalla va en **`nz-page-header`** (no `<h1>` propios ni título en el header
-global). Una pantalla **hija** lleva flecha de volver + título y un
-`nz-breadcrumb nz-page-header-breadcrumb` con el recorrido hasta ella. Detalle y ejemplos en
+El título de toda pantalla lo pinta el **header de la aplicación** (`app-header`), no la pantalla: ninguna
+pantalla usa `nz-page-header` ni `<h1>` propios. El título y la pantalla padre (flecha de volver y
+breadcrumb) salen de `data: { title, parent }` de la ruta; lo que solo conoce el componente (título
+dinámico, subtítulo, botones) se declara con `PageHeaderService.bind()`. Detalle y ejemplos en
 `design-system/conciliation/MASTER.md`, "Patrón: encabezado de página".
 
 ## Regla: botones "icono + label"

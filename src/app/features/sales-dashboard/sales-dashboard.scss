@@ -115,6 +115,11 @@
 
 // Resumen de la venta con `.info-fields`: MASTER.md "Patrón: Drawer de detalle al hacer click en una fila (sin navegar)".
 
+// El CUFE es un hash de 96 caracteres sin espacios: se parte donde haga falta.
+.sale-drawer__cufe {
+  word-break: break-all;
+}
+
 .sale-drawer__note {
   font-size: 12px;
   margin: 12px 0 0;

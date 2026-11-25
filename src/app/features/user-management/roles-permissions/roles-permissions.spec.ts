@@ -1,6 +1,7 @@
 import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+import { PageHeaderService } from '../../../core/layout/header/page-header.service';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { ModalOptions, NzModalService } from 'ng-zorro-antd/modal';
 import { Subject, of, throwError } from 'rxjs';
@@ -57,7 +58,8 @@ describe('RolesPermissions', () => {
     await TestBed.configureTestingModule({
       imports: [RolesPermissions],
       providers: [
-        provideRouter([]),
+        // Ruta hoja con el título, como `app.routes.ts`: el header lo lee de `data`.
+        provideRouter([{ path: 'gestion-de-roles', children: [], data: { title: 'Roles y permisos' } }]),
         {
           provide: AccessCatalogService,
           useValue: {
@@ -78,8 +80,9 @@ describe('RolesPermissions', () => {
     TestBed.overrideProvider(NzModalService, { useValue: modal });
     await TestBed.compileComponents();
 
-    // Sin navegación real: `navigate` (onEdit) y `navigateByUrl` (routerLink).
     const router = TestBed.inject(Router);
+    await router.navigateByUrl('/gestion-de-roles');
+    // Sin navegación real: `navigate` (onEdit) y `navigateByUrl` (routerLink).
     navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
 
@@ -99,11 +102,24 @@ describe('RolesPermissions', () => {
       expect(users.syncFromBackend).toHaveBeenCalledTimes(1);
     });
 
-    it('muestra el título y el botón "Nuevo rol" con enlace al alta', () => {
-      expect(el.querySelector('nz-page-header')?.textContent).toContain('Roles y permisos');
-      const button = Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes('Nuevo rol'))!;
-      expect(button).toBeTruthy();
-      expect(button.getAttribute('routerLink') ?? button.getAttribute('ng-reflect-router-link')).toBe('/gestion-de-roles/nuevo');
+    it('le entrega al header el botón "Nuevo rol" (el título es el de la ruta) y no pinta su propio encabezado', () => {
+      const page = TestBed.inject(PageHeaderService).header()!;
+
+      expect(page.title).toBe('Roles y permisos');
+      expect(page.actions).not.toBeNull();
+      expect(el.querySelector('nz-page-header')).toBeNull();
+      expect(Array.from(el.querySelectorAll('button')).some((b) => b.textContent?.includes('Nuevo rol'))).toBe(false);
+    });
+
+    it('el botón "Nuevo rol" lleva al alta', () => {
+      const view = TestBed.inject(PageHeaderService).header()!.actions!.createEmbeddedView({});
+      view.detectChanges();
+      const button = view.rootNodes.find((n): n is HTMLButtonElement => n instanceof HTMLButtonElement)!;
+      button.click();
+
+      expect(button.textContent).toContain('Nuevo rol');
+      expect(String(navigateByUrl.mock.calls.at(-1)![0])).toBe('/gestion-de-roles/nuevo');
+      view.destroy();
     });
 
     it('pinta una fila por rol del catálogo con nombre y código', () => {

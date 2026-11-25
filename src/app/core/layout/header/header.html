@@ -1,4 +1,40 @@
 <header class="app-header">
+  @if (pageHeader.header(); as page) {
+    <div class="app-header__page">
+      @if (page.parent; as parent) {
+        <nz-page-header [nzTitle]="page.title" [nzBackIcon]="backIcon" (nzBack)="goBack(parent)">
+          <nz-breadcrumb nz-page-header-breadcrumb>
+            <nz-breadcrumb-item><a [routerLink]="parent.path">{{ parent.label }}</a></nz-breadcrumb-item>
+            <nz-breadcrumb-item>{{ page.title }}</nz-breadcrumb-item>
+          </nz-breadcrumb>
+          @if (page.subtitle) {
+            <nz-page-header-content>
+              <span class="app-header__subtitle">{{ page.subtitle }}</span>
+            </nz-page-header-content>
+          }
+        </nz-page-header>
+      } @else {
+        <nz-page-header [nzTitle]="page.title">
+          @if (page.subtitle) {
+            <nz-page-header-content>
+              <span class="app-header__subtitle">{{ page.subtitle }}</span>
+            </nz-page-header-content>
+          }
+        </nz-page-header>
+      }
+    </div>
+    @if (page.actions; as actions) {
+      <div class="app-header__page-actions">
+        <ng-container [ngTemplateOutlet]="actions" />
+      </div>
+    }
+    <ng-template #backIcon>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+      </svg>
+    </ng-template>
+  }
+
   <div class="app-header__actions">
     <div class="app-header__search">
       @if (!searchOpen()) {

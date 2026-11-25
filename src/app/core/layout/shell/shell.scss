@@ -3,7 +3,7 @@
 .shell {
   display: grid;
   grid-template-columns: auto 1fr;
-  grid-template-rows: 72px 1fr;
+  grid-template-rows: auto 1fr;
   height: 100vh;
   overflow: hidden;
   background: var(--color-background);
@@ -18,7 +18,7 @@
 .shell__header {
   grid-row: 1;
   grid-column: 2;
-  height: 72px;
+  min-height: 72px;
   padding: 4px 0;
 }
 

@@ -1,14 +1,14 @@
 <div class="roles-permissions">
-  <nz-page-header class="page-header" nzTitle="Roles y permisos">
-    <nz-page-header-extra>
-      <button nz-button nzType="primary" type="button" routerLink="/gestion-de-roles/nuevo">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
-        </svg>
-        Nuevo rol
-      </button>
-    </nz-page-header-extra>
-  </nz-page-header>
+  <!-- Botones del encabezado (los pinta el header de la aplicación) -->
+  <ng-template #headerActions>
+    <button nz-button nzType="primary" type="button" routerLink="/gestion-de-roles/nuevo">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+      </svg>
+      Nuevo rol
+    </button>
+
+  </ng-template>
 
   <!-- MASTER.md "Regla general: tablas" -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">

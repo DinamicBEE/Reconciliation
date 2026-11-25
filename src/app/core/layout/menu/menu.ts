@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { MenuService } from '../../services/menu.service';
 import { AccessControlService } from '../../auth/access-control.service';
 import { AuthService } from '../../auth/auth.service';
@@ -12,7 +13,7 @@ import { AuthService } from '../../auth/auth.service';
  */
 @Component({
   selector: 'app-menu',
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, NzTooltipModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './menu.html',
   styleUrl: './menu.scss',

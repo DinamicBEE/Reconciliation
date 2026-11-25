@@ -142,8 +142,8 @@ Código: `src/app/core/auth/auth.service.ts`, `src/app/core/auth/auth-errors.ts`
 - Las acciones se deciden por permiso, como las pantallas. Ejemplo: "Reprocesar" exige
   `capture_sales` porque `POST /sales/capture` lo exige; mostrarlo a quien no lo tiene solo
   produciría un 403.
-- `hasRole` existe solo para pantallas exclusivas de un rol que ningún permiso expresa por sí solo
-  ("Roles y permisos": `manage_roles` también lo tiene `ALTAS`, pero la pantalla es de `ADMIN`).
+- `hasRole` y `data.role` siguen disponibles para una pantalla exclusiva de un rol que ningún
+  permiso exprese, pero hoy ninguna ruta los usa: "Roles y permisos" pasó a `manage_roles`.
 - `homeRoute()` devuelve la primera pantalla accesible en el orden del menú lateral (no
   alfabético). Se usa tras el login y en los guards. Sin ningún permiso reconocido devuelve
   `/login`, para evitar bucles de redirección entre rutas que tampoco puede ver.

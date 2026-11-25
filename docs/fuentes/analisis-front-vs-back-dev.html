@@ -9,8 +9,8 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="doc-version" content="6.0">
-<title>Análisis comparativo front vs. back DEV — v6.0</title>
+<meta name="doc-version" content="7.0">
+<title>Análisis comparativo front vs. back DEV — v7.0</title>
 <style>
   @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
   * { box-sizing: border-box; }
@@ -67,52 +67,51 @@
 <body>
 
 <div class="cover">
-  <div class="eyebrow">Análisis de integración · Actualizado con la DEV de captura en vivo y carga masiva (v6.0)</div>
+  <div class="eyebrow">Análisis de integración · Actualizado con la DEV de catálogos cargados y sincronización con NetSuite (v7.0)</div>
   <h1>Front vs. Back <code style="background:#1e2f5c;color:#fff;font-size:17pt">DEV</code> y guía de integración</h1>
   <div class="subtitle">Usuarios, roles, permisos, catálogos y ventas: qué quedó implementado en el front, qué agregó DEV y qué sigue abierto</div>
   <table class="meta">
-    <tr><td class="l">Front</td><td class="v"><code>feature/login-coctel-del-mar-integration</code> hasta <code>44fb6b8</code> (19-Oct-2026). Desde la v5.0: <code>bb0551e</code> (<code>GET /sales</code> y administración de roles), <code>70e31d2</code> y <code>44fb6b8</code> (reorganización en <code>core/auth</code> y <code>user-management/roles-permissions</code>, estado con <code>rxResource</code>/<code>linkedSignal</code>) y <code>715c007</code> (Vitest). Proyecto <code>reconciliation</code>.</td></tr>
-    <tr><td class="l">Back</td><td class="v">Rama <code>DEV</code> (commit <code>541c538</code>, 16-Oct-2026, <i>feature/asyncCapture</i>), proyecto <code>coctel_midd</code>. La v5.0 se hizo contra <code>3852101</code>. Nuevos: <code>95db1f3</code> (corrección de baja de roles), <code>d9556b5</code> (captura en vivo, tiendas reales, homologación DIAN) y <code>28e4caf</code> (carga masiva en segundo plano). La migración <b>V1 volvió a cambiar</b>: hace falta otra base nueva.</td></tr>
-    <tr><td class="l">Guía del back</td><td class="v"><code>Guia_Integracion_Frontend</code> (08-Oct-2026). Los endpoints nuevos se documentan en <code>docs/api-endpoints.csv</code>, en la colección de Postman y en Swagger del back; aquí se contrastaron contra el código.</td></tr>
-    <tr><td class="l">Método</td><td class="v">Contraste contra el <b>código real de DEV</b> (controladores, DTO, <code>SecurityConfig</code>, migración, rutas del gateway) y contra la pila levantada en local. No se modificó nada del back.</td></tr>
-    <tr><td class="l">Versión</td><td class="v">6.0 — 19-Oct-2026 · Responsable portal: Irving Canul. Respaldos de la v3.0 a la v5.0 en <code>docs/avances/</code>; los de la v1.0 y la v2.0, en <code>docs/implementaciones/</code>.</td></tr>
+    <tr><td class="l">Front</td><td class="v"><code>feature/login-coctel-del-mar-integration</code> hasta <code>56e03d0</code> (29-Oct-2026). Desde la v6.0: <code>0b9e479</code> ("Reprocesar" con <code>POST /sales/capture</code> y reglas de roles de <code>95db1f3</code>), <code>cedc7af</code> (estilos del resumen) y <code>56e03d0</code> (pantalla "Catálogos cargados" con <code>GET /catalogs</code> y <code>GET /catalogs/items</code>, pila local v5). Proyecto <code>reconciliation</code>.</td></tr>
+    <tr><td class="l">Back</td><td class="v">Rama <code>DEV</code> (commit <code>fae5944</code>, 27-Oct-2026, <i>feature/catalogsDetails</i>), proyecto <code>coctel_midd</code>. La v6.0 se hizo contra <code>541c538</code>. Nuevos: <code>c34ac15</code> y <code>f05b36a</code> (sincronización de catálogos desde NetSuite), <code>71ab17b</code> (descripción de catálogos) y <code>47041fa</code> (detalle de catálogos). La migración <b>V1 volvió a cambiar</b>: hace falta otra base nueva.</td></tr>
+    <tr><td class="l">Guía del back</td><td class="v"><code>Guia_Integracion_Frontend</code> (08-Oct-2026), <code>docs/api-endpoints.csv</code>, la colección de Postman y la nueva <code>docs/Guia_Integracion_NetSuite.md</code> del back; aquí se contrastaron contra el código.</td></tr>
+    <tr><td class="l">Método</td><td class="v">Contraste contra el <b>código real de DEV</b> (controladores, DTO, <code>SecurityConfig</code>, migración, rutas del gateway, <code>docker-compose.yml</code>) y contra la pila levantada en local. No se modificó nada del back.</td></tr>
+    <tr><td class="l">Versión</td><td class="v">7.0 — 29-Oct-2026 · Responsable portal: Irving Canul. Respaldos de la v3.0 a la v6.0 en <code>docs/avances/</code>; los de la v1.0 y la v2.0, en <code>docs/implementaciones/</code>.</td></tr>
   </table>
 </div>
 
 <h2 style="margin-top:0;">1. Resumen</h2>
 <div class="cards">
-  <div class="card g"><div class="n">32</div><div class="t">endpoints conectados: los 27 de la v5.0 más <code>GET /sales</code> y la administración de roles (<code>POST</code>, <code>GET</code>, <code>PATCH</code> y <code>DELETE /roles</code>)</div></div>
-  <div class="card o"><div class="n">2</div><div class="t">endpoints <b>nuevos</b> en DEV, pendientes: carga masiva de capturas y su avance (sección 7)</div></div>
-  <div class="card p"><div class="n">4</div><div class="t">endpoints de captura pendientes en total: los 2 nuevos más <code>POST /sales/capture</code> y <code>GET /sales/captures</code></div></div>
-  <div class="card r"><div class="n">8</div><div class="t">preguntas abiertas para el equipo de back (sección 8)</div></div>
+  <div class="card g"><div class="n">35</div><div class="t">endpoints conectados: los 32 de la v6.0 más <code>POST /sales/capture</code>, <code>GET /catalogs</code> y <code>GET /catalogs/items</code></div></div>
+  <div class="card o"><div class="n">8</div><div class="t">endpoints <b>nuevos</b> en DEV: 2 de "Catálogos cargados" (ya conectados) y 6 de sincronización con NetSuite</div></div>
+  <div class="card p"><div class="n">3</div><div class="t">endpoints de captura pendientes: carga masiva, su avance y la bitácora (sección 7)</div></div>
+  <div class="card r"><div class="n">9</div><div class="t">preguntas abiertas para el equipo de back (sección 9)</div></div>
 </div>
 <div class="callout warn">
-  <b>Nuevo en DEV desde la v5.0</b>
+  <b>Nuevo en DEV desde la v6.0</b>
   <ul>
-    <li><b>Carga masiva en segundo plano:</b> <code>POST /sales/capture/jobs</code> (202 con <code>jobId</code>, hasta 5000 capturas tienda × día, una carga a la vez) y <code>GET /sales/capture/jobs/{jobId}</code> (avance). <code>POST /sales/capture</code> sigue igual: síncrono, hasta 31 capturas (sección 7).</li>
-    <li><b>Captura en vivo:</b> el capture-service sondea el día en curso de todas las tiendas (solo páginas nuevas, con reintentos). No tiene endpoint: se enciende con <code>SALES_CAPTURE_LIVE_ENABLED</code> (apagada por defecto) y deja sus corridas en la misma bitácora.</li>
-    <li><b>Tiendas reales en la migración:</b> la V1 siembra 2 subsidiarias (1 "Coctel del Mar", 2 "Hipermar Fish") y 16 tiendas de Facturiza (8 Hipermar y 8 Restaurante). Además trae el catálogo de medios de pago DIAN y la homologación Simphony → DIAN.</li>
-    <li><b>Roles (<code>95db1f3</code>):</b> el nombre de un rol se valida solo contra los roles <b>activos</b>. Al dar de baja un rol su código se libera (queda con sufijo <code>_DEL_&lt;id&gt;</code>), así que el nombre se puede volver a usar. Si el código derivado ya está ocupado, el back agrega <code>_2</code>, <code>_3</code>…</li>
-    <li><b>Contratos que cambian:</b> <code>GET /sales/catalogs/tender-media</code> agrega <code>dianCode</code>. En <code>GET /sales/captures</code>, <code>createdBy</code> pasa de número a texto (<code>MANUAL:usuario &lt;id&gt;</code>, <code>SERVICIO:captura-en-vivo</code>, <code>SERVICIO:captura-nocturna</code>). <code>customer.last_name</code> crece a 100 caracteres.</li>
+    <li><b>Catálogos cargados (Core):</b> <code>GET /catalogs?search&amp;type</code> lista los catálogos registrados en la tabla <code>catalog_registry</code> (35 en la V1: 6 de NetSuite, 2 internos y 27 de la DIAN) con registros habilitados y última actualización. <code>GET /catalogs/items?code&amp;search&amp;includeDisabled&amp;page&amp;pageSize</code> da el detalle: columnas propias de cada catálogo y una página de registros. Basta tener sesión.</li>
+    <li><b>Sincronización con NetSuite (Core):</b> 6 <code>POST /netsuite/*</code> (subsidiarias, ubicaciones, departamentos, cargos, puestos y áreas) que crean o actualizan por <code>nsId</code> o <code>id</code> y responden 200/207/400 con el resultado de cada registro (sección 8). Los consume NetSuite, no el portal.</li>
+    <li><b>Permisos y cuenta de servicio:</b> dos permisos nuevos, <code>sync_netsuite</code> y <code>manage_catalogs</code> (11 en total). La V1 crea la cuenta <code>netsuite@cocteldelmar.local</code> (id 1) solo con <code>sync_netsuite</code>; el administrador inicial ahora nace con el id 2.</li>
+    <li><b><code>netsuite-service</code>:</b> servicio nuevo en el compose (puerto interno 8084). Por ahora solo publica su contrato OpenAPI (<code>/netsuite/v3/api-docs</code>); los <code>POST /netsuite/*</code> los atiende el core.</li>
+    <li><b>Contratos que cambian:</b> los 6 <code>GET /catalogs/*</code> de organización agregan <code>nsId</code> (<code>string | null</code>). Subsidiaria y ubicación ganan <code>ns_id</code>; <code>brand_id_api</code> y <code>store_id_api</code> pueden ser nulos (registros que solo existen en NetSuite).</li>
   </ul>
 </div>
 <div class="callout">
-  <b>Resuelto en el front desde la v5.0</b>
+  <b>Resuelto en el front desde la v6.0</b>
   <ul>
-    <li><b><code>GET /sales</code></b> alimenta la tabla del Resumen de venta con paginación en el servidor, filtros por id y búsqueda; la exportación CSV recorre todas las páginas.</li>
-    <li><b>Administración de roles</b> conectada: alta, edición (con resumen de cambios y personas afectadas) y baja desde la tabla y desde la edición.</li>
-    <li><b>Reorganización del front:</b> autenticación en <code>core/auth</code>, roles dentro de <code>user-management</code>, catálogos de ventas y edición de roles con <code>rxResource</code>. Hay <b>pruebas unitarias con Vitest</b> (123 casos, entre ellos <code>AuthService</code>, login, guardas, interceptor y catálogos).</li>
-    <li><b>Entorno:</b> <code>dev-env</code> levanta la DEV nueva en una base nueva (<code>coctel_dev_v4</code>), con la siembra adaptada a las tiendas reales y 448 ventas de prueba.</li>
+    <li><b>"Reprocesar" conectado a <code>POST /sales/capture</code></b>, con las condiciones de siempre: un solo día y una tienda específica. Se muestra según el permiso <code>capture_sales</code> (antes, según el rol) y el aviso sale del resultado del back (200, 207, 502 con resultado, 409, 403).</li>
+    <li><b>Roles al día con <code>95db1f3</code>:</b> nombre duplicado solo contra roles activos, "Código estimado" al crear y texto de baja corregido. <code>DELETE /roles/{code}</code> sigue respondiendo 409 <code>ROLE_IN_USE</code> si alguna persona habilitada tiene el rol (verificado en código y en vivo), así que la restricción del front se conserva.</li>
+    <li><b>"Catálogos cargados" conectada</b> a <code>GET /catalogs</code> y <code>GET /catalogs/items</code>: búsqueda, filtro por tipo, detalle paginado en el servidor y sin datos simulados. Ya no exige <code>view_catalogs</code>.</li>
+    <li><b>Entorno:</b> <code>dev-env</code> levanta la DEV nueva en una base nueva (<code>coctel_dev_v5</code>), con <code>netsuite-service</code> y la siembra aplicada antes del auth-service. Pruebas unitarias: 799 (3 de conciliación fallan desde <code>cedc7af</code>, que ocultó el comentario del back en <code>line-detail</code>) casos con Vitest.</li>
   </ul>
 </div>
 <div class="callout crit">
   <b>Hallazgos que siguen abiertos</b>
   <ul>
-    <li><b>Textos y validación de roles desactualizados en el front:</b> la confirmación de baja dice que el nombre "queda reservado", y el alta bloquea un nombre cuyo código derivado ya existe. Con <code>95db1f3</code> ninguna de las dos cosas aplica: hay que ajustar el texto y validar solo por nombre contra roles activos.</li>
-    <li><b>Reglas por rol en vez de por permiso:</b> "Roles y permisos" y su edición exigen el rol <code>ADMIN</code> (<code>data.role</code>) y "Reprocesar" usa <code>canReprocessSales</code> (ADMIN/CONTABILIDAD). En un DEV limpio no existen esos roles.</li>
-    <li><b>Errores <code>ProblemDetail</code> de Core y Capture</b> (<code>title</code>, <code>status</code>, <code>detail</code>, sin <code>code</code>): el interceptor aún no muestra el <code>detail</code>. Es necesario antes de conectar la captura.</li>
+    <li><b>Reglas por rol en vez de por permiso:</b> "Roles y permisos" y su edición siguen exigiendo el rol <code>ADMIN</code> (<code>data.role</code>, también en el buscador del encabezado) y la lista de usuarios usa <code>MANAGER_ROLE_IDS</code>. En un DEV limpio no existen esos roles.</li>
+    <li><b>Errores <code>ProblemDetail</code> de Core y Capture</b> (<code>title</code>, <code>status</code>, <code>detail</code>, sin <code>code</code>): la captura ya muestra su <code>detail</code>, pero el interceptor general todavía no.</li>
     <li><b><code>GET /sales</code> sin filtro por subsidiaria</b> (el select "Empresa" está deshabilitado) y <b>sin detalle ni exportación</b> en el back.</li>
-    <li><b><code>view_catalogs</code></b> sigue fuera de los 9 permisos de DEV; <b><code>PATCH /users/{id}/unlock</code></b> sigue sin documentarse.</li>
+    <li><b><code>view_catalogs</code></b> ya no lo usa ninguna pantalla, pero sigue en la siembra local. <b><code>manage_catalogs</code></b> permite editar catálogos desde el portal, algo que el DED no contempla (solo lectura). <b><code>PATCH /users/{id}/unlock</code></b> sigue sin documentarse.</li>
   </ul>
 </div>
 
@@ -124,76 +123,81 @@
   <tr><td>3</td><td><span class="m POST">POST</span></td><td><code>/auth/logout</code></td><td>Público</td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
   <tr><td>4</td><td><span class="m GET">GET</span></td><td><code>/auth/me</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
   <tr><td>5</td><td><span class="m POST">POST</span></td><td><code>/auth/change-password</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Encadena el refresh posterior.</td></tr>
-  <tr><td>6</td><td><span class="m GET">GET</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td><code>size=100</code> y recorre todas las páginas.</td></tr>
-  <tr><td>7</td><td><span class="m GET">GET</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v4.0</span></td><td>Lee <code>cargos</code>, <code>puestos</code>, <code>departamentos</code> y <code>areas</code> (<code>{ id, nombre }</code>).</td></tr>
-  <tr><td>8</td><td><span class="m POST">POST</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v4.0</span></td><td>Subsidiarias y ubicaciones del catálogo global; las ubicaciones se filtran por subsidiaria.</td></tr>
-  <tr><td>9</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Ajustado en v4.0</span></td><td>Envía las 6 listas completas (<code>subsidiariaIds</code>, <code>ubicacionIds</code>, <code>cargoIds</code>, <code>puestoIds</code>, <code>departamentoIds</code>, <code>areaIds</code>).</td></tr>
-  <tr><td>10</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/roles</code></td><td><code>manage_users</code> + <code>manage_roles</code></td><td><span class="b chg">Revisar (v5.0)</span></td><td>DEV ahora <b>suma</b> los permisos del rol asignado y calcula los permisos especiales. El front ya manda la lista final en <code>permissions</code>, así que su regla sigue ganando; falta alinear el texto de la UI (sección 3).</td></tr>
+  <tr><td>6</td><td><span class="m GET">GET</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td><code>size=100</code> y recorre todas las páginas. La cuenta de NetSuite aparece en la lista.</td></tr>
+  <tr><td>7</td><td><span class="m GET">GET</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Lee <code>cargos</code>, <code>puestos</code>, <code>departamentos</code> y <code>areas</code> (<code>{ id, nombre }</code>).</td></tr>
+  <tr><td>8</td><td><span class="m POST">POST</span></td><td><code>/users</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Subsidiarias y ubicaciones del catálogo global; las ubicaciones se filtran por subsidiaria.</td></tr>
+  <tr><td>9</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Envía las 6 listas completas (<code>subsidiariaIds</code>, <code>ubicacionIds</code>, <code>cargoIds</code>, <code>puestoIds</code>, <code>departamentoIds</code>, <code>areaIds</code>).</td></tr>
+  <tr><td>10</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/roles</code></td><td><code>manage_users</code> + <code>manage_roles</code></td><td><span class="b ok">Implementado</span></td><td>DEV suma los permisos del rol asignado; el front manda la lista final en <code>permissions</code>.</td></tr>
   <tr><td>11</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/status</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
   <tr><td>12</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/verify-email</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
   <tr><td>13</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/close-sessions</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
   <tr><td>14</td><td><span class="m POST">POST</span></td><td><code>/users/{id}/reset-password</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
   <tr><td>15</td><td><span class="m DELETE">DELETE</span></td><td><code>/users/{id}</code></td><td><code>manage_users</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
-  <tr><td>16</td><td><span class="m GET">GET</span></td><td><code>/users/{id}/audit-log</code></td><td><code>view_audit_log</code></td><td><span class="b ok">Implementado</span></td><td><code>organization_updated</code> ahora también cubre cargos, puestos, departamentos y áreas.</td></tr>
+  <tr><td>16</td><td><span class="m GET">GET</span></td><td><code>/users/{id}/audit-log</code></td><td><code>view_audit_log</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
   <tr><td>17</td><td><span class="m GET">GET</span></td><td><code>/audit-log</code></td><td><code>view_audit_log</code></td><td><span class="b ok">Implementado</span></td><td>Sin cambios.</td></tr>
   <tr><td>18</td><td><span class="m GET">GET</span></td><td><code>/roles</code></td><td><code>manage_users</code> o <code>manage_roles</code></td><td><span class="b ok">Implementado</span></td><td>En una base limpia devuelve <code>[]</code> (no hay roles predefinidos).</td></tr>
-  <tr><td>19</td><td><span class="m GET">GET</span></td><td><code>/permissions</code></td><td><code>manage_users</code> o <code>manage_roles</code></td><td><span class="b ok">Implementado</span></td><td>9 permisos fijos (sin <code>view_catalogs</code>).</td></tr>
-  <tr><td>20</td><td><span class="m GET">GET</span></td><td><code>/catalogs/subsidiarias</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Alta y Organización (selección múltiple).</td></tr>
-  <tr><td>21</td><td><span class="m GET">GET</span></td><td><code>/catalogs/ubicaciones</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Trae <code>subsidiariaId</code>: filtra y depura según las subsidiarias elegidas.</td></tr>
-  <tr><td>22</td><td><span class="m GET">GET</span></td><td><code>/catalogs/cargos</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Organización → <code>cargoIds</code>.</td></tr>
-  <tr><td>23</td><td><span class="m GET">GET</span></td><td><code>/catalogs/puestos</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Organización → <code>puestoIds</code>.</td></tr>
-  <tr><td>24</td><td><span class="m GET">GET</span></td><td><code>/catalogs/departamentos</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Organización → <code>departamentoIds</code>.</td></tr>
-  <tr><td>25</td><td><span class="m GET">GET</span></td><td><code>/catalogs/areas</code></td><td>Sesión</td><td><span class="b ok">Implementado en v4.0</span></td><td>Organización → <code>areaIds</code>.</td></tr>
-  <tr><td>26</td><td><span class="m GET">GET</span></td><td><code>/sales/catalogs/tender-media</code></td><td><code>view_dashboard</code></td><td><span class="b chg">Implementado · opcional</span></td><td>Filtro "Medio de pago" del Resumen de venta; <code>pendingReview</code> se marca "(por revisar)". DEV agrega <code>dianCode</code> (sección 3).</td></tr>
-  <tr><td>27</td><td><span class="m GET">GET</span></td><td><code>/sales/catalogs/reconciliation-statuses</code></td><td><code>view_dashboard</code></td><td><span class="b ok">Implementado en v4.0</span></td><td>Filtro "Estado" del Resumen de venta.</td></tr>
-  <tr><td>28</td><td><span class="m GET">GET</span></td><td><code>/sales</code></td><td><code>view_dashboard</code></td><td><span class="b ok">Implementado en v6.0</span></td><td>Tabla del Resumen de venta: paginación en el servidor, filtros por id y exportación (sección 4).</td></tr>
-  <tr><td>29</td><td><span class="m POST">POST</span></td><td><code>/roles</code></td><td><code>manage_roles</code></td><td><span class="b chg">Implementado · ajustar</span></td><td>"Nuevo rol". Ajustar la validación de nombre a la regla nueva del back (sección 3).</td></tr>
-  <tr><td>30</td><td><span class="m GET">GET</span></td><td><code>/roles/{code}</code></td><td><code>manage_users</code> o <code>manage_roles</code></td><td><span class="b ok">Implementado en v6.0</span></td><td>Precarga de la edición (<code>/gestion-de-roles/:code</code>).</td></tr>
-  <tr><td>31</td><td><span class="m PATCH">PATCH</span></td><td><code>/roles/{code}</code></td><td><code>manage_roles</code></td><td><span class="b ok">Implementado en v6.0</span></td><td>Guarda solo lo que cambió; nuevo 409 <code>ROLE_ALREADY_EXISTS</code> al renombrar, ya en el catálogo de errores.</td></tr>
-  <tr><td>32</td><td><span class="m DELETE">DELETE</span></td><td><code>/roles/{code}</code></td><td><code>manage_roles</code></td><td><span class="b chg">Implementado · ajustar</span></td><td>Columna "Acciones" y botón en la edición. Corregir el aviso de "nombre reservado" (sección 3).</td></tr>
-  <tr><td>33</td><td><span class="m POST">POST</span></td><td><code>/sales/capture</code></td><td><code>capture_sales</code></td><td><span class="b miss">Pendiente</span></td><td>Botón "Reprocesar" (hoy simulado) (sección 7).</td></tr>
-  <tr><td>34</td><td><span class="m GET">GET</span></td><td><code>/sales/captures</code></td><td><code>view_dashboard</code></td><td><span class="b miss">Pendiente</span></td><td>Bitácora de capturas de un día; <code>createdBy</code> ahora es texto (sección 7).</td></tr>
-  <tr><td>35</td><td><span class="m POST">POST</span></td><td><code>/sales/capture/jobs</code></td><td><code>capture_sales</code></td><td><span class="b miss">Nuevo · pendiente</span></td><td>Carga masiva en segundo plano (sección 7).</td></tr>
-  <tr><td>36</td><td><span class="m GET">GET</span></td><td><code>/sales/capture/jobs/{jobId}</code></td><td><code>view_dashboard</code></td><td><span class="b miss">Nuevo · pendiente</span></td><td>Avance de la carga masiva (sección 7).</td></tr>
+  <tr><td>19</td><td><span class="m GET">GET</span></td><td><code>/permissions</code></td><td><code>manage_users</code> o <code>manage_roles</code></td><td><span class="b ok">Implementado</span></td><td>11 permisos fijos: se suman <code>sync_netsuite</code> y <code>manage_catalogs</code>. El grid de roles los muestra solo.</td></tr>
+  <tr><td>20</td><td><span class="m GET">GET</span></td><td><code>/catalogs/subsidiarias</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Alta y Organización. DEV agrega <code>nsId</code> (sección 3).</td></tr>
+  <tr><td>21</td><td><span class="m GET">GET</span></td><td><code>/catalogs/ubicaciones</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Trae <code>subsidiariaId</code> y ahora <code>nsId</code>.</td></tr>
+  <tr><td>22</td><td><span class="m GET">GET</span></td><td><code>/catalogs/cargos</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Organización → <code>cargoIds</code>. Agrega <code>nsId</code>.</td></tr>
+  <tr><td>23</td><td><span class="m GET">GET</span></td><td><code>/catalogs/puestos</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Organización → <code>puestoIds</code>. Agrega <code>nsId</code>.</td></tr>
+  <tr><td>24</td><td><span class="m GET">GET</span></td><td><code>/catalogs/departamentos</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Organización → <code>departamentoIds</code>. Agrega <code>nsId</code>.</td></tr>
+  <tr><td>25</td><td><span class="m GET">GET</span></td><td><code>/catalogs/areas</code></td><td>Sesión</td><td><span class="b ok">Implementado</span></td><td>Organización → <code>areaIds</code>. Agrega <code>nsId</code>.</td></tr>
+  <tr><td>26</td><td><span class="m GET">GET</span></td><td><code>/sales/catalogs/tender-media</code></td><td><code>view_dashboard</code></td><td><span class="b ok">Ajustado en v7.0</span></td><td>Filtro "Medio de pago"; el tipo ya incluye <code>dianCode</code>.</td></tr>
+  <tr><td>27</td><td><span class="m GET">GET</span></td><td><code>/sales/catalogs/reconciliation-statuses</code></td><td><code>view_dashboard</code></td><td><span class="b ok">Implementado</span></td><td>Filtro "Estado" del Resumen de venta.</td></tr>
+  <tr><td>28</td><td><span class="m GET">GET</span></td><td><code>/sales</code></td><td><code>view_dashboard</code></td><td><span class="b ok">Implementado</span></td><td>Tabla del Resumen de venta: paginación en el servidor, filtros por id y exportación.</td></tr>
+  <tr><td>29</td><td><span class="m POST">POST</span></td><td><code>/roles</code></td><td><code>manage_roles</code></td><td><span class="b ok">Ajustado en v7.0</span></td><td>Nombre duplicado solo contra roles activos; "Código estimado".</td></tr>
+  <tr><td>30</td><td><span class="m GET">GET</span></td><td><code>/roles/{code}</code></td><td><code>manage_users</code> o <code>manage_roles</code></td><td><span class="b ok">Implementado</span></td><td>Precarga de la edición (<code>/gestion-de-roles/:code</code>).</td></tr>
+  <tr><td>31</td><td><span class="m PATCH">PATCH</span></td><td><code>/roles/{code}</code></td><td><code>manage_roles</code></td><td><span class="b ok">Ajustado en v7.0</span></td><td>Misma regla de nombre que el alta.</td></tr>
+  <tr><td>32</td><td><span class="m DELETE">DELETE</span></td><td><code>/roles/{code}</code></td><td><code>manage_roles</code></td><td><span class="b ok">Ajustado en v7.0</span></td><td>Texto de baja corregido. Sigue deshabilitado con personas asignadas (409 <code>ROLE_IN_USE</code>).</td></tr>
+  <tr><td>33</td><td><span class="m POST">POST</span></td><td><code>/sales/capture</code></td><td><code>capture_sales</code></td><td><span class="b ok">Implementado en v7.0</span></td><td>Botón "Reprocesar": un día y una tienda (sección 4).</td></tr>
+  <tr><td>34</td><td><span class="m GET">GET</span></td><td><code>/sales/captures</code></td><td><code>view_dashboard</code></td><td><span class="b miss">Pendiente</span></td><td>Bitácora de capturas de un día; <code>createdBy</code> en texto (sección 7).</td></tr>
+  <tr><td>35</td><td><span class="m POST">POST</span></td><td><code>/sales/capture/jobs</code></td><td><code>capture_sales</code></td><td><span class="b miss">Pendiente</span></td><td>Carga masiva en segundo plano (sección 7).</td></tr>
+  <tr><td>36</td><td><span class="m GET">GET</span></td><td><code>/sales/capture/jobs/{jobId}</code></td><td><code>view_dashboard</code></td><td><span class="b miss">Pendiente</span></td><td>Avance de la carga masiva (sección 7).</td></tr>
+  <tr><td>37</td><td><span class="m GET">GET</span></td><td><code>/catalogs</code></td><td>Sesión</td><td><span class="b ok">Nuevo · implementado en v7.0</span></td><td>Tabla de "Catálogos cargados" (sección 4).</td></tr>
+  <tr><td>38</td><td><span class="m GET">GET</span></td><td><code>/catalogs/items</code></td><td>Sesión</td><td><span class="b ok">Nuevo · implementado en v7.0</span></td><td>Detalle de un catálogo, paginado en el servidor (sección 4).</td></tr>
+  <tr><td>39–44</td><td><span class="m POST">POST</span></td><td><code>/netsuite/subsidiaries</code>, <code>/locations</code>, <code>/departments</code>, <code>/job-titles</code>, <code>/positions</code>, <code>/areas</code></td><td><code>sync_netsuite</code> o <code>manage_catalogs</code></td><td><span class="b und">Nuevo · no va en el portal</span></td><td>Los envía NetSuite; el DED deja los catálogos de solo lectura en el portal (sección 8).</td></tr>
   <tr><td>—</td><td><span class="m PATCH">PATCH</span></td><td><code>/users/{id}/unlock</code></td><td><code>manage_users</code></td><td><span class="b und">Sin documentar</span></td><td>Sigue en <code>UserAdminController</code>; la guía no lo menciona.</td></tr>
 </table>
-<p class="small">Conteo: 27 de la v5.0 + <code>GET /sales</code> + 4 de roles = <b>32 conectados</b>; 4 de captura pendientes (2 de ellos nuevos). En la pantalla de ventas, los selects de subsidiaria y de tienda se llenan con lo que regresa el login.</p>
+<p class="small">Conteo: 32 de la v6.0 + <code>POST /sales/capture</code> + <code>GET /catalogs</code> + <code>GET /catalogs/items</code> = <b>35 conectados</b>; 3 de captura pendientes; 6 de sincronización que consume NetSuite. En la pantalla de ventas, los selects de subsidiaria y de tienda se llenan con lo que regresa el login.</p>
 
 <div class="pb"></div>
-<h2 style="margin-top:0;">3. Cambios de DEV en endpoints ya implementados — estado en la v6.0</h2>
+<h2 style="margin-top:0;">3. Cambios de DEV en endpoints ya implementados — estado en la v7.0</h2>
 <table class="data">
-  <tr><th style="width:17%">Endpoint / tema</th><th style="width:30%">Qué cambió en DEV</th><th>Qué requiere el front</th><th style="width:11%">Estado</th></tr>
-  <tr><td><code>POST /roles</code> · <code>PATCH /roles/{code}</code></td><td>409 <code>ROLE_ALREADY_EXISTS</code> solo si un rol <b>activo</b> ya tiene ese nombre (sin distinguir mayúsculas). El código ya no bloquea: si está ocupado, el back agrega <code>_2</code>, <code>_3</code>… Renombrar ahora valida el nombre.</td><td>En <code>RoleCreate</code>, validar el duplicado solo por nombre contra roles activos (quitar la comparación por código derivado de <code>toRoleCode</code>). El código que se muestra al crear es orientativo: el definitivo lo devuelve el back.</td><td><span class="b chg">Ajustar</span></td></tr>
-  <tr><td><code>DELETE /roles/{code}</code></td><td>Al dar de baja, el código del rol cambia a <code>&lt;CODE&gt;_DEL_&lt;id&gt;</code> y el nombre queda libre.</td><td>Corregir el texto de la confirmación (en la tabla y en la edición), que hoy dice que el nombre "queda reservado".</td><td><span class="b chg">Ajustar</span></td></tr>
-  <tr><td><code>GET /sales/catalogs/tender-media</code></td><td>Cada medio agrega <code>dianCode</code> (catálogo DIAN 12: 10 Efectivo, 48 Tarjeta Crédito, 49 Tarjeta Débito, ZZZ Otro…); <code>null</code> si el medio aún no está homologado.</td><td>Agregar <code>dianCode?: string | null</code> a <code>TenderMediaOption</code>. No rompe nada; sirve para la conciliación y para el país Colombia.</td><td><span class="b chg">Opcional</span></td></tr>
-  <tr><td><code>GET /sales/captures</code></td><td><code>createdBy</code> pasa de id numérico a texto: <code>MANUAL:usuario &lt;id&gt;</code>, <code>SERVICIO:captura-en-vivo</code> o <code>SERVICIO:captura-nocturna</code>.</td><td>Aún no se consume; al conectarlo, mostrar "Manual (persona)" o "Automática" según el prefijo.</td><td><span class="b miss">Pendiente</span></td></tr>
-  <tr><td>Subsidiarias y tiendas</td><td>Ya no se cargan aparte: la V1 siembra 2 subsidiarias y 16 tiendas reales con sus prefijos fiscales.</td><td>Nada en el código (salen del login y de <code>GET /catalogs/*</code>). La siembra local dejó de crear subsidiarias propias y asigna las cuentas demo a 4 restaurantes de "Coctel del Mar".</td><td><span class="b ok">Hecho</span></td></tr>
-  <tr><td>Esquema de base</td><td>V1 cambió otra vez: <code>capture_state</code>, catálogo DIAN y homologación, <code>content_hash</code> en documentos, <code>created_by</code>/<code>modified_by</code> en texto en las tablas de captura y <code>last_name</code> de 100.</td><td><code>dev-env/levantar-backend.ps1</code> pasa al proyecto <code>coctel_dev_v4</code> (base nueva). Las bases anteriores conservan su volumen.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><th style="width:17%">Endpoint / tema</th><th style="width:30%">Qué cambió en DEV</th><th>Qué requiere o hizo el front</th><th style="width:11%">Estado</th></tr>
+  <tr><td><code>POST /roles</code> · <code>PATCH /roles/{code}</code></td><td>(<code>95db1f3</code>) 409 <code>ROLE_ALREADY_EXISTS</code> solo si un rol <b>activo</b> ya tiene ese nombre; si el código está ocupado, el back agrega <code>_2</code>, <code>_3</code>…</td><td><code>RoleCreate</code> valida el duplicado solo por nombre contra roles activos (sin mayúsculas ni espacios extra; los acentos cuentan). Al crear muestra "Código estimado".</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>DELETE /roles/{code}</code></td><td>Al dar de baja, el código pasa a <code>&lt;CODE&gt;_DEL_&lt;id&gt;</code> y el nombre queda libre. Con personas habilitadas sigue respondiendo 409 <code>ROLE_IN_USE</code>.</td><td>La confirmación dice que el nombre queda libre. La baja sigue deshabilitada mientras el rol tenga personas.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>GET /sales/catalogs/tender-media</code></td><td><code>dianCode</code> por medio de pago (catálogo DIAN 12).</td><td><code>TenderMediaOption.dianCode?: string | null</code>.</td><td><span class="b ok">Hecho</span></td></tr>
+  <tr><td><code>GET /catalogs/*</code> (6 de organización)</td><td>Cada opción agrega <code>nsId</code> (internalId de NetSuite, <code>null</code> si no viene de NetSuite).</td><td>No rompe nada. Agregarlo a <code>CatalogEntry</code> solo cuando una pantalla lo necesite.</td><td><span class="b chg">Opcional</span></td></tr>
+  <tr><td><code>GET /permissions</code></td><td>Agrega <code>sync_netsuite</code> y <code>manage_catalogs</code>.</td><td>El grid de roles los muestra solo. <code>PermissionKey</code> no los incluye porque ninguna pantalla los evalúa.</td><td><span class="b ok">Sin cambios</span></td></tr>
+  <tr><td><code>GET /sales/captures</code></td><td><code>createdBy</code> en texto (<code>MANUAL:usuario &lt;id&gt;</code>, <code>SERVICIO:…</code>).</td><td>Aún no se consume; al conectarlo, mostrar "Manual (persona)" o "Automática" según el prefijo.</td><td><span class="b miss">Pendiente</span></td></tr>
+  <tr><td>Esquema de base</td><td>V1 cambió otra vez: <code>catalog_registry</code> con sus columnas, 25 tablas de catálogos DIAN, <code>ns_id</code> en catálogos, subsidiarias y tiendas, y la cuenta de integración de NetSuite.</td><td><code>dev-env/levantar-backend.ps1</code> pasa al proyecto <code>coctel_dev_v5</code> (base nueva) y siembra antes del auth-service (ver 5.3).</td><td><span class="b ok">Hecho</span></td></tr>
 </table>
 
 <h2>4. Endpoints conectados</h2>
 <p class="small">Probados contra la pila DEV local y en el navegador, sin datos simulados.</p>
 
 <div class="ep">
-  <div class="ep-head"><span class="m GET">GET</span><span class="path">/sales</span><span class="desc">Core · <span class="b ok">Implementado (desde la v5.0)</span></span></div>
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/catalogs · /catalogs/items</span><span class="desc">Core · <span class="b ok">Implementado en v7.0</span></span></div>
   <table>
-    <tr><td class="k">Hecho</td><td><code>SalesApiService</code> y <code>SalesDashboardService</code> traducen el toolbar a la query: <code>dateFrom</code>/<code>dateTo</code> en hora local, <code>store</code> (ubicaciones del login), <code>tenderMedia</code> y <code>status</code> (ids de los catálogos) y <code>search</code> (con 300 ms de espera). La tabla pagina en el servidor (10/20/50/100); un cambio de filtro vuelve a la página 1 y una consulta nueva cancela la anterior. Se retiró el mock de la pantalla y los puentes por nombre.</td></tr>
-    <tr><td class="k">Límites</td><td>El panel de detalle muestra lo que trae la fila: el detalle completo espera <code>GET /sales/{id}</code>. "Exportar" recorre todas las páginas (no hay <code>GET /sales/export</code>). "Empresa" está deshabilitado: el back no filtra por subsidiaria.</td></tr>
+    <tr><td class="k">Hecho</td><td>"Catálogos cargados" (<code>CatalogsService</code>) pide la lista con <code>search</code> (300 ms de espera; borrarla aplica en el acto) y <code>type</code> (sin valor con "Todos los tipos"). Tipos: "Catálogo fijo DIAN", "Sincronizado desde NetSuite" e "Interno del sistema"; la columna "Origen" muestra <code>origin</code>. El detalle (Drawer) pide <code>GET /catalogs/items</code> con búsqueda y paginación en el servidor (10/20/50/100). Abrir otro catálogo limpia la búsqueda y vuelve a la página 1. Cada columna se formatea por su <code>type</code> (fecha, Sí/No, texto o número). Hay "Reintentar" si falla la carga.</td></tr>
+    <tr><td class="k">Cambios</td><td>Se retiraron los datos simulados de México y Colombia y la clasificación propia del front (fiscal, homologación, NetSuite, dato maestro). La pantalla ya no exige <code>view_catalogs</code>: la ve cualquier persona con sesión, igual que en el back. Si alguien no tiene otra pantalla, entra a Catálogos.</td></tr>
+    <tr><td class="k">Límites</td><td>No se usa <code>includeDisabled</code>: los registros no traen un campo que diga cuáles están deshabilitados.</td></tr>
   </table>
 </div>
 
 <div class="ep">
-  <div class="ep-head"><span class="m POST">POST</span><span class="path">/roles · GET/PATCH/DELETE /roles/{code}</span><span class="desc">Auth · <span class="b ok">Implementado (desde la v5.0)</span></span></div>
+  <div class="ep-head"><span class="m POST">POST</span><span class="path">/sales/capture</span><span class="desc">Capture · <span class="b ok">Implementado en v7.0</span></span></div>
   <table>
-    <tr><td class="k">Hecho</td><td><code>RoleCreate</code> sirve para el alta (<code>/gestion-de-roles/nuevo</code>) y la edición (<code>/gestion-de-roles/:code</code>, con precarga). La edición guarda solo lo que cambió y la confirmación lista los permisos agregados y quitados y a cuántas personas afecta. Después recarga el catálogo, los usuarios y, si la sesión propia tiene el rol, la sesión. La baja tiene confirmación y está en la columna "Acciones" y en el encabezado de la edición; se deshabilita mientras el rol tenga personas (el back respondería 409 <code>ROLE_IN_USE</code>).</td></tr>
-    <tr><td class="k">Ajustar</td><td>La regla de nombres de <code>95db1f3</code> (sección 3).</td></tr>
+    <tr><td class="k">Hecho</td><td>"Reprocesar" manda <code>{ ubicacionIds: [tienda], dateFrom: día }</code> y solo se habilita con un día y una tienda específica. Se muestra con <code>capture_sales</code>. El aviso traduce el resultado: 200 con conteos, 207 parcial, 502 con el motivo que trae el cuerpo, 409 ya en curso, 403 sin permiso. Si entraron documentos nuevos, la tabla se recarga. Estas llamadas marcan <code>SKIP_HTTP_ERROR_ALERT</code> para que el interceptor no duplique el aviso.</td></tr>
+    <tr><td class="k">Límites</td><td>En local responde 502 por falta de credenciales de Facturiza (esperado).</td></tr>
   </table>
 </div>
 
 <div class="ep">
-  <div class="ep-head"><span class="m GET">GET</span><span class="path">/catalogs/* · /sales/catalogs/tender-media · /sales/catalogs/reconciliation-statuses</span><span class="desc">Core · <span class="b ok">Implementado (v4.0)</span></span></div>
+  <div class="ep-head"><span class="m GET">GET</span><span class="path">/sales · /roles · /catalogs/* · /sales/catalogs/*</span><span class="desc"><span class="b ok">Implementados (v4.0 a v6.0)</span></span></div>
   <table>
-    <tr><td class="k">Hecho</td><td>Los 6 catálogos de organización alimentan el alta y la sección "Organización" del usuario (catálogo global, ubicaciones filtradas por subsidiaria). Los 2 de ventas llenan "Medio de pago" y "Estado" del Resumen de venta con ids del back. Desde <code>44fb6b8</code> los catálogos de ventas se cargan con <code>rxResource</code>.</td></tr>
+    <tr><td class="k">Hecho</td><td><code>GET /sales</code> alimenta el Resumen de venta con paginación en el servidor; la administración de roles cubre alta, edición y baja; los 6 catálogos de organización y los 2 de ventas alimentan formularios y filtros con ids del back.</td></tr>
   </table>
 </div>
 
@@ -202,39 +206,41 @@
 <h3>5.1 Catálogo de permisos: DEV vs. front</h3>
 <table class="data">
   <tr><th style="width:24%">Permiso</th><th style="width:17%">DEV (migración V1)</th><th style="width:19%">Front hoy</th><th>Consecuencia</th></tr>
-  <tr><td><code>capture_sales</code></td><td>Sí</td><td>En <code>PermissionKey</code> y en el grid; <b>aún no se evalúa</b></td><td>Debe gobernar "Reprocesar" y la carga masiva (<code>POST /sales/capture</code> y <code>/sales/capture/jobs</code>). Hoy "Reprocesar" usa una regla por rol.</td></tr>
-  <tr><td><code>view_catalogs</code></td><td><b>No existe</b></td><td>Sí (pantalla <code>/catalogos</code>, menú, guard)</td><td>Contra un DEV limpio, <code>/catalogos</code> queda inaccesible. Solo lo resuelve la siembra local.</td></tr>
+  <tr><td><code>capture_sales</code></td><td>Sí</td><td>Gobierna "Reprocesar"</td><td>También gobernará la carga masiva (<code>POST /sales/capture/jobs</code>).</td></tr>
+  <tr><td><code>sync_netsuite</code> · <code>manage_catalogs</code></td><td>Sí (nuevos)</td><td>Solo en el grid de roles</td><td>Ninguna pantalla los usa: la sincronización la hace NetSuite y el portal no edita catálogos.</td></tr>
+  <tr><td><code>view_catalogs</code></td><td><b>No existe</b></td><td>Ya no se evalúa</td><td><code>/catalogos</code> pasó a ser de cualquier persona con sesión. Queda solo en la siembra local y en las pruebas de contrato.</td></tr>
   <tr><td>Los otros 8</td><td colspan="2">Coinciden (<code>view_dashboard, view_reconciliation, manage_differences, import_settlements, export_reports, manage_users, manage_roles, view_audit_log</code>)</td><td>Los 4 de conciliación aún no abren ningún endpoint en DEV.</td></tr>
 </table>
 
 <h3>5.2 Roles</h3>
 <table class="data">
   <tr><th style="width:22%">Escenario</th><th>Qué pasa</th></tr>
-  <tr><td>DEV limpio</td><td>No hay roles. El administrador inicial (<code>ADMIN_EMAIL</code>) tiene los 9 permisos sin rol, como permisos especiales. Con la administración de roles del portal ya puede crearlos, <b>pero no puede entrar a "Roles y permisos"</b>: la ruta exige el rol <code>ADMIN</code>.</td></tr>
-  <tr><td>Pila local sembrada</td><td>5 roles de la matriz 7.16 (ADMIN, ALTAS, CONTABILIDAD, TESORERIA, COSTOS), <code>capture_sales</code> para ADMIN, <code>view_catalogs</code> donde aplica y los permisos especiales de las cuentas demo.</td></tr>
-  <tr><td>Impacto en el front</td><td>Migrar a permisos: <code>data.role: 'ADMIN'</code> de las 3 rutas de roles (y del buscador del encabezado) → <code>manage_roles</code>; <code>canReprocessSales</code> → <code>capture_sales</code>; <code>MANAGER_ROLE_IDS</code> → <code>manage_users</code>.</td></tr>
+  <tr><td>DEV limpio</td><td>No hay roles. El administrador inicial (<code>ADMIN_EMAIL</code>, id 2) tiene los permisos sin rol, como permisos especiales. Puede crear roles, <b>pero no puede entrar a "Roles y permisos"</b>: la ruta exige el rol <code>ADMIN</code>.</td></tr>
+  <tr><td>Pila local sembrada</td><td>5 roles de la matriz 7.16 (ADMIN, ALTAS, CONTABILIDAD, TESORERIA, COSTOS), <code>capture_sales</code> para ADMIN y los permisos especiales de las cuentas demo. La cuenta de NetSuite (id 1) queda como la crea la V1.</td></tr>
+  <tr><td>Impacto en el front</td><td>Falta migrar a permisos <code>data.role: 'ADMIN'</code> de las 3 rutas de roles (y del buscador del encabezado) → <code>manage_roles</code>, y <code>MANAGER_ROLE_IDS</code> → <code>manage_users</code>. <code>canReprocessSales</code> ya usa <code>capture_sales</code>.</td></tr>
 </table>
 
 <h3>5.3 Entorno y pruebas</h3>
 <table class="data">
   <tr><th style="width:20%">Tema</th><th>Estado y cómo quedó</th></tr>
-  <tr><td>Pila DEV</td><td><b>Hecho.</b> <code>dev-env/levantar-backend.ps1</code> levanta db-migration → auth, capture, core → gateway en el proyecto <code>coctel_dev_v4</code>. El Gateway escucha en el puerto de <code>GATEWAY_PORT</code> (<code>dev-env/.env</code>; hoy 8082), el mismo que usa <code>proxy.conf.js</code>. La captura en vivo queda apagada (<code>SALES_CAPTURE_LIVE_ENABLED=false</code>) y la captura real necesita credenciales de Facturiza que el entorno local no tiene.</td></tr>
-  <tr><td>Siembra</td><td><b>Hecho.</b> <code>seed-demo-users.sql</code>: 26 cuentas demo asignadas a las tiendas reales, 5 roles, matriz 7.16, permisos especiales y catálogos de cargo, puesto, departamento y área. <code>seed-demo-sales.sql</code>: 448 ventas de prueba (7 días × 16 tiendas × 4) con notas crédito, pagos mixtos y los 3 estados.</td></tr>
-  <tr><td>Pruebas</td><td>Contrato: <code>node dev-env/pruebas-endpoints.mjs</code>, <b>150 de 150</b> contra la DEV <code>541c538</code> (se ajustaron 2 verificaciones a la regla "asignar un rol suma sus permisos"). Carga masiva probada a mano: 202 con <code>jobId</code>, avance hasta <code>ERROR</code> por falta de credenciales de Facturiza (esperado en local) y 404 para un <code>jobId</code> inexistente. Front: Vitest (<code>pnpm test</code>, <code>test:ci</code>), 123 casos. Hay un agente para E2E con Playwright, pero aún no hay pruebas E2E.</td></tr>
+  <tr><td>Pila DEV</td><td><b>Hecho.</b> <code>dev-env/levantar-backend.ps1</code> usa el proyecto <code>coctel_dev_v5</code> e incluye <code>netsuite-service</code>. Orden: postgres + db-migration → siembra → auth, capture, core, netsuite → gateway. La siembra va antes del auth-service porque, con solo la cuenta de NetSuite en la base, su <code>AdminUserSeeder</code> crearía un administrador con el id 2, que es el de <code>admin@conciliacion.mx</code>. El Gateway escucha en <code>GATEWAY_PORT</code> de <code>dev-env/.env</code> (hoy 8082, porque otro proyecto ocupa el 8080), el mismo que usa <code>proxy.conf.js</code>.</td></tr>
+  <tr><td>Siembra</td><td><b>Hecho, sin cambios.</b> <code>seed-demo-users.sql</code>: 26 cuentas demo (ids 2–27) asignadas a las tiendas reales, 5 roles, matriz 7.16, permisos especiales y catálogos de cargo, puesto, departamento y área. <code>seed-demo-sales.sql</code>: 448 ventas de prueba.</td></tr>
+  <tr><td>Pruebas</td><td>Contrato: <code>node dev-env/pruebas-endpoints.mjs</code>, <b>150 de 150</b> contra la DEV <code>fae5944</code>. Catálogos probados a mano: 35 catálogos, filtros por tipo y búsqueda, 400 con un tipo inválido, detalle paginado y 404 para un catálogo inexistente. Front: Vitest (<code>pnpm test:ci</code>), 799 (3 de conciliación fallan desde <code>cedc7af</code>, que ocultó el comentario del back en <code>line-detail</code>) casos.</td></tr>
   <tr><td>CORS y Vercel</td><td>Sin cambios: <code>API_URL</code> + <code>scripts/set-api-url.mjs</code>. <b>Pendiente del back:</b> agregar el dominio del portal a <code>CORS_ALLOWED_ORIGINS</code>.</td></tr>
 </table>
 
 <h2>6. Estado del orden de implementación</h2>
 <table class="data">
   <tr><th style="width:4%">#</th><th style="width:44%">Entregable</th><th style="width:20%">Estado</th><th>Pendiente</th></tr>
-  <tr><td>1</td><td>Entorno: pila DEV, siembra, proxy</td><td><span class="b ok">Hecho (v6.0: DEV v4)</span></td><td>—</td></tr>
+  <tr><td>1</td><td>Entorno: pila DEV, siembra, proxy</td><td><span class="b ok">Hecho (v7.0: DEV v5)</span></td><td>—</td></tr>
   <tr><td>2</td><td>Usuarios, roles, permisos y bitácora (19 endpoints)</td><td><span class="b ok">Hecho (v3.0)</span></td><td>—</td></tr>
-  <tr><td>3</td><td>Catálogos de organización y de filtros de ventas</td><td><span class="b ok">Hecho (v4.0)</span></td><td>Listas reales de cargos, puestos, departamentos y áreas (las entrega el cliente).</td></tr>
+  <tr><td>3</td><td>Catálogos de organización y de filtros de ventas</td><td><span class="b ok">Hecho (v4.0)</span></td><td>Listas reales de cargos, puestos, departamentos y áreas (llegarán por la sincronización con NetSuite).</td></tr>
   <tr><td>4</td><td><code>GET /sales</code> → tabla del Resumen de venta</td><td><span class="b ok">Hecho (v6.0)</span></td><td>Detalle y exportación del back; filtro por subsidiaria.</td></tr>
-  <tr><td>5</td><td>Administración de roles (<code>POST</code>, <code>GET</code>, <code>PATCH</code>, <code>DELETE</code>)</td><td><span class="b chg">Hecho · ajustar</span></td><td>Regla de nombres y texto de la baja (<code>95db1f3</code>).</td></tr>
-  <tr><td>6</td><td>Reglas por rol → por permiso</td><td><span class="b miss">Abierto</span></td><td>Necesario para un DEV sin roles predefinidos.</td></tr>
-  <tr><td>7</td><td>Errores <code>ProblemDetail</code> de Core/Capture en el interceptor</td><td><span class="b miss">Abierto</span></td><td>Requisito de 8.</td></tr>
-  <tr><td>8</td><td>Captura: <code>POST /sales/capture</code>, carga masiva (<code>/sales/capture/jobs</code>) y bitácora (<code>GET /sales/captures</code>)</td><td><span class="b miss">Abierto</span></td><td>Sección 7.</td></tr>
+  <tr><td>5</td><td>Administración de roles (<code>POST</code>, <code>GET</code>, <code>PATCH</code>, <code>DELETE</code>)</td><td><span class="b ok">Hecho (v7.0)</span></td><td>—</td></tr>
+  <tr><td>6</td><td>Reglas por rol → por permiso</td><td><span class="b chg">Parcial</span></td><td>Rutas de roles y <code>MANAGER_ROLE_IDS</code>.</td></tr>
+  <tr><td>7</td><td>Errores <code>ProblemDetail</code> de Core/Capture en el interceptor</td><td><span class="b chg">Parcial</span></td><td>La captura ya los muestra; falta el interceptor general.</td></tr>
+  <tr><td>8</td><td>Captura: <code>POST /sales/capture</code>, carga masiva y bitácora</td><td><span class="b chg">Parcial</span></td><td><code>/sales/capture/jobs</code> y <code>GET /sales/captures</code> (sección 7).</td></tr>
+  <tr><td>9</td><td>"Catálogos cargados": <code>GET /catalogs</code> y <code>GET /catalogs/items</code></td><td><span class="b ok">Hecho (v7.0)</span></td><td>—</td></tr>
 </table>
 
 <div class="pb"></div>
@@ -242,28 +248,34 @@
 <p class="small">El Gateway enruta <code>/sales/capture</code>, <code>/sales/capture/jobs</code>, <code>/sales/capture/jobs/*</code> y <code>/sales/captures</code> al capture-service. Todas las capturas son <b>idempotentes</b>: repetirlas no duplica documentos. Cada tienda y día deja su corrida en la bitácora.</p>
 <table class="data">
   <tr><th style="width:7%">Método</th><th style="width:20%">Endpoint</th><th style="width:11%">Permiso</th><th style="width:32%">Contrato</th><th>Qué requiere el front</th></tr>
-  <tr><td><span class="m POST">POST</span></td><td><code>/sales/capture</code></td><td><code>capture_sales</code></td><td>Body <code>{ ubicacionIds, dateFrom, dateTo? }</code>. <b>Síncrono</b>, hasta 31 capturas (tiendas × días). 200 OK · 207 parcial · 502 Facturiza no respondió · 409 ya en curso · 404 tienda inexistente; detalle por tienda y por día.</td><td>Botón <b>"Reprocesar"</b> (un día y una tienda): conectarlo, con indicador de progreso y el resultado por día. Mostrarlo por <code>capture_sales</code>, no por rol.</td></tr>
-  <tr><td><span class="m POST">POST</span></td><td><code>/sales/capture/jobs</code> <b>(nuevo)</b></td><td><code>capture_sales</code></td><td>Mismo body, para cargas grandes: hasta 5000 capturas. Responde <b>202</b> al instante con el estado inicial y <code>jobId</code> (cabecera <code>Location</code>). Una sola carga a la vez: 409 si hay otra en curso. 400 rango al revés o excede el máximo; 404 tienda inexistente.</td><td>Acción nueva <b>"Carga masiva"</b> (rango de fechas + varias tiendas) para quien tenga <code>capture_sales</code>. Guarda el <code>jobId</code> y consulta su avance.</td></tr>
-  <tr><td><span class="m GET">GET</span></td><td><code>/sales/capture/jobs/{jobId}</code> <b>(nuevo)</b></td><td><code>view_dashboard</code></td><td><code>CaptureJobResponse</code>: <code>status</code> (<code>RUNNING</code> → <code>OK</code>/<code>INCOMPLETE</code>/<code>ERROR</code>), <code>capturesTotal</code>/<code>capturesDone</code>, conteos (declarados, capturados, insertados, omitidos, fallidos), <code>capturedAmount</code>, <code>requestedBy</code>, <code>startedAt</code>/<code>finishedAt</code> y <code>problems[]</code> (tienda, día, estado, error; máx. 100). El seguimiento vive en memoria: 404 si el servicio se reinició.</td><td>Sondeo cada pocos segundos mientras esté en <code>RUNNING</code>, con barra de avance (<code>capturesDone / capturesTotal</code>) y, al terminar, la lista de problemas. Ante un 404, avisar que el avance se perdió y remitir a la bitácora.</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/sales/capture</code></td><td><code>capture_sales</code></td><td>Body <code>{ ubicacionIds, dateFrom, dateTo? }</code>. <b>Síncrono</b>, hasta 31 capturas (tiendas × días). 200 OK · 207 parcial · 502 Facturiza no respondió · 409 ya en curso · 404 tienda inexistente.</td><td><b>Hecho en v7.0</b>: "Reprocesar" (un día y una tienda), sección 4.</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/sales/capture/jobs</code></td><td><code>capture_sales</code></td><td>Mismo body, para cargas grandes: hasta 5000 capturas. Responde <b>202</b> al instante con el estado inicial y <code>jobId</code> (cabecera <code>Location</code>). Una sola carga a la vez: 409 si hay otra en curso. 400 rango al revés o excede el máximo; 404 tienda inexistente.</td><td>Acción nueva <b>"Carga masiva"</b> (rango de fechas + varias tiendas) para quien tenga <code>capture_sales</code>. Guarda el <code>jobId</code> y consulta su avance.</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/sales/capture/jobs/{jobId}</code></td><td><code>view_dashboard</code></td><td><code>CaptureJobResponse</code>: <code>status</code> (<code>RUNNING</code> → <code>OK</code>/<code>INCOMPLETE</code>/<code>ERROR</code>), <code>capturesTotal</code>/<code>capturesDone</code>, conteos, <code>capturedAmount</code>, <code>requestedBy</code>, <code>startedAt</code>/<code>finishedAt</code> y <code>problems[]</code> (máx. 100). El seguimiento vive en memoria: 404 si el servicio se reinició.</td><td>Sondeo cada pocos segundos mientras esté en <code>RUNNING</code>, con barra de avance y, al terminar, la lista de problemas. Ante un 404, avisar que el avance se perdió y remitir a la bitácora.</td></tr>
   <tr><td><span class="m GET">GET</span></td><td><code>/sales/captures?ubicacionId&amp;date</code></td><td><code>view_dashboard</code></td><td>Corridas de una tienda y un día (manuales, en vivo y nocturnas), la más reciente primero. <code>createdBy</code> en texto.</td><td>Bitácora de capturas junto a "Reprocesar" (p. ej. un panel "Historial de capturas" del día y tienda filtrados).</td></tr>
 </table>
-<div class="callout">
-  <b>Requisitos comunes:</b> manejar los errores <code>ProblemDetail</code> (mostrar <code>detail</code>) y los 207/409/502 como resultados normales de la captura, no como fallas genéricas. En local, sin credenciales de Facturiza, la captura responde error (502): para probar se necesitan credenciales de un entorno de pruebas.
-</div>
 
-<h2>8. Preguntas abiertas para el equipo de back</h2>
+<h2>8. Sincronización con NetSuite (no va en el portal)</h2>
+<p class="small">DED CU13. Los atiende el core-service (el Gateway enruta <code>/netsuite/**</code> al core, salvo <code>/netsuite/v3/api-docs</code>, que va al <code>netsuite-service</code>). Piden <code>sync_netsuite</code> (NetSuite, con la cuenta <code>netsuite@cocteldelmar.local</code>) o <code>manage_catalogs</code>.</p>
+<table class="data">
+  <tr><th style="width:27%">Endpoints</th><th style="width:38%">Contrato</th><th>Relación con el portal</th></tr>
+  <tr><td><code>POST /netsuite/subsidiaries</code><br><code>POST /netsuite/locations</code></td><td>Arreglo de registros. Con <code>id</code> se actualiza ese registro; sin <code>id</code>, se busca por <code>nsId</code> y si no existe se crea. Subsidiaria: <code>nombre</code>, <code>razonSocial</code>, <code>nit</code>, <code>brandIdApi</code>, <code>enabled</code>. Ubicación: <code>subsidiariaId</code> o <code>subsidiariaNsId</code> (la subsidiaria debe existir), <code>nombre</code>, <code>prefijoFiscal</code>, <code>storeIdApi</code>, <code>enabled</code>.</td><td rowspan="2">Ninguna pantalla los usa. El DED deja los catálogos de solo lectura en el portal y las correcciones van por soporte. Lo que NetSuite envía aparece solo en "Catálogos cargados", en los combos de organización y, para las tiendas, en el login de quien las tenga asignadas.</td></tr>
+  <tr><td><code>POST /netsuite/departments</code>, <code>/job-titles</code>, <code>/positions</code>, <code>/areas</code></td><td>Arreglo de <code>{ id?, nsId?, nombre?, enabled? }</code>. Sin <code>nsId</code> previo, enlaza por nombre (sin distinguir mayúsculas) un registro que ya estaba cargado. Respuesta común: <code>{ received, created, updated, failed, results[] }</code> con el resultado de cada registro; 200 todos bien, 207 mezcla, 400 todos rechazados o lote vacío o demasiado grande.</td></tr>
+</table>
+
+<h2>9. Preguntas abiertas para el equipo de back</h2>
 <ul class="small" style="margin:4px 0 0;padding-left:18px;">
-  <li>¿La carga masiva tendrá un historial persistente de cargas, o solo el avance en memoria más la bitácora por día?</li>
-  <li>¿Habrá un endpoint para saber si la captura en vivo está activa y cuándo corrió por última vez, para mostrarlo en el portal?</li>
+  <li><code>manage_catalogs</code> permite crear y editar catálogos con los <code>POST /netsuite/*</code>. ¿Se espera mantenimiento de catálogos en el portal? El DED dice solo lectura.</li>
+  <li>¿<code>GET /catalogs/items</code> puede devolver si cada registro está habilitado, para usar <code>includeDisabled</code>?</li>
+  <li>¿<code>GET /catalogs</code> y <code>GET /catalogs/items</code> seguirán sin permiso propio? ¿Se retira definitivamente <code>view_catalogs</code>?</li>
+  <li>¿La cuenta <code>netsuite@cocteldelmar.local</code> debe ocultarse en <code>GET /users</code>, para que no se pueda editar ni desactivar desde el portal?</li>
+  <li>¿La carga masiva tendrá un historial persistente, o solo el avance en memoria más la bitácora por día?</li>
   <li>¿Pueden Core y Capture devolver un <code>code</code> estable en sus errores, como Auth?</li>
   <li>¿Habrá <code>GET /sales/{id}</code>, <code>GET /sales/export</code> y un filtro por subsidiaria en <code>GET /sales</code>? ¿Se limitará el listado a las tiendas del usuario?</li>
-  <li>¿Se sembrará <code>view_catalogs</code>, o la pantalla de catálogos cambia de permiso?</li>
-  <li>¿Se registrará en alguna bitácora el alta, la edición y la baja de roles? ¿<code>GET /users/{id}</code> expondrá los permisos especiales?</li>
   <li>Con la homologación DIAN ya en la base, ¿cómo se relacionan los medios de pago del POS con los orígenes de conciliación del portal (BBVA, Rappi, DiDi Food, Efectivo)?</li>
   <li>¿<code>PATCH /users/{id}/unlock</code> se conserva? Para Vercel: ¿origen del Gateway y dominio del portal en <code>CORS_ALLOWED_ORIGINS</code>?</li>
 </ul>
 
-<h2>9. Historial de versiones</h2>
+<h2>10. Historial de versiones</h2>
 <table class="data">
   <tr><th style="width:9%">Versión</th><th style="width:14%">Fecha</th><th>Cambios</th></tr>
   <tr><td>1.0</td><td>06-Oct-2026</td><td>Primer análisis: front <code>ab89ce2</code> vs. back <code>DEV</code> <code>de23127</code> y guía <code>Guia_Endpoints_Usuarios_Roles_Permisos</code>. Respaldado en <code>docs/implementaciones/analisis-front-vs-back-dev_v1.0.pdf</code>.</td></tr>
@@ -271,8 +283,9 @@
   <tr><td>3.0</td><td>08-Oct-2026</td><td>Los 19 endpoints de la guía quedan conectados; entorno resuelto; hallazgos de paginación y permisos. Respaldada en <code>docs/avances/analisis-front-vs-back-dev_v3.pdf</code>.</td></tr>
   <tr><td>4.0</td><td>12-Oct-2026</td><td>Contraste con la DEV <code>0244b60</code> (capture/core, V1 reescrita, sin roles predefinidos) y la <code>Guia_Integracion_Frontend</code>. Conectados los 6 <code>GET /catalogs/*</code> y los catálogos de ventas de medio de pago y estado; retiro de <code>department</code>/<code>area</code>/<code>jobTitle</code>; corrección de fechas; pila DEV v2 con siembra de roles y catálogos. Sección de ventas reescrita: qué endpoint va en cada parte del front. En la pantalla de ventas, subsidiaria y tienda salen del login. Respaldada en <code>docs/avances/analisis-front-vs-back-dev_v4.pdf</code>.</td></tr>
   <tr><td>5.0</td><td>13-Oct-2026</td><td>Contraste con la DEV <code>3852101</code> ("add rol services"): 4 endpoints nuevos de roles (<code>POST /roles</code>, <code>GET</code>/<code>PATCH</code>/<code>DELETE /roles/{code}</code>) con lo que requiere el front para conectarlos (sección 7); cambio de <code>PATCH /users/{id}/roles</code> (asignar rol suma permisos, permisos especiales); V1 modificada otra vez (base nueva). Ventas: quedan 3 endpoints pendientes. Respaldada en <code>docs/avances/analisis-front-vs-back-dev_v5.pdf</code>.</td></tr>
-  <tr><td>6.0</td><td>19-Oct-2026</td><td>Contraste con la DEV <code>541c538</code>: 2 endpoints nuevos de carga masiva (<code>POST /sales/capture/jobs</code>, <code>GET /sales/capture/jobs/{jobId}</code>), captura en vivo, tiendas reales y homologación DIAN en la V1, nueva regla de nombres de roles y <code>dianCode</code>/<code>createdBy</code> en texto. Se marcan como conectados <code>GET /sales</code> y la administración de roles (32 endpoints); pila local v4. La sección de ventas queda dedicada a la captura.</td></tr>
+  <tr><td>6.0</td><td>19-Oct-2026</td><td>Contraste con la DEV <code>541c538</code>: 2 endpoints nuevos de carga masiva (<code>POST /sales/capture/jobs</code>, <code>GET /sales/capture/jobs/{jobId}</code>), captura en vivo, tiendas reales y homologación DIAN en la V1, nueva regla de nombres de roles y <code>dianCode</code>/<code>createdBy</code> en texto. Se marcan como conectados <code>GET /sales</code> y la administración de roles (32 endpoints); pila local v4. La sección de ventas queda dedicada a la captura. Respaldada en <code>docs/avances/analisis-front-vs-back-dev_v6.pdf</code>.</td></tr>
+  <tr><td>7.0</td><td>29-Oct-2026</td><td>Contraste con la DEV <code>fae5944</code>: 8 endpoints nuevos, 2 de "Catálogos cargados" (<code>GET /catalogs</code>, <code>GET /catalogs/items</code>, ya conectados) y 6 de sincronización con NetSuite (<code>POST /netsuite/*</code>, nueva sección 8, fuera del portal). Permisos <code>sync_netsuite</code> y <code>manage_catalogs</code>, cuenta de integración de NetSuite, <code>netsuite-service</code> y <code>nsId</code> en los catálogos. Se marcan como hechos <code>POST /sales/capture</code> ("Reprocesar") y los ajustes de roles (35 endpoints conectados). "Catálogos cargados" deja de exigir <code>view_catalogs</code>. Pila local v5 con la siembra antes del auth-service.</td></tr>
 </table>
-<div class="footer">Análisis front vs. back DEV · Cóctel del Mar · v6.0 · 19-Oct-2026 · Fuente: docs/fuentes/analisis-front-vs-back-dev.html</div>
+<div class="footer">Análisis front vs. back DEV · Cóctel del Mar · v7.0 · 29-Oct-2026 · Fuente: docs/fuentes/analisis-front-vs-back-dev.html</div>
 </body>
 </html>
