@@ -24,7 +24,10 @@
         class="app-menu__link"
         routerLink="/dashboard"
         routerLinkActive="app-menu__link--active"
-        [attr.title]="!menu.expanded() ? 'Dashboard' : null"
+        nz-tooltip
+        nzTooltipPlacement="right"
+        [nzTooltipTitle]="menu.expanded() ? null : 'Dashboard'"
+        aria-label="Dashboard"
       >
         <span class="app-menu__icon">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -43,7 +46,10 @@
         class="app-menu__link"
         routerLink="/conciliacion"
         routerLinkActive="app-menu__link--active"
-        [attr.title]="!menu.expanded() ? 'Conciliación' : null"
+        nz-tooltip
+        nzTooltipPlacement="right"
+        [nzTooltipTitle]="menu.expanded() ? null : 'Conciliación'"
+        aria-label="Conciliación"
       >
         <span class="app-menu__icon">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -63,7 +69,10 @@
       class="app-menu__link"
       routerLink="/catalogos"
       routerLinkActive="app-menu__link--active"
-      [attr.title]="!menu.expanded() ? 'Catálogos' : null"
+      nz-tooltip
+      nzTooltipPlacement="right"
+      [nzTooltipTitle]="menu.expanded() ? null : 'Catálogos'"
+      aria-label="Catálogos"
     >
       <span class="app-menu__icon">
         <!-- libro abierto: listas de consulta -->
@@ -80,7 +89,10 @@
         class="app-menu__link"
         routerLink="/usuarios"
         routerLinkActive="app-menu__link--active"
-        [attr.title]="!menu.expanded() ? 'Usuarios' : null"
+        nz-tooltip
+        nzTooltipPlacement="right"
+        [nzTooltipTitle]="menu.expanded() ? null : 'Usuarios'"
+        aria-label="Usuarios"
       >
         <span class="app-menu__icon">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -102,7 +114,10 @@
         class="app-menu__link"
         routerLink="/gestion-de-roles"
         routerLinkActive="app-menu__link--active"
-        [attr.title]="!menu.expanded() ? 'Roles y permisos' : null"
+        nz-tooltip
+        nzTooltipPlacement="right"
+        [nzTooltipTitle]="menu.expanded() ? null : 'Roles y permisos'"
+        aria-label="Roles y permisos"
       >
         <span class="app-menu__icon">
           <!-- escudo con check: roles y permisos -->
@@ -123,8 +138,10 @@
       type="button"
       class="app-menu__link"
       (click)="onLogout()"
+      nz-tooltip
+      nzTooltipPlacement="right"
+      [nzTooltipTitle]="menu.expanded() ? null : 'Cerrar sesión'"
       aria-label="Cerrar sesión"
-      [attr.title]="!menu.expanded() ? 'Cerrar sesión' : null"
     >
       <span class="app-menu__icon">
         <!-- salir -->

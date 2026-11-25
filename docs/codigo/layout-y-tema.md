@@ -70,7 +70,7 @@ expandido/contraído y tokens".
 
 - **Estado.** `MenuService.expanded` es un signal persistido en `localStorage`
   (`conciliation-menu-expanded`); contraído por defecto. Contraído solo se ven los iconos (cada link
-  lleva `[attr.title]`) y el icono activo va en `--color-primary` para que se note la pantalla actual
+  lleva `nz-tooltip` a la derecha y `aria-label`; expandido el tooltip se desactiva con título `null`) y el icono activo va en `--color-primary` para que se note la pantalla actual
   sin etiqueta.
 - **Superficie flotante.** `.app-menu` comparte fondo (`--color-on-primary`) y borde con `.user-card`
   del Header. Se despega 8px de los bordes con `margin` y su alto descuenta esos márgenes

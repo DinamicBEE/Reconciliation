@@ -62,3 +62,64 @@ describe('Menu · enlace "Roles y permisos"', () => {
     expect(rolesLink(el)).toBeNull();
   });
 });
+
+describe('Menu · tooltips de navegación', () => {
+  const NAMES = ['Dashboard', 'Conciliación', 'Catálogos', 'Usuarios', 'Roles y permisos', 'Cerrar sesión'];
+  const ALL: PermissionKey[] = ['view_dashboard', 'view_reconciliation', 'manage_users', 'manage_roles'];
+  let fixture: ComponentFixture<Menu>;
+
+  async function mount(expanded: boolean): Promise<HTMLElement> {
+    await TestBed.configureTestingModule({
+      imports: [Menu],
+      providers: [
+        provideRouter([]),
+        { provide: MenuService, useValue: { expanded: signal(expanded), toggle: vi.fn() } },
+        { provide: AuthService, useValue: { logout: vi.fn() } },
+        {
+          provide: AccessControlService,
+          useValue: { hasPermission: (key: PermissionKey) => ALL.includes(key), hasRole: vi.fn(() => false) },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(Menu);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const items = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll<HTMLElement>('.app-menu__link')).filter((e) =>
+      NAMES.includes(e.getAttribute('aria-label') ?? ''),
+    );
+
+  async function hover(target: HTMLElement): Promise<string> {
+    target.dispatchEvent(new MouseEvent('mouseenter'));
+    await new Promise((resolve) => setTimeout(resolve, 400)); // retardo de apertura de nz-tooltip
+    fixture.detectChanges();
+    return document.querySelector('.ant-tooltip')?.textContent?.trim() ?? '';
+  }
+
+  it('no usa el atributo title nativo', async () => {
+    const el = await mount(false);
+
+    expect(el.querySelectorAll('[title]').length).toBe(0);
+  });
+
+  it('cada enlace y el pie conservan su nombre accesible con aria-label', async () => {
+    const el = await mount(false);
+
+    expect(items(el).map((e) => e.getAttribute('aria-label'))).toEqual(NAMES);
+  });
+
+  it('contraído muestra el nombre de la pantalla en el tooltip al pasar el mouse', async () => {
+    const el = await mount(false);
+
+    expect(await hover(items(el)[0])).toBe('Dashboard');
+  });
+
+  it('expandido no muestra tooltip', async () => {
+    const el = await mount(true);
+
+    expect(await hover(items(el)[0])).toBe('');
+  });
+});

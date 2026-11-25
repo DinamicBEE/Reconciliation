@@ -623,8 +623,9 @@ mismo patrón que `ThemeService`).
 - **Contraído/expandido**: `MenuService.expanded` controla la clase
   `.app-menu--expanded` (`width: 220px`; contraído son `64px`). Contraído
   solo se ven los iconos (`.app-menu__label` en `display: none`) — cada
-  link lleva `[attr.title]` con el nombre de la pantalla como tooltip
-  nativo cuando está contraído. Un botón `.app-menu__toggle` (chevron que
+  link lleva `nz-tooltip` (`nzTooltipPlacement="right"`) con el nombre de la
+  pantalla, activo solo contraído (`[nzTooltipTitle]` en `null` expandido),
+  más `aria-label` con el mismo nombre. Un botón `.app-menu__toggle` (chevron que
   cambia de dirección según el estado) alterna `MenuService.toggle()`.
 - **Efectos de hover/seleccionado**: son los mismos que ya existían en
   `app-header__nav-link` antes de la migración (`background:
