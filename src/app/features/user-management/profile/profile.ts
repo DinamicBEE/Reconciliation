@@ -4,7 +4,6 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzMessageService } from 'ng-zorro-antd/message';
@@ -25,7 +24,6 @@ import { parseIsoDate, toIsoDate } from '../../../shared/utils/iso-date.util';
 @Component({
   selector: 'app-profile',
   imports: [
-    NzPageHeaderModule,
     ReactiveFormsModule,
     NzAvatarModule,
     NzButtonModule,

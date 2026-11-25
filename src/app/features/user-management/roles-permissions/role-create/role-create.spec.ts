@@ -6,6 +6,7 @@ import { ModalOptions, NzModalService } from 'ng-zorro-antd/modal';
 import { Observable, of, throwError } from 'rxjs';
 import { AccessCatalogService, RoleDto } from '../../../../core/auth/access-catalog.service';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { PageHeaderService } from '../../../../core/layout/header/page-header.service';
 import { PermissionDef, RoleDef } from '../../../../shared/models/access.model';
 import { AppUser } from '../../data/user-management.model';
 import { RolesApiService } from '../../data/roles-api.service';
@@ -55,7 +56,7 @@ describe('RoleCreate — nombre duplicado', () => {
       ],
     }).compileComponents();
 
-    // `onBack`/`create` navegan: se espía para que no haya navegación real.
+    // `create` navega: se espía para que no haya navegación real.
     vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
 
     fixture = TestBed.createComponent(RoleCreate);
@@ -217,6 +218,16 @@ describe('RoleCreate — guardado, baja y estados', () => {
   const nameInput = () => el.querySelector<HTMLInputElement>('input[nz-input]')!;
   const buttonByText = (text: string) =>
     Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.includes(text))!;
+  const pageHeader = () => TestBed.inject(PageHeaderService).header();
+  // Los botones del encabezado los pinta el header de la app: se instancia el template que la pantalla le entrega.
+  function headerButton(text: string): HTMLButtonElement | undefined {
+    const actions = pageHeader()?.actions;
+    if (!actions) return undefined;
+    const view = actions.createEmbeddedView({});
+    view.detectChanges();
+    const buttons = view.rootNodes.flatMap((n: Node) => (n instanceof Element ? [...n.querySelectorAll('button')] : []));
+    return buttons.find((b) => b.textContent?.includes(text));
+  }
   const saveButton = () => el.querySelector<HTMLButtonElement>('.role-create__bar button[nz-button]')!;
   const permissionCheckbox = (key: string) =>
     Array.from(el.querySelectorAll<HTMLElement>('.permission-table tbody tr'))
@@ -241,9 +252,10 @@ describe('RoleCreate — guardado, baja y estados', () => {
   describe('alta', () => {
     beforeEach(() => setup());
 
-    it('muestra el título "Nuevo rol", sin botón de eliminar y sin pedir ningún rol', () => {
-      expect(el.querySelector('nz-page-header')?.textContent).toContain('Nuevo rol');
-      expect(buttonByText('Eliminar rol')).toBeUndefined();
+    it('le entrega al header el título "Nuevo rol", sin botón de eliminar, y no pide ningún rol', () => {
+      expect(pageHeader()).toMatchObject({ title: 'Nuevo rol', actions: null });
+      expect(el.querySelector('nz-page-header')).toBeNull();
+      expect(headerButton('Eliminar rol')).toBeUndefined();
       expect(rolesApi.getRole).not.toHaveBeenCalled();
       expect(users.syncFromBackend).toHaveBeenCalledTimes(1);
     });
@@ -347,7 +359,9 @@ describe('RoleCreate — guardado, baja y estados', () => {
   describe('edición', () => {
     it('precarga nombre y permisos del rol, muestra su código y no permite guardar sin cambios', async () => {
       await setup('CONTABILIDAD');
-      expect(el.querySelector('nz-page-header')?.textContent).toContain('Editar rol');
+      expect(pageHeader()).toMatchObject({ title: 'Editar rol' });
+      expect(pageHeader()!.actions).not.toBeNull();
+      expect(headerButton('Eliminar rol')).toBeDefined();
       expect(nameInput().value).toBe('Contabilidad');
       expect(el.querySelector('.role-create__code')?.textContent?.replace(/\s+/g, ' ')).toContain('Código: CONTABILIDAD');
       expect(permissionCheckbox('view_dashboard').classList).toContain('ant-checkbox-wrapper-checked');
@@ -415,13 +429,7 @@ describe('RoleCreate — guardado, baja y estados', () => {
     it('muestra el aviso de rol inexistente cuando GET /roles/{code} falla', async () => {
       await setup('NO_EXISTE', { getRole: () => throwError(() => new Error('404')) });
       expect(el.textContent).toContain('El rol no existe o ya fue dado de baja.');
-      expect(buttonByText('Eliminar rol').disabled).toBe(true);
-    });
-
-    it('la flecha de volver regresa a la lista', async () => {
-      await setup('CONTABILIDAD');
-      await click(el.querySelector<HTMLElement>('.ant-page-header-back-button')!);
-      expect(navigate).toHaveBeenCalledWith(['/gestion-de-roles']);
+      expect(headerButton('Eliminar rol')!.disabled).toBe(true);
     });
   });
 
@@ -430,12 +438,12 @@ describe('RoleCreate — guardado, baja y estados', () => {
       await setup('CONTABILIDAD');
       allUsers.set([{ id: 'u1', firstName: 'Ana', lastName: 'Ruiz', roleIds: ['CONTABILIDAD'] } as unknown as AppUser]);
       await fixture.whenStable();
-      expect(buttonByText('Eliminar rol').disabled).toBe(true);
+      expect(headerButton('Eliminar rol')!.disabled).toBe(true);
     });
 
     it('al confirmar da de baja el rol, recarga el catálogo y vuelve a la lista', async () => {
       await setup('CONTABILIDAD');
-      const button = buttonByText('Eliminar rol');
+      const button = headerButton('Eliminar rol')!;
       expect(button.disabled).toBe(false);
 
       await click(button);
@@ -453,7 +461,7 @@ describe('RoleCreate — guardado, baja y estados', () => {
     it('si el DELETE falla no navega', async () => {
       await setup('CONTABILIDAD');
       rolesApi.deleteRole.mockReturnValue(throwError(() => new Error('409')));
-      await click(buttonByText('Eliminar rol'));
+      await click(headerButton('Eliminar rol')!);
       await confirmOk();
 
       expect(message.success).not.toHaveBeenCalled();

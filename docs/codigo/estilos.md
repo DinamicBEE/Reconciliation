@@ -69,10 +69,12 @@ Código: `src/styles.scss`.
 <a id="encabezado-de-pagina"></a>
 ## `nz-page-header` global
 
-MASTER.md: "Patrón: encabezado de página". El header no tiene padding ni fondo propios porque la
-pantalla ya reserva su espacio con `--grid-gap`. Todas las reglas llevan el prefijo `html body` para
-ganar a la hoja de ng-zorro sin depender del orden de carga, que cambia entre dev y build (ver
-[especificidad](#especificidad)).
+MASTER.md: "Patrón: encabezado de página". El `nz-page-header` solo lo renderiza `app-header`
+([`layout-y-tema.md`](layout-y-tema.md#encabezado-de-pantalla)); estas reglas fijan su aspecto. No lleva
+padding ni fondo propios (también se anula el `padding-top` de `.has-breadcrumb`) y el breadcrumb queda a
+2px del título, para que el conjunto quepa en los 72px del header. Todas las reglas llevan el prefijo
+`html body` para ganar a la hoja de ng-zorro sin depender del orden de carga, que cambia entre dev y build
+(ver [especificidad](#especificidad)).
 
 Código: `src/styles.scss`.
 

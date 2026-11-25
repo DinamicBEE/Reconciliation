@@ -1,7 +1,9 @@
 import { MOCK_SALES, MOCK_SETTLEMENTS } from '../../../shared/mock-data/sales-settlements.mock-data';
 import { MatchStatus, TENDER_MEDIA_LABEL, TenderMedia, TransactionMatch } from '../../../shared/models/reconciliation-item.model';
 import { crossMatchTransactions } from '../../../shared/utils/cross-match.util';
+import { bankTotal } from './reconciliation-result.util';
 import {
+  ReconciliationBankMovement,
   ReconciliationLineSide,
   ReconciliationResult,
   ReconciliationResultKpi,
@@ -30,17 +32,92 @@ function sum(values: number[]): number {
   return round(values.reduce((acc, value) => acc + value, 0), 2);
 }
 
-function comment(match: TransactionMatch): string {
-  switch (match.status) {
-    case 'matched':
-      return 'Coincide sin diferencias entre el POS y el banco.';
-    case 'amount_mismatch':
-      return `El banco liquidó un monto distinto al del POS (diferencia de ${round(match.difference, 2).toFixed(2)}).`;
-    case 'sale_only':
-      return 'Venta registrada en el POS sin movimiento en el banco.';
-    default:
-      return 'Movimiento del banco sin venta registrada en el POS.';
+function addDays(isoDate: string, days: number): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+function statusFor(pos: number | null, bank: number): ReconciliationResultStatus {
+  if (pos === null || bank === 0) return 'sin_coincidencia';
+  return pos === bank ? 'coincide' : 'diferencia';
+}
+
+function commentFor(status: ReconciliationResultStatus, hasPos: boolean, movements: number, difference: number): string {
+  if (status === 'coincide') {
+    return movements > 1
+      ? `Coincide: ${movements} movimientos del banco suman el monto del POS.`
+      : 'Coincide sin diferencias entre el POS y el banco.';
   }
+  if (status === 'diferencia') {
+    return `El banco abonó ${movements} movimiento(s) por un monto distinto al del POS (diferencia de ${difference.toFixed(2)}).`;
+  }
+  return hasPos ? 'Venta registrada en el POS sin movimiento en el banco.' : 'Movimiento del banco sin venta registrada en el POS.';
+}
+
+// Ventas que el banco abona en varios movimientos (1 a muchos): `shares` reparte lo abonado y
+// `settled` es la fracción del POS que llega al banco (1 = completo, menos = falta, más = sobra).
+interface SplitPlan {
+  shares: number[];
+  settled: number;
+}
+
+const ONE_TO_MANY: Record<string, SplitPlan> = {
+  'CORTE-0827-01': { shares: [0.6, 0.4], settled: 1 },
+  'CORTE-0827-02': { shares: [0.3, 0.25, 0.2, 0.15, 0.1], settled: 0.88 },
+  'RAPPI-LIQ-901': { shares: [0.35, 0.25, 0.2, 0.12, 0.08], settled: 0.835 },
+  SPEI0000129981: { shares: [0.5, 0.3, 0.2], settled: 1 },
+  SPEI0000129990: { shares: [0.65, 0.35], settled: 1 },
+  'CORTE-202608260': { shares: [0.5, 0.5], settled: 1 },
+  'CORTE-202608264': { shares: [0.4, 0.3, 0.2, 0.1], settled: 1 },
+  'DIDI-202608261': { shares: [0.55, 0.45], settled: 1 },
+};
+
+function splitMovements(match: TransactionMatch, plan: SplitPlan): ReconciliationBankMovement[] {
+  const total = round(match.sale!.amount * plan.settled, 2);
+  const method = TENDER_MEDIA_LABEL[match.tenderMedia];
+  let assigned = 0;
+  return plan.shares.map((share, index) => {
+    const last = index === plan.shares.length - 1;
+    const amount = last ? round(total - assigned, 2) : round(total * share, 2);
+    assigned = round(assigned + amount, 2);
+    return {
+      id: `${match.orderId}-M${index + 1}`,
+      date: addDays(match.date, index === 0 ? 0 : 1),
+      reference: `${match.orderId}-${index + 1}`,
+      amount,
+      concept: `Abono ${index + 1} de ${plan.shares.length} — ${match.orderId}`,
+      paymentMethod: method,
+    };
+  });
+}
+
+// Movimientos sin asignar que el back sugiere al ajustar una línea por gestionar: primero las
+// liquidaciones sueltas del medio más cercanas al monto y, si faltan, depósitos sintéticos.
+const CANDIDATES_PER_ROW = 5;
+const COVERED_ORDER_IDS = new Set(
+  TENDER_MEDIA.flatMap((media) => crossMatchTransactions(MOCK_SALES[media], MOCK_SETTLEMENTS[media]))
+    .filter((match) => match.status === 'matched')
+    .map((match) => match.orderId),
+);
+
+function suggestedMovements(match: TransactionMatch, assigned: ReconciliationBankMovement[]): ReconciliationBankMovement[] {
+  const method = TENDER_MEDIA_LABEL[match.tenderMedia];
+  const target = match.sale?.amount ?? match.settlement?.amount ?? 0;
+  const taken = new Set(assigned.map((movement) => movement.id));
+  const real = MOCK_SETTLEMENTS[match.tenderMedia]
+    .filter((s) => s.orderId !== match.orderId && !COVERED_ORDER_IDS.has(s.orderId) && !taken.has(s.id))
+    .sort((a, b) => Math.abs(a.amount - target) - Math.abs(b.amount - target))
+    .slice(0, CANDIDATES_PER_ROW)
+    .map((s) => ({ id: s.id, date: s.date, reference: s.orderId, amount: s.amount, concept: s.description, paymentMethod: method }));
+  const synthetic = Array.from({ length: CANDIDATES_PER_ROW - real.length }, (_, index) => ({
+    id: `${match.orderId}-C${index + 1}`,
+    date: addDays(match.date, index + 1),
+    reference: `DEP-${match.orderId}-${index + 1}`,
+    amount: round(target * (0.15 + index * 0.17), 2),
+    concept: 'Depósito sin conciliar',
+    paymentMethod: method,
+  }));
+  return [...real, ...synthetic];
 }
 
 function toRow(match: TransactionMatch): ReconciliationResultRow {
@@ -48,25 +125,38 @@ function toRow(match: TransactionMatch): ReconciliationResultRow {
   const pos: ReconciliationLineSide | null = match.sale
     ? { reference: match.sale.orderId, amount: match.sale.amount, concept: `Venta ${match.sale.id}`, paymentMethod: method }
     : null;
+  const plan = ONE_TO_MANY[match.orderId];
   // Monto liquidado total de la orden (puede venir en más de un depósito).
-  const bank: ReconciliationLineSide | null = match.settlement
-    ? {
-        reference: match.settlement.orderId,
-        amount: round((match.sale?.amount ?? 0) - match.difference, 2),
-        concept: match.settlement.description,
-        paymentMethod: method,
-      }
-    : null;
+  const bank: ReconciliationBankMovement[] =
+    plan && match.sale
+      ? splitMovements(match, plan)
+      : match.settlement
+        ? [
+            {
+              id: match.settlement.id,
+              date: match.settlement.date,
+              reference: match.settlement.orderId,
+              amount: round((match.sale?.amount ?? 0) - match.difference, 2),
+              concept: match.settlement.description,
+              paymentMethod: method,
+            },
+          ]
+        : [];
+  const bankAmount = bankTotal(bank);
+  const status = plan ? statusFor(pos?.amount ?? null, bankAmount) : STATUS[match.status];
+  const difference = round((pos?.amount ?? 0) - bankAmount, 2);
   return {
     id: `${match.tenderMedia}:${match.orderId}`,
     date: match.date,
     reference: match.orderId,
     tenderMedia: match.tenderMedia,
+    channel: method,
     pos,
     bank,
-    difference: round(match.difference, 2),
-    comment: comment(match),
-    status: STATUS[match.status],
+    candidates: status === 'coincide' ? [] : suggestedMovements(match, bank),
+    difference,
+    comment: commentFor(status, pos !== null, bank.length, difference),
+    status,
   };
 }
 
@@ -103,7 +193,7 @@ const ROWS: ReconciliationResultRow[] = TENDER_MEDIA.flatMap((tenderMedia) =>
  */
 export const MOCK_RECONCILIATION_RESULT: ReconciliationResult = {
   total: ROWS.length,
-  totals: { pos: sum(ROWS.map((row) => row.pos?.amount ?? 0)), bank: sum(ROWS.map((row) => row.bank?.amount ?? 0)) },
+  totals: { pos: sum(ROWS.map((row) => row.pos?.amount ?? 0)), bank: sum(ROWS.map((row) => bankTotal(row.bank))) },
   kpis: {
     coincidencias: kpi(ROWS, 'coincide'),
     diferencias: kpi(ROWS, 'diferencia'),

@@ -5,7 +5,7 @@ import { CreateUserRequest, UpdateUserRequest, UpdateUserRolesRequest, UserDetai
 import {
   AppUser,
   AppUserAddress,
-  MANAGER_ROLE_IDS,
+  MANAGER_PERMISSION,
   PermissionKey,
   RoleId,
   UserStatus,
@@ -186,9 +186,9 @@ export class UserManagementService {
     };
   });
 
-  /** Usuarios con un rol de {@link MANAGER_ROLE_IDS}; el componente excluye a la persona editada. */
+  /** Usuarios con {@link MANAGER_PERMISSION}; el componente excluye a la persona editada. */
   readonly managerCandidates = computed(() =>
-    this.usersSignal().filter((u) => u.roleIds.some((r) => MANAGER_ROLE_IDS.includes(r))),
+    this.usersSignal().filter((u) => u.permissions.includes(MANAGER_PERMISSION)),
   );
 
   setSearch(value: string): void {

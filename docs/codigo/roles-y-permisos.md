@@ -15,7 +15,7 @@ Convención: [README](README.md).
   El backend es la fuente de qué roles existen, sus nombres y sus permisos por defecto
   (`GET /roles`, `GET /permissions`, vía `AccessCatalogService`, ver
   [`sesion-y-acceso.md#catalogos-de-acceso`](sesion-y-acceso.md#catalogos-de-acceso)).
-- `RoleId` solo nombra los códigos que el front compara en código (p. ej. `MANAGER_ROLE_IDS`); no
+- `RoleId` solo nombra los códigos de rol que el front conoce (filtros y datos simulados); no
   hay lista de roles propia del front. El acceso a cada pantalla lo decide el permiso
   (`permissionGuard` y `data` de las rutas en `app.routes.ts`), no el rol.
 - Mapeo de DTOs: `GET /permissions` → `PermissionDef` (`code` → `key`, `description` → `label`,
@@ -71,7 +71,7 @@ Código: `src/app/features/user-management/data/role-code.util.ts`.
   de `GET /permissions`) y las personas que lo tienen. Las personas salen de
   `UserManagementService.allUsers`, la misma colección de "Administración de usuarios"; al entrar
   se sincroniza con `GET /users` para ver roles y altas hechos fuera de la sesión.
-- Exclusiva del rol ADMIN (`permissionGuard` con `data.role`).
+- Exige `manage_roles` (permiso, no rol: un DEV limpio no tiene roles predefinidos).
 - Desde aquí se crea un rol, se abre su edición (`/gestion-de-roles/:code`) y se da de baja
   (`DELETE /roles/{code}`, con confirmación). La baja se deshabilita mientras el rol tenga usuarios,
   porque el backend respondería 409 `ROLE_IN_USE`. El tooltip va en un `<span>` envolvente porque un
@@ -83,7 +83,7 @@ Código: `src/app/features/user-management/roles-permissions/roles-permissions.*
 ## Alta y edición de un rol
 
 - Nombre + permisos agrupados por módulo (`GET /permissions`); nunca una lista propia del front.
-  Exclusiva de ADMIN.
+  Exige `manage_roles`.
 - **Alta** (`/gestion-de-roles/nuevo` → `POST /roles`): el nombre se valida como el backend
   (`existsByNameIgnoreCaseAndEnabledTrue`): no puede repetir el de otro rol activo, sin espacios
   sobrantes ni distinción de mayúsculas; los acentos sí cuentan. Los roles dados de baja no

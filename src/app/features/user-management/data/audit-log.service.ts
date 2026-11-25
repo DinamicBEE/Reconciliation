@@ -19,7 +19,8 @@ export interface AuditLogEntryDto {
   id: number;
   /** `null` cuando actuó el sistema (bloqueo/desbloqueo automático). */
   actor: AuditPersonDto | null;
-  target: AuditPersonDto;
+  /** `null` cuando la acción no es sobre un usuario (p. ej. `reconciliation_created`). */
+  target: AuditPersonDto | null;
   action: string;
   detail: string | null;
   createdAt: string;
@@ -102,8 +103,8 @@ function toEntry(dto: AuditLogEntryDto): AuditLogEntry {
     id: dto.id,
     timestamp: dto.createdAt,
     actorName: dto.actor?.displayName ?? 'Sistema',
-    targetBackendUserId: dto.target.id,
-    targetUserName: dto.target.displayName,
+    targetBackendUserId: dto.target?.id ?? null,
+    targetUserName: dto.target?.displayName ?? null,
     action: dto.action,
     detail: dto.detail ?? '',
   };

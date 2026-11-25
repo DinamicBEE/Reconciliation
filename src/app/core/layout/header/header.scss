@@ -1,10 +1,27 @@
 // Sin fondo ni divisor: flota sobre --color-background. Ver docs/codigo/layout-y-tema.md#header
 .app-header {
-  height: 72px;
+  min-height: 72px;
   display: flex;
   align-items: center;
   gap: 32px;
   padding: 0 24px;
+}
+
+// Título de la pantalla activa (nz-page-header) y sus botones, a la izquierda de los iconos.
+.app-header__page {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-header__subtitle {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+.app-header__page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .app-header__actions {

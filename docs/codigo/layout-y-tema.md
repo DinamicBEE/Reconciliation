@@ -47,6 +47,21 @@ Header: búsqueda de pantallas y notificaciones".
 
 Código: `src/app/core/layout/header/**` (incluye `header-search.util.ts`).
 
+<a id="encabezado-de-pantalla"></a>
+## Encabezado de pantalla en el header
+
+- `app-header` pinta el `nz-page-header` de la pantalla activa a la izquierda de sus iconos. No hay título
+  si la ruta no declara `data.title`.
+- `PageHeaderService` (root) lee `title` y `parent` de la `data` de la ruta hoja en cada `NavigationEnd`.
+  `bind()` agrega lo que el componente conoce: lo suyo sustituye a lo de la ruta y se quita al destruirlo
+  (cada `bind` lleva su dueño, así el cierre de una pantalla vieja no borra el de la nueva).
+- Los botones llegan como `TemplateRef` declarado en la pantalla: conservan sus estilos encapsulados y sus
+  handlers, aunque el header los inserte en otro punto del árbol.
+- `.shell` usa `grid-template-rows: auto 1fr` y el header `min-height: 72px`: un subtítulo largo hace crecer
+  la fila en lugar de cortarse.
+
+Código: `core/layout/header/page-header.service.ts`, `header.html`, `header.ts`, `app.routes.ts`.
+
 <a id="menu-lateral"></a>
 ## Menú lateral y estado expandido/contraído
 

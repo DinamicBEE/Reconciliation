@@ -121,7 +121,8 @@ export type AuditAction =
   | 'password_reset'
   | 'email_verified'
   | 'sessions_closed'
-  | 'deleted';
+  | 'deleted'
+  | 'reconciliation_created';
 
 /** Entrada de la bitácora del backend, mapeada para la UI. */
 export interface AuditLogEntry {
@@ -130,10 +131,10 @@ export interface AuditLogEntry {
   timestamp: string;
   /** `'Sistema'` cuando `actor` es `null` (bloqueo/desbloqueo automático). */
   actorName: string;
-  /** `app_user.id` de la persona afectada; puede estar dada de baja. */
-  targetBackendUserId: number;
-  /** Nombre al momento de consultar. */
-  targetUserName: string;
+  /** `app_user.id` de la persona afectada (puede estar dada de baja); `null` si la acción no es sobre un usuario. */
+  targetBackendUserId: number | null;
+  /** Nombre al momento de consultar; `null` si la acción no es sobre un usuario. */
+  targetUserName: string | null;
   /** {@link AuditAction} o un código que el front aún no conoce. */
   action: string;
   detail: string;
@@ -181,12 +182,12 @@ export const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
 ];
 
 /**
- * Roles que habilitan a una persona como "Administrador responsable" de otra.
+ * Permiso que habilita a una persona como "Administrador responsable" de otra.
  *
- * @remarks Contabilidad, Tesorería y Costos quedan fuera: son roles operativos, no de gestión de personas.
+ * @remarks Por permiso, no por rol: los roles los define cada empresa y un DEV limpio no tiene ninguno.
  * @see docs/codigo/usuarios.md#organizacion-y-responsables
  */
-export const MANAGER_ROLE_IDS: RoleId[] = ['ADMIN', 'ALTAS'];
+export const MANAGER_PERMISSION: PermissionKey = 'manage_users';
 
 /** Etiqueta en español de cada {@link AuditAction}. */
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
@@ -202,6 +203,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   email_verified: 'Correo verificado manualmente',
   sessions_closed: 'Sesiones activas cerradas',
   deleted: 'Usuario eliminado',
+  reconciliation_created: 'Conciliación creada',
 };
 
 /**

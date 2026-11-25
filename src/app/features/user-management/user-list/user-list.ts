@@ -1,10 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzInputModule } from 'ng-zorro-antd/input';
@@ -20,11 +19,12 @@ import { AccessControlService } from '../../../core/auth/access-control.service'
 import { RoleFilter, StatusFilter, UserManagementService } from '../data/user-management.service';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { StatusChip } from '../status-chip/status-chip';
+import { UserCreateModal } from '../user-create-modal/user-create-modal';
+import { PageHeaderService } from '../../../core/layout/header/page-header.service';
 
 @Component({
   selector: 'app-user-list',
   imports: [
-    NzPageHeaderModule,
     CommonModule,
     FormsModule,
     RouterLink,
@@ -38,12 +38,15 @@ import { StatusChip } from '../status-chip/status-chip';
     NzTooltipModule,
     NzModalModule,
     StatusChip,
+    UserCreateModal,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './user-list.html',
   styleUrl: './user-list.scss',
 })
 export class UserList {
+  private readonly pageHeader = inject(PageHeaderService);
+  private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
   protected readonly service = inject(UserManagementService);
   private readonly message = inject(NzMessageService);
   private readonly modal = inject(NzModalService);
@@ -53,6 +56,7 @@ export class UserList {
 
   protected readonly fullName = fullName;
   protected readonly statusMeta = STATUS_META;
+  protected readonly createModalOpen = signal(false);
   // Roles de `GET /roles`: filtro y selector de la fila.
   protected readonly roleOptions = this.accessCatalog.roleOptions;
   protected readonly rolesLoading = this.accessCatalog.loading;
@@ -70,6 +74,7 @@ export class UserList {
   ];
 
   constructor() {
+    this.pageHeader.bind(() => ({ actions: this.headerActions() ?? null }));
     // Sincroniza la lista con `GET /users` al entrar (best-effort).
     this.service.syncFromBackend();
   }

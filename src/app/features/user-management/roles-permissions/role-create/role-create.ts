@@ -1,21 +1,8 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  TemplateRef,
-  computed,
-  effect,
-  inject,
-  input,
-  linkedSignal,
-  signal,
-  untracked,
-  viewChild,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, linkedSignal, signal, TemplateRef, untracked, viewChild } from '@angular/core';
 import { rxResource, toSignal } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormControl, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { NzBreadCrumbModule } from 'ng-zorro-antd/breadcrumb';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
@@ -23,7 +10,6 @@ import { NzCollapseModule } from 'ng-zorro-antd/collapse';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
-import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { AccessCatalogService } from '../../../../core/auth/access-catalog.service';
@@ -32,6 +18,7 @@ import { PermissionDef, PermissionKey } from '../../../../shared/models/access.m
 import { fullName } from '../../data/user-management.model';
 import { UserManagementService } from '../../data/user-management.service';
 import { toRoleCode } from '../../data/role-code.util';
+import { PageHeaderService } from '../../../../core/layout/header/page-header.service';
 
 // Mismo límite que el backend (`CreateRoleRequest.name`, @Size(max = 80)).
 const ROLE_NAME_MAX_LENGTH = 80;
@@ -55,8 +42,6 @@ interface PermissionModule {
   imports: [
     ReactiveFormsModule,
     RouterLink,
-    NzPageHeaderModule,
-    NzBreadCrumbModule,
     NzButtonModule,
     NzCardModule,
     NzCheckboxModule,
@@ -70,6 +55,8 @@ interface PermissionModule {
   styleUrl: './role-create.scss',
 })
 export class RoleCreate {
+  private readonly pageHeader = inject(PageHeaderService);
+  private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
   /** `:code` de la ruta (`withComponentInputBinding`); ausente en el alta. */
   readonly code = input<string>();
 
@@ -166,6 +153,10 @@ export class RoleCreate {
   protected readonly canDelete = computed(() => this.isEdit() && !!this.original() && this.assignedUsers().length === 0);
 
   constructor() {
+    this.pageHeader.bind(() => ({
+      title: this.isEdit() ? 'Editar rol' : 'Nuevo rol',
+      actions: this.isEdit() ? (this.headerActions() ?? null) : null,
+    }));
     // Los usuarios del rol (baja deshabilitada si tiene, impacto de la edición).
     this.users.syncFromBackend();
 
@@ -286,10 +277,6 @@ export class RoleCreate {
     if (((this.auth.currentUser()?.roles ?? []) as readonly string[]).includes(code)) {
       this.auth.renewSession().subscribe();
     }
-  }
-
-  protected onBack(): void {
-    void this.router.navigate(['/gestion-de-roles']);
   }
 
   // Mismo nombre que otro rol activo (sin distinguir mayúsculas) — en edición,

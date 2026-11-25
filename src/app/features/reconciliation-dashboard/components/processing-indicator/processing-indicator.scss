@@ -1,0 +1,62 @@
+// Engranes girando, textos y barra, en columna centrada.
+.validation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.gears {
+  margin-bottom: 8px;
+}
+
+// Engranes acoplados: sentidos opuestos; el chico, más rápido (menos dientes).
+.gear {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gear-spin 6s linear infinite;
+}
+
+.gear--a {
+  color: var(--color-primary);
+}
+
+.gear--b {
+  color: var(--color-secondary);
+  animation-direction: reverse;
+  animation-duration: 4.5s;
+}
+
+.gear__hole {
+  fill: var(--color-card);
+}
+
+@keyframes gear-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gear {
+    animation: none;
+  }
+}
+
+.validation__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.validation__subtitle {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+.validation__progress {
+  width: 100%;
+  max-width: 420px;
+  margin-top: 16px;
+}

@@ -1,5 +1,4 @@
 <div class="dashboard">
-  <nz-page-header class="page-header" nzTitle="Conciliación bancaria" />
 
   <!-- Filtros y tabla -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
@@ -24,7 +23,16 @@
 
       <span class="toolbar__spacer"></span>
 
-      @if (access.hasPermission('import_settlements')) {
+      @if (service.loadFailed()) {
+        <button nz-button type="button" (click)="service.reload()">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v6h6M20 20v-6h-6M5.5 15a7 7 0 0 0 12.4 2M18.5 9A7 7 0 0 0 6.1 7" />
+          </svg>
+          Reintentar
+        </button>
+      }
+
+      @if (access.hasPermission('create_reconciliation')) {
         <button nz-button nzType="primary" type="button" (click)="openNewModal()">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 10 12 4l9 6" />
@@ -36,12 +44,21 @@
     </section>
 
     <div class="table-bleed">
+      <!-- Paginación en el servidor (GET /reconciliations) -->
       <nz-table
         #tbl
-        [nzData]="service.filteredRuns()"
-        [nzPageSize]="10"
+        [nzData]="service.runs()"
+        [nzFrontPagination]="false"
+        [nzTotal]="service.total()"
+        [nzPageIndex]="service.page()"
+        [nzPageSize]="service.pageSize()"
+        [nzShowSizeChanger]="true"
+        [nzPageSizeOptions]="pageSizes"
+        [nzLoading]="service.loading()"
+        (nzPageIndexChange)="service.setPage($event)"
+        (nzPageSizeChange)="service.setPageSize($event)"
         nzSize="middle"
-        nzNoResult="No hay conciliaciones con los filtros aplicados."
+        [nzNoResult]="service.loadFailed() ? 'No se pudieron cargar las conciliaciones.' : 'No hay conciliaciones con los filtros aplicados.'"
       >
         <thead>
           <tr>
@@ -50,6 +67,7 @@
             <th class="col-truncate" style="--col-max-width: 220px">Restaurante</th>
             <th style="width: 220px">Periodo</th>
             <th class="text-center" style="width: 140px">Estatus</th>
+            <th class="text-right" style="width: 100px">Ventas</th>
             <th class="col-truncate" style="--col-max-width: 260px">Comentarios</th>
             <th class="text-center">Acciones</th>
           </tr>
@@ -66,6 +84,7 @@
               </td>
               <td class="font-mono">{{ formatPeriod(run) }}</td>
               <td class="cell-indicator"><app-run-status-tag [status]="run.status" /></td>
+              <td class="text-right font-mono">{{ run.salesCount | number }}</td>
               <td class="col-truncate" style="--col-max-width: 260px" [attr.title]="run.comments || null">
                 {{ run.comments || '—' }}
               </td>
@@ -180,12 +199,14 @@
             />
           </div>
 
+
           <button
             nz-button
             nzType="primary"
             type="button"
             class="new-reco__submit"
             [disabled]="!canStart()"
+            [nzLoading]="creating()"
             (click)="startReconciliation()"
           >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">

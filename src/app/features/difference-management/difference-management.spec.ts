@@ -5,6 +5,7 @@ import { NzModalService } from 'ng-zorro-antd/modal';
 import { AccessControlService } from '../../core/auth/access-control.service';
 import { ACTIVE_COUNTRY, provideCountry } from '../../core/country/active-country';
 import { PermissionKey } from '../../shared/models/access.model';
+import { PageHeaderService } from '../../core/layout/header/page-header.service';
 import { DifferenceManagementService } from './data/difference-management.service';
 import { DifferenceManagement } from './difference-management';
 
@@ -51,6 +52,7 @@ describe('DifferenceManagement', () => {
     fixture.detectChanges();
   }
 
+  const pageHeader = () => TestBed.inject(PageHeaderService);
   const service = () => fixture.debugElement.injector.get(DifferenceManagementService);
   const backLink = () => el.querySelector('a[href="/conciliacion"]');
   const saveButton = () => el.querySelector<HTMLButtonElement>('.save-match-button')!;
@@ -58,17 +60,18 @@ describe('DifferenceManagement', () => {
   describe('pantalla de una orden', () => {
     beforeEach(() => render());
 
-    it('muestra el page-header con el título y el breadcrumb de vuelta', () => {
-      expect(el.querySelector('nz-page-header')!.textContent).toContain(`Gestión de diferencias — Orden ${ORDER_ID}`);
-      expect(el.querySelector('nz-breadcrumb')).not.toBeNull();
-      expect(el.querySelector('.ant-page-header-back-button')).not.toBeNull();
-      expect(backLink()).not.toBeNull();
+    it('le entrega al header el título con la orden, sin botones ni subtítulo', () => {
+      expect(pageHeader().header()).toEqual({
+        title: `Gestión de diferencias — Orden ${ORDER_ID}`,
+        subtitle: null,
+        parent: null,
+        actions: null,
+      });
     });
 
-    it('la flecha de volver navega a /conciliacion', () => {
-      el.querySelector<HTMLElement>('.ant-page-header-back-button')!.click();
-
-      expect(navigateByUrl).toHaveBeenCalledWith('/conciliacion');
+    it('no pinta su propio encabezado de página', () => {
+      expect(el.querySelector('nz-page-header')).toBeNull();
+      expect(el.querySelector('nz-breadcrumb')).toBeNull();
     });
 
     it('resume la orden: referencia y medio de pago', () => {
@@ -99,7 +102,6 @@ describe('DifferenceManagement', () => {
       expect(el.textContent).toContain('Esta orden no requiere gestión de diferencias, o no existe.');
       expect(el.textContent).toContain('Volver a conciliación');
       expect(backLink()).not.toBeNull();
-      expect(el.querySelector('nz-page-header')).toBeNull();
       expect(el.querySelector('app-candidate-list')).toBeNull();
     });
 

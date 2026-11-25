@@ -1,54 +1,48 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { toIsoDate } from '../../../shared/utils/iso-date.util';
-import { NewReconciliationRunInput, ReconciliationRun } from './reconciliation-run.model';
-import { MOCK_RECONCILIATION_RUNS } from './reconciliation-runs.mock-data';
+import { ReconciliationRun } from './reconciliation-run.model';
 
 /**
- * Conciliaciones (corridas) de la sesión, en memoria (sin backend).
+ * Conciliaciones (corridas) que la sesión ya recibió del backend, por id.
  *
- * @remarks Es `root` porque la tabla y la comparativa tienen servicios por ruta y deben ver la misma corrida.
+ * @remarks Es `root` para que la comparativa y el proceso encuentren la corrida que abrió la tabla.
+ * "Desconciliar" vive solo aquí (el backend no tiene endpoint) y se superpone a lo que llega.
  * @see docs/codigo/conciliacion.md#corridas
  */
 @Injectable({ providedIn: 'root' })
 export class ReconciliationRunsStore {
-  private readonly all = signal<ReconciliationRun[]>(MOCK_RECONCILIATION_RUNS);
+  private readonly byId = signal<ReadonlyMap<string, ReconciliationRun>>(new Map());
+  private readonly desconciliados = signal<ReadonlySet<string>>(new Set());
 
-  /** Corridas de la más reciente a la más antigua (fecha de creación y, a igual fecha, id). */
+  /** Corridas conocidas, de la más reciente a la más antigua (fecha de creación y, a igual fecha, id). */
   readonly runs = computed(() =>
-    [...this.all()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)),
+    [...this.byId().values()]
+      .map((run) => this.withLocalStatus(run))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id, undefined, { numeric: true })),
   );
 
-  /** @returns La corrida con ese id, o `null` si no existe o el id está vacío. */
+  /** @returns La corrida con ese id, o `null` si la sesión aún no la recibió o el id está vacío. */
   find(id: string | null | undefined): ReconciliationRun | null {
-    return id ? (this.all().find((run) => run.id === id) ?? null) : null;
+    const run = id ? this.byId().get(id) : undefined;
+    return run ? this.withLocalStatus(run) : null;
   }
 
-  /**
-   * Crea una corrida `pendiente` con el siguiente id `CON-NNNN`.
-   *
-   * @param now - Fecha de creación en hora local; es la fecha real, no el "hoy" fijo de los mocks.
-   */
-  create(input: NewReconciliationRunInput, now: Date = new Date()): ReconciliationRun {
-    const run: ReconciliationRun = {
-      ...input,
-      id: this.nextId(),
-      createdAt: toIsoDate(now),
-      status: 'pendiente',
-      comments: '',
-    };
-    this.all.update((current) => [...current, run]);
-    return run;
+  /** Guarda o reemplaza las corridas recibidas del backend. */
+  upsert(runs: readonly ReconciliationRun[]): void {
+    if (runs.length === 0) return;
+    this.byId.update((current) => {
+      const next = new Map(current);
+      for (const run of runs) next.set(run.id, run);
+      return next;
+    });
   }
 
-  /** Pasa la corrida a `desconciliado`; no revalida {@link canDesconciliar}, eso lo decide la tabla. */
+  /** Aplica a las corridas el "Desconciliar" de la sesión. */
+  withLocalStatus(run: ReconciliationRun): ReconciliationRun {
+    return this.desconciliados().has(run.id) ? { ...run, status: 'desconciliado' } : run;
+  }
+
+  /** Pasa la corrida a `desconciliado` en esta sesión; no revalida {@link canDesconciliar}, eso lo decide la tabla. */
   markDesconciliado(id: string): void {
-    this.all.update((current) =>
-      current.map((run) => (run.id === id ? { ...run, status: 'desconciliado' as const } : run)),
-    );
-  }
-
-  private nextId(): string {
-    const max = this.all().reduce((acc, run) => Math.max(acc, Number(run.id.replace(/\D/g, '')) || 0), 0);
-    return `CON-${String(max + 1).padStart(4, '0')}`;
+    this.desconciliados.update((current) => new Set(current).add(id));
   }
 }

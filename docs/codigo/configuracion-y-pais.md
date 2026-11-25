@@ -63,12 +63,11 @@ Código: `src/environments/environment.ts`, `environment.co.ts`, `api-url.ts`
 | `conciliacion/:tenderMedia/diferencias/:orderId` | `view_reconciliation` | Cuatro segmentos: no choca con las de dos y tres |
 | `catalogos` | — | Solo lectura para cualquier usuario autenticado (CU14); el backend no pide permiso ([catalogos.md](catalogos.md#pantalla-catalogos-cargados)) |
 | `perfil` | — | Abierta a cualquier usuario autenticado |
-| `gestion-de-roles`, `/nuevo`, `/:code` | `manage_roles` + rol `ADMIN` | `ALTAS` también tiene `manage_roles` (lo piden `GET /roles` y `GET /permissions`), por eso no basta el permiso. `:code` reutiliza el componente del alta en modo edición |
-| `usuarios`, `usuarios/nuevo`, `usuarios/:userId` | `manage_users` | |
+| `gestion-de-roles`, `/nuevo`, `/:code` | `manage_roles` | Por permiso, no por rol: un DEV limpio no tiene roles y el backend pide `manage_roles` para administrarlos. |
+| `usuarios`, `usuarios/:userId` | `manage_users` | El alta es un modal de `usuarios`, sin ruta propia |
 | `usuarios/auditoria` | `view_audit_log` | Permiso propio según la matriz 7.16 del DED |
 
-- Orden: `usuarios/auditoria` y `usuarios/nuevo` se declaran antes de `usuarios/:userId`, que si no
-  las capturaría.
+- Orden: `usuarios/auditoria` se declara antes de `usuarios/:userId`, que si no la capturaría.
 
 Código: `src/app/app.routes.ts`.
 

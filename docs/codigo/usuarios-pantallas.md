@@ -29,8 +29,8 @@ Código: `src/app/features/user-management/user-list/**`.
 <a id="detalle-carga"></a>
 ## Detalle: carga del usuario y detalle del backend
 
-La pantalla atiende `/usuarios/:userId` y, sin `:userId`, `/usuarios/nuevo` en modo alta
-(`isCreate()`). `notFound()` distingue un id inexistente o eliminado de la ausencia de id.
+La pantalla atiende `/usuarios/:userId`; el alta no es una ruta sino un modal
+([#alta-de-usuario](#alta-de-usuario)). `notFound()` indica un id inexistente o eliminado.
 
 - **Detalle del backend.** `GET /users/{id}` se pide con `rxResource` keyed en el
   `backendUserId` de la cuenta, no en `user()`: `user()` se arma a partir de ese detalle y
@@ -51,19 +51,13 @@ La pantalla atiende `/usuarios/:userId` y, sin `:userId`, `/usuarios/nuevo` en m
 Código: `src/app/features/user-management/user-detail/user-detail.ts`.
 
 <a id="detalle-formularios"></a>
-## Detalle: formularios, alta y sincronización con el usuario mostrado
+## Detalle: formularios y sincronización con el usuario mostrado
 
 - **Mezcla de APIs.** Nombre, correo y teléfono tienen validación (requerido, formato) y van en
   Reactive Forms (`infoForm`); roles, permisos y estado son controles sin reglas propias y usan
   `ngModel` ([ADR-0003](../architecture/decisions/0003-formularios.md)). Fecha de nacimiento, SSN,
   género y dirección son datos de referencia sin validadores y no se piden al crear.
 - **`orgForm`.** "Organización" se edita solo en un usuario existente y es enteramente opcional.
-- **`createForm` (alta).** `Validators.required` sobre `roleIds` exige al menos un rol.
-  Subsidiarias y ubicaciones sí se piden al crear y admiten varias
-  (`CreateUserRequest.subsidiariaIds`/`ubicacionIds`, N:M). `managerId` es un solo responsable;
-  `null` significa sin asignar y se envía como `supervisorId`
-  (ver [`usuarios.md#alta-de-usuario`](usuarios.md#alta-de-usuario)). La app es zoneless: las
-  lecturas de plantilla usan `toSignal` porque `control.value` no dispara detección de cambios.
 - **Ubicaciones por subsidiaria.** Se ofrecen solo las de las subsidiarias elegidas (todas si no hay
   ninguna); al quitar una subsidiaria se podan sus ubicaciones, solo por acción del usuario y nunca
   al precargar el detalle.
@@ -72,10 +66,32 @@ Código: `src/app/features/user-management/user-detail/user-detail.ts`.
   detalle del backend para la misma cuenta; sin ese segundo disparo se quedaría con los datos
   incompletos del registro local. Reaccionar a un guardado propio es inofensivo (mismos valores).
 - **Estado por visita.** `resetOnAccountChange` lee `userId()` para que los `linkedSignal`
-  (`isEditing`, `submittingCreate`) vuelvan a su valor inicial al cambiar de cuenta. Los borradores
+  (`isEditing`) vuelva a su valor inicial al cambiar de cuenta. Los borradores
   de roles y permisos son `linkedSignal` de `user()`.
 
-Código: `user-detail.ts` (`infoForm`, `createForm`, el `effect` de sincronización).
+Código: `user-detail.ts` (`infoForm`, `orgForm`, el `effect` de sincronización).
+
+<a id="alta-de-usuario"></a>
+## Alta de usuario (modal)
+
+"Nuevo usuario" en la lista abre `UserCreateModal` (`[(open)]` sobre `createModalOpen` de `UserList`):
+formulario a la izquierda y card de presentación a la derecha, como el modal "Nueva conciliación".
+
+- **Formulario.** Un `FormGroup` tipado (`form`). `Validators.required` sobre `roleIds` exige al menos
+  un rol. Subsidiarias y ubicaciones sí se piden al crear y admiten varias
+  (`CreateUserRequest.subsidiariaIds`/`ubicacionIds`, N:M). `managerId` es un solo responsable;
+  `null` significa sin asignar y se envía como `supervisorId`
+  (ver [`usuarios.md#alta-de-usuario`](usuarios.md#alta-de-usuario)). La app es zoneless: las
+  lecturas de plantilla usan `toSignal` porque `control.value` no dispara detección de cambios.
+- **Ubicaciones por subsidiaria.** Igual que en el detalle: solo las de las subsidiarias elegidas, y
+  quitar una subsidiaria poda sus ubicaciones.
+- **Envío.** Rechaza un correo ya presente en la lista; con `POST /users` en vuelo el botón y el cierre
+  quedan deshabilitados. Si falla, el interceptor avisa y el modal queda abierto con lo escrito. Si
+  funciona, cierra el modal y navega a `/usuarios/:id`, donde se ve la contraseña temporal.
+- **Apertura y cierre.** Un `effect` pide los combos al abrir (`ensureLoaded`) y reinicia el formulario al
+  cerrar.
+
+Código: `src/app/features/user-management/user-create-modal/**`.
 
 <a id="detalle-edicion-y-guardado"></a>
 ## Detalle: modo edición y guardado único de "Información general"

@@ -34,15 +34,13 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
     keywords: ['administración', 'administracion', 'cuentas'],
     permission: 'manage_users',
   },
-  { label: 'Nuevo usuario', path: '/usuarios/nuevo', keywords: ['crear', 'alta'], permission: 'manage_users' },
   {
     label: 'Roles y permisos',
     path: '/gestion-de-roles',
     keywords: ['roles', 'permisos', 'accesos'],
     permission: 'manage_roles',
-    role: 'ADMIN',
   },
-  { label: 'Nuevo rol', path: '/gestion-de-roles/nuevo', keywords: ['crear', 'roles', 'permisos'], permission: 'manage_roles', role: 'ADMIN' },
+  { label: 'Nuevo rol', path: '/gestion-de-roles/nuevo', keywords: ['crear', 'roles', 'permisos'], permission: 'manage_roles' },
   {
     label: 'Auditoría de usuarios',
     path: '/usuarios/auditoria',

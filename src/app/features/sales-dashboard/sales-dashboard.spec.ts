@@ -1,3 +1,4 @@
+import { formatNumber } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -10,9 +11,10 @@ import { NzOptionComponent, NzSelectComponent } from 'ng-zorro-antd/select';
 import { Subject, of, throwError } from 'rxjs';
 import { AccessControlService } from '../../core/auth/access-control.service';
 import { ACTIVE_COUNTRY, provideCountry } from '../../core/country/active-country';
+import { MoneyPipe } from '../../core/country/money.pipe';
 import { CatalogService } from '../../core/services/catalog.service';
 import { PermissionKey } from '../../shared/models/access.model';
-import { CaptureBatchResult, SaleListItem } from './data/sales-api.service';
+import { CaptureBatchResult, SaleDetail, SaleListItem } from './data/sales-api.service';
 import { SalesCatalogService } from './data/sales-catalog.service';
 import { DateRangeFilter, ReprocessTarget, SalesDashboardService } from './data/sales-dashboard.service';
 import { SalesDashboard } from './sales-dashboard';
@@ -40,6 +42,86 @@ function sale(id: number, overrides: Partial<SaleListItem> = {}): SaleListItem {
   };
 }
 
+// Detalle completo de `GET /sales/{id}` para la venta 7; cada prueba lo ajusta.
+function saleDetail(overrides: Partial<SaleDetail> = {}): SaleDetail {
+  return {
+    id: 7,
+    folio: 'A-7',
+    documentType: 'INVOICE',
+    date: '2026-10-20',
+    time: '14:05:00',
+    store: { id: 7, name: 'Centro' },
+    reconciliationStatus: { id: 10, code: 'conciliado', description: 'Conciliado' },
+    reference: { posCheckNumber: '1234', posFolio: 55 },
+    customer: {
+      id: 3,
+      documentType: { code: '31', description: 'NIT' },
+      document: '900123456',
+      checkDigit: '7',
+      name: 'Mariscos S.A.S.',
+      email: 'compras@mariscos.co',
+      phone: '6011234567',
+      mobilePhone: '3001234567',
+      address: 'Calle 1 # 2-3',
+      personType: { code: '1', description: 'Persona jurídica' },
+      taxRegime: { code: '48', description: 'Responsable de IVA' },
+      finalConsumer: false,
+    },
+    fiscal: {
+      prefix: 'FE',
+      number: '1234',
+      cufe: 'cufe-abc-123',
+      billedAt: '2026-10-20T13:45:00',
+      resolutionNumber: '18760000001',
+      dianPaymentMethods: [
+        { code: '10', description: 'Efectivo' },
+        { code: '48', description: 'Tarjeta Crédito' },
+      ],
+    },
+    lines: [
+      { seq: 1, productCode: 'P-01', description: 'Ceviche', quantity: 2, unitPrice: 30, amount: 60, taxAmount: 11.4, taxCode: '01', taxRate: 19 },
+      { seq: 2, productCode: null, description: 'Limonada', quantity: 1, unitPrice: 10, amount: 10, taxAmount: null, taxCode: null, taxRate: null },
+    ],
+    payments: [
+      {
+        seq: 1,
+        tenderMedia: { id: 2, code: 'TC', description: 'Tarjeta' },
+        dianPaymentMethod: { code: '48', description: 'Tarjeta Crédito' },
+        amount: 50,
+        cardNetwork: 'VISA',
+        acquirer: 'Credibanco',
+        approvalCode: 'AUT123',
+        paidAt: '2026-10-20T13:50:00',
+      },
+      {
+        seq: 2,
+        tenderMedia: null,
+        dianPaymentMethod: null,
+        amount: 33.4,
+        cardNetwork: null,
+        acquirer: null,
+        approvalCode: null,
+        paidAt: null,
+      },
+    ],
+    adjustments: {
+      discountTotal: 5,
+      tipTotal: 7,
+      otherChargesTotal: 0,
+      items: [
+        { seq: 1, kind: 'DISCOUNT', reason: 'Cliente frecuente', percentage: 10, amount: 5 },
+        { seq: 2, kind: 'TIP', reason: null, percentage: null, amount: 7 },
+      ],
+    },
+    taxes: [
+      { code: '01', rate: 19, base: 60, amount: 11.4 },
+      { code: '22', rate: 66, base: 1, amount: 66 },
+    ],
+    breakdown: { linesTotal: 70, subtotal: 65, taxes: 11.4, charges: 7, total: 83.4, totalPaid: 83.4 },
+    ...overrides,
+  };
+}
+
 function captureResult(overrides: Partial<CaptureBatchResult> = {}): CaptureBatchResult {
   return {
     status: 'OK',
@@ -63,6 +145,10 @@ function captureResult(overrides: Partial<CaptureBatchResult> = {}): CaptureBatc
 function createServiceStub() {
   return {
     selectedSale: signal<SaleListItem | null>(null),
+    saleDetail: signal<SaleDetail | null>(null),
+    saleDetailLoading: signal(false),
+    saleDetailFailed: signal(false),
+    reloadSaleDetail: vi.fn(),
     dateRange: signal<DateRangeFilter>(null),
     subsidiariaFilter: signal<number | 'all'>('all'),
     storeFilter: signal<number | 'all'>('all'),
@@ -189,8 +275,8 @@ describe('SalesDashboard', () => {
       expect(salesCatalog.ensureLoaded).toHaveBeenCalledTimes(1);
     });
 
-    it('muestra el título y la columna de ubicación con el vocabulario del país', () => {
-      expect(el.querySelector('nz-page-header')?.textContent).toContain('Resumen de venta');
+    it('no pinta su título (lo da el header) y muestra la columna de ubicación con el vocabulario del país', () => {
+      expect(el.querySelector('nz-page-header')).toBeNull();
       const headers = Array.from(el.querySelectorAll('thead th')).map((th) => th.textContent?.trim());
       expect(headers).toContain(ACTIVE_COUNTRY.vocabulary.location);
     });
@@ -276,6 +362,275 @@ describe('SalesDashboard', () => {
       expect(drawer?.textContent).toContain('Venta A-7');
       expect(drawer?.textContent).toContain('XAXX010101000');
       expect(drawer?.textContent).toContain('(pago mixto: 2 pagos)');
+    });
+  });
+
+  describe('detalle de la venta (drawer)', () => {
+    const norm = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
+    const money = (value: number) => norm(TestBed.runInInjectionContext(() => new MoneyPipe().transform(value)));
+    const drawer = () => document.querySelector<HTMLElement>('.ant-drawer')!;
+    const headings = () => Array.from(drawer().querySelectorAll('.sale-drawer__heading')).map((h) => norm(h.textContent));
+    const section = (heading: string) =>
+      Array.from(drawer().querySelectorAll<HTMLElement>('.sale-drawer__section')).find(
+        (s) => norm(s.querySelector('.sale-drawer__heading')?.textContent) === heading,
+      );
+    // Campos `label -> valor` de una sección con `.info-field`.
+    const fields = (heading: string) =>
+      Object.fromEntries(
+        Array.from(section(heading)!.querySelectorAll('.info-field')).map((f) => [
+          norm(f.querySelector('.info-field__label')?.textContent),
+          norm(f.querySelector('.info-field__value')?.textContent),
+        ]),
+      );
+    // Sin el placeholder ni la fila de medición que agrega `nzScroll` (celdas vacías).
+    const tableRowsOf = (heading: string) =>
+      Array.from(section(heading)!.querySelectorAll('tbody tr'))
+        .filter((tr) => !tr.classList.contains('ant-table-placeholder'))
+        .map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => norm(td.textContent)))
+        .filter((cells) => cells.some((cell) => cell !== ''));
+
+    async function open(detail: SaleDetail | null = saleDetail(), row: SaleListItem = sale(7)): Promise<void> {
+      service.selectedSale.set(row);
+      service.saleDetail.set(detail);
+      await render();
+    }
+
+    beforeEach(() => setup());
+
+    it('con el detalle pinta las secciones en orden', async () => {
+      await open();
+
+      expect(headings()).toEqual([
+        'Resumen de la venta',
+        'Cliente',
+        'Comprobante fiscal',
+        'Productos',
+        'Pagos',
+        'Descuentos y propinas',
+        'Impuestos',
+        'Importes',
+      ]);
+    });
+
+    it('sin detalle (aún no llega) solo muestra el resumen de la fila y los importes', async () => {
+      await open(null);
+
+      expect(headings()).toEqual(['Resumen de la venta', 'Importes']);
+    });
+
+    describe('Cliente', () => {
+      it('muestra nombre, documento con dígito de verificación, tipo de persona, régimen, correo, celular y dirección', async () => {
+        await open();
+
+        expect(fields('Cliente')).toEqual({
+          Nombre: 'Mariscos S.A.S.',
+          Documento: 'NIT 900123456-7',
+          'Tipo de persona': 'Persona jurídica',
+          'Régimen fiscal': 'Responsable de IVA',
+          Correo: 'compras@mariscos.co',
+          Teléfono: '3001234567',
+          Dirección: 'Calle 1 # 2-3',
+        });
+      });
+
+      it('sin celular usa el teléfono fijo y los datos ausentes van como "—"', async () => {
+        const base = saleDetail().customer!;
+        await open(
+          saleDetail({
+            customer: { ...base, mobilePhone: null, email: null, address: null, personType: null, taxRegime: null, checkDigit: null },
+          }),
+        );
+
+        expect(fields('Cliente')).toMatchObject({
+          Documento: 'NIT 900123456',
+          'Tipo de persona': '—',
+          'Régimen fiscal': '—',
+          Correo: '—',
+          Teléfono: '6011234567',
+          Dirección: '—',
+        });
+      });
+
+      it('sin ningún teléfono muestra "—"', async () => {
+        await open(saleDetail({ customer: { ...saleDetail().customer!, mobilePhone: null, phone: null } }));
+
+        expect(fields('Cliente')['Teléfono']).toBe('—');
+      });
+
+      it('sin cliente no pinta la sección', async () => {
+        await open(saleDetail({ customer: null }));
+
+        expect(section('Cliente')).toBeUndefined();
+      });
+    });
+
+    describe('Comprobante fiscal', () => {
+      it('muestra número (prefijo + número), fecha de facturación, resolución, medios DIAN y CUFE', async () => {
+        await open();
+
+        expect(fields('Comprobante fiscal')).toEqual({
+          Número: 'FE1234',
+          Facturada: '20/10/2026 13:45',
+          'Resolución DIAN': '18760000001',
+          'Medios de pago DIAN': '10 Efectivo, 48 Tarjeta Crédito',
+          CUFE: 'cufe-abc-123',
+        });
+        expect(section('Comprobante fiscal')!.querySelector('.sale-drawer__cufe')!.getAttribute('title')).toBe('cufe-abc-123');
+      });
+
+      it('sin datos fiscales muestra "—" en cada campo', async () => {
+        await open(
+          saleDetail({
+            fiscal: { prefix: null, number: null, cufe: null, billedAt: null, resolutionNumber: null, dianPaymentMethods: [] },
+          }),
+        );
+
+        expect(fields('Comprobante fiscal')).toEqual({
+          Número: '—',
+          Facturada: '—',
+          'Resolución DIAN': '—',
+          'Medios de pago DIAN': '—',
+          CUFE: '—',
+        });
+      });
+
+      it('sin comprobante no pinta la sección', async () => {
+        await open(saleDetail({ fiscal: null }));
+
+        expect(section('Comprobante fiscal')).toBeUndefined();
+      });
+    });
+
+    describe('Productos', () => {
+      it('lista cada línea con código, cantidad, precio, impuesto e importe', async () => {
+        await open();
+
+        expect(tableRowsOf('Productos')).toEqual([
+          ['Ceviche (P-01)', formatNumber(2, ACTIVE_COUNTRY.locale, '1.0-3'), money(30), money(11.4), money(60)],
+          ['Limonada', formatNumber(1, ACTIVE_COUNTRY.locale, '1.0-3'), money(10), '—', money(10)],
+        ]);
+      });
+
+      it('sin líneas capturadas muestra el aviso', async () => {
+        await open(saleDetail({ lines: [] }));
+
+        expect(tableRowsOf('Productos')).toEqual([]);
+        expect(norm(section('Productos')!.textContent)).toContain('Los productos de esta venta aún no se capturaron.');
+      });
+    });
+
+    describe('Pagos', () => {
+      it('muestra medio con su código DIAN, franquicia y adquirente, aprobación, fecha e importe', async () => {
+        await open();
+
+        expect(tableRowsOf('Pagos')).toEqual([
+          ['Tarjeta · DIAN 48', 'VISA · Credibanco', 'AUT123', '20/10/2026 13:50', money(50)],
+          ['—', '—', '—', '—', money(33.4)],
+        ]);
+      });
+
+      it('sin pagos muestra el aviso', async () => {
+        await open(saleDetail({ payments: [] }));
+
+        expect(norm(section('Pagos')!.textContent)).toContain('La venta no tiene pagos.');
+      });
+    });
+
+    describe('Descuentos y propinas', () => {
+      it('distingue descuento de propina y muestra motivo, porcentaje e importe', async () => {
+        await open();
+
+        expect(tableRowsOf('Descuentos y propinas')).toEqual([
+          ['Descuento', 'Cliente frecuente', `${formatNumber(10, ACTIVE_COUNTRY.locale, '1.0-2')} %`, money(5)],
+          ['Propina / recargo', '—', '—', money(7)],
+        ]);
+      });
+
+      it('sin ajustes o con la lista vacía no pinta la sección', async () => {
+        await open(saleDetail({ adjustments: null }));
+        expect(section('Descuentos y propinas')).toBeUndefined();
+
+        service.saleDetail.set(saleDetail({ adjustments: { discountTotal: 0, tipTotal: 0, otherChargesTotal: 0, items: [] } }));
+        await render();
+        expect(section('Descuentos y propinas')).toBeUndefined();
+      });
+    });
+
+    describe('Impuestos', () => {
+      it('muestra el tributo con su nombre DIAN, la tasa, la base y el impuesto', async () => {
+        await open();
+
+        expect(tableRowsOf('Impuestos')).toEqual([
+          ['IVA (01)', `${formatNumber(19, ACTIVE_COUNTRY.locale, '1.0-2')} %`, money(60), money(11.4)],
+          // La bolsa (22) es un valor por unidad: sin "%".
+          ['Impuesto a las bolsas (22)', formatNumber(66, ACTIVE_COUNTRY.locale, '1.0-2'), money(1), money(66)],
+        ]);
+      });
+
+      it('sin impuestos no pinta la sección', async () => {
+        await open(saleDetail({ taxes: [] }));
+
+        expect(section('Impuestos')).toBeUndefined();
+      });
+    });
+
+    describe('Importes', () => {
+      it('con el desglose del back muestra subtotal, impuestos, propinas, total y total pagado de él', async () => {
+        await open();
+
+        expect(fields('Importes')).toEqual({
+          Subtotal: money(65),
+          Impuestos: money(11.4),
+          'Propinas y recargos': money(7),
+          Total: money(83.4),
+          'Total pagado': money(83.4),
+        });
+      });
+
+      it('sin desglose usa los importes de la fila, sin propinas ni total pagado', async () => {
+        await open(saleDetail({ breakdown: null }));
+
+        expect(fields('Importes')).toEqual({ Subtotal: money(100), Impuestos: money(16), Total: money(116) });
+      });
+
+      it('sin detalle también usa los importes de la fila', async () => {
+        await open(null);
+
+        expect(fields('Importes')).toEqual({ Subtotal: money(100), Impuestos: money(16), Total: money(116) });
+      });
+    });
+
+    describe('carga y error', () => {
+      const note = () => drawer().querySelector<HTMLElement>('.sale-drawer__note');
+      const retry = () =>
+        Array.from(drawer().querySelectorAll<HTMLButtonElement>('button')).find((b) => norm(b.textContent) === 'Reintentar');
+
+      it('mientras carga muestra el aviso, sin botón de reintentar', async () => {
+        service.saleDetailLoading.set(true);
+        await open(null);
+
+        expect(norm(note()?.textContent)).toBe('Cargando el detalle de la venta…');
+        expect(retry()).toBeUndefined();
+      });
+
+      it('si falló muestra el error con "Reintentar" (icono + label) y vuelve a pedir el detalle', async () => {
+        service.saleDetailFailed.set(true);
+        await open(null);
+
+        expect(norm(note()?.textContent)).toContain('No se pudo cargar el detalle de la venta.');
+        const button = retry()!;
+        expect(button.firstElementChild?.tagName.toLowerCase()).toBe('svg');
+
+        button.click();
+
+        expect(service.reloadSaleDetail).toHaveBeenCalledTimes(1);
+      });
+
+      it('con el detalle cargado no muestra avisos', async () => {
+        await open();
+
+        expect(note()).toBeNull();
+      });
     });
   });
 

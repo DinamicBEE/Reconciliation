@@ -2,10 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
-import { NzBreadCrumbModule } from 'ng-zorro-antd/breadcrumb';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzInputModule } from 'ng-zorro-antd/input';
@@ -31,14 +29,13 @@ interface AuditQuery {
  */
 @Component({
   selector: 'app-user-audit',
-  imports: [CommonModule, FormsModule, RouterLink, NzPageHeaderModule, NzBreadCrumbModule, NzCardModule, NzTableModule, NzSelectModule, NzInputModule],
+  imports: [CommonModule, FormsModule, NzCardModule, NzTableModule, NzSelectModule, NzInputModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './user-audit.html',
   styleUrl: './user-audit.scss',
 })
 export class UserAudit {
   private readonly audit = inject(AuditLogService);
-  private readonly router = inject(Router);
   protected readonly auditActionLabel = auditActionLabel;
   protected readonly pageSize = PAGE_SIZE;
 
@@ -85,10 +82,6 @@ export class UserAudit {
         this.entries.set(result.entries);
         this.total.set(result.totalElements);
       });
-  }
-
-  protected onBack(): void {
-    void this.router.navigateByUrl('/usuarios');
   }
 
   protected onSearchChange(value: string): void {

@@ -1,4 +1,4 @@
-import { Injectable, Signal, computed, inject, linkedSignal, signal } from '@angular/core';
+import { Injectable, Signal, computed, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { SettlementTransaction, TenderMedia, TransactionMatch } from '../../../shared/models/reconciliation-item.model';
 import { MOCK_SALES, MOCK_SETTLEMENTS } from '../../../shared/mock-data/sales-settlements.mock-data';
 import { crossMatchTransactions } from '../../../shared/utils/cross-match.util';
@@ -35,6 +35,11 @@ export class DifferenceManagementService {
   // Cambia solo al pasar a otra orden: reinicia la sesión de resolución.
   private readonly orderKey = computed(() => `${this.tenderMediaSignal() ?? ''}|${this.orderIdSignal() ?? ''}`);
 
+  // Liquidaciones que la pantalla trae ya elegidas y las sugeridas aparte (`bindSeed`): reemplazan al pool.
+  private readonly seed = signal<{ selected: Signal<SettlementTransaction[]>; suggested: Signal<SettlementTransaction[]> } | null>(null);
+  private readonly seeded = computed(() => this.seed()?.selected() ?? []);
+  private readonly selectionKey = computed(() => `${this.orderKey()}|${this.seeded().map((s) => s.id).join(',')}`);
+
   private readonly importedSettlements = linkedSignal<string, SettlementTransaction[]>({
     source: this.orderKey,
     computation: () => [],
@@ -43,8 +48,10 @@ export class DifferenceManagementService {
   // settlement.id -> origen; solo guarda las seleccionadas. Con `amount_mismatch`
   // arranca con la liquidación sugerida por el motor.
   private readonly selection = linkedSignal<string, Map<string, MatchOrigin>>({
-    source: this.orderKey,
+    source: this.selectionKey,
     computation: () => {
+      const seeded = untracked(() => this.seeded());
+      if (seeded.length > 0) return new Map(seeded.map((s) => [s.id, 'backend' as MatchOrigin]));
       const tenderMedia = this.tenderMediaSignal();
       const orderId = this.orderIdSignal();
       const order = tenderMedia && orderId ? (this.crossMatchFor(tenderMedia).find((m) => m.orderId === orderId) ?? null) : null;
@@ -94,6 +101,17 @@ export class DifferenceManagementService {
   });
 
   readonly candidates = computed<MatchCandidate[]>(() => {
+    const seed = this.seed();
+    if (seed) {
+      const selectedIds = new Set(this.seeded().map((s) => s.id));
+      return [
+        ...this.seeded().map((settlement) => ({ settlement, suggestedByBackend: true })),
+        ...seed
+          .suggested()
+          .filter((s) => !selectedIds.has(s.id))
+          .map((settlement) => ({ settlement, suggestedByBackend: false })),
+      ];
+    }
     const order = this.order();
     if (!order?.sale) return [];
     return findMatchCandidates(order.sale, this.candidatePool(), order.settlement?.id ?? null);
@@ -125,6 +143,11 @@ export class DifferenceManagementService {
    */
   bindOrder(tenderMedia: Signal<TenderMedia | null>, orderId: Signal<string | null>): void {
     this.source.set({ tenderMedia, orderId });
+  }
+
+  /** Siembra la lista: `selected` arrancan seleccionadas y `suggested` van detrás sin seleccionar. */
+  bindSeed(selected: Signal<SettlementTransaction[]>, suggested: Signal<SettlementTransaction[]>): void {
+    this.seed.set({ selected, suggested });
   }
 
   setImportErrors(errors: string[]): void {

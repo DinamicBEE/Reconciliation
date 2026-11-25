@@ -239,7 +239,7 @@ Objetivo (verificable con lint de límites cuando se instale; mientras, en revis
   `CommonModule` solo si se usan sus pipes; preferir importar el pipe concreto.
 - **Routing:** toda pantalla es `loadComponent` lazy (ya es así). Rutas hijas protegidas cuelgan de
   `Shell` con `authGuard`; cada ruta declara `data.permission`. Rutas estáticas antes que las
-  paramétricas (`usuarios/nuevo` antes de `usuarios/:userId`). Si una pantalla agrupa varias rutas
+  paramétricas (`usuarios/auditoria` antes de `usuarios/:userId`). Si una pantalla agrupa varias rutas
   hijas, `loadChildren` con su propio `*.routes.ts` dentro de la feature.
 - **Guards/resolvers:** funcionales (`CanActivateFn`). Redirigen con `router.parseUrl(...)`, no
   `false` en seco. No se usan resolvers para cargar datos: la pantalla muestra su propio estado de
@@ -305,7 +305,7 @@ Decisión y evaluación de Signal Forms en [ADR-0003](decisions/0003-formularios
 - **Formularios de captura/edición (validación, envío, errores del backend):** Reactive Forms
   tipados (`FormBuilder.nonNullable`, `FormGroup<T>`), con `nz-form-item`/`nz-form-control` y
   `nzErrorTip`. Es lo que ya usan login, cambio de contraseña, perfil, roles y detalle de usuario
-  (incluido el alta: `UserDetail.createForm`, ADR-0003). Un campo de un formulario reactivo que la
+  (incluido el alta: `UserCreateModal.form`, ADR-0003). Un campo de un formulario reactivo que la
   plantilla deba leer en una app zoneless se expone con `toSignal(control.valueChanges)`, no
   leyendo `control.value` en la plantilla.
 - **Excepción aceptada:** "Seguridad y acceso" en `UserDetail` (roles + grid de permisos con su

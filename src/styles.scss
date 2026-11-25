@@ -137,6 +137,10 @@ html body .ant-page-header {
   background: transparent;
 }
 
+html body .ant-page-header.has-breadcrumb {
+  padding-top: 0;
+}
+
 html body .ant-page-header-heading {
   align-items: center;
 }
@@ -179,7 +183,7 @@ html body .ant-page-header-content {
 }
 
 html body .ant-page-header .ant-breadcrumb {
-  margin-bottom: 6px;
+  margin-bottom: 2px;
   font-size: 13px;
   color: var(--color-muted-foreground);
 

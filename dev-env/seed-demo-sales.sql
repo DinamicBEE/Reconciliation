@@ -26,9 +26,9 @@ ON CONFLICT DO NOTHING;
 
 -- Documentos.
 WITH gen AS (
-  SELECT u.id AS ubicacion_id, u.prefijo_fiscal AS prefix, d::date AS business_date,
+  SELECT u.id AS location_id, u.fiscal_prefix AS prefix, d::date AS business_date,
          row_number() OVER (ORDER BY u.id, d, n) AS rn
-  FROM ubicacion u
+  FROM location u
   CROSS JOIN generate_series(DATE '2026-10-05', DATE '2026-10-11', INTERVAL '1 day') AS d
   CROSS JOIN generate_series(1, 4) AS n
   WHERE u.enabled
@@ -39,9 +39,9 @@ priced AS (
          CASE WHEN g.rn % 11 = 0 THEN round((2000 + (g.rn * 131) % 6000)::numeric, 2) ELSE 0 END AS charges
   FROM gen g
 )
-INSERT INTO sale_document (ubicacion_id, doc_type, prefix, folio, business_date, business_time, customer_id,
+INSERT INTO sale_document (location_id, doc_type, prefix, folio, business_date, business_time, customer_id,
                            reconciliation_status_id, subtotal, total_taxes, total_charges, total)
-SELECT p.ubicacion_id,
+SELECT p.location_id,
        CASE WHEN p.rn % 23 = 0 THEN 2 ELSE 1 END,
        p.prefix,
        'D' || lpad(p.rn::text, 5, '0'),
@@ -58,7 +58,7 @@ JOIN customer c ON c.document = (ARRAY['222222222222', '222222222222', '10203040
                                        '52345678', '222222222222', '900123456', '830987654'])[(p.rn % 9) + 1]
 JOIN catalog_reconciliation_status s
   ON s.code = (ARRAY['por_conciliar', 'conciliado', 'por_conciliar', 'conciliado', 'desconciliado'])[(p.rn % 5) + 1]
-ON CONFLICT (ubicacion_id, doc_type, prefix, folio) DO NOTHING;
+ON CONFLICT (location_id, doc_type, prefix, folio) DO NOTHING;
 
 -- Pagos: uno por documento; 1 de cada 7 es mixto (60 % / 40 % con dos medios distintos).
 WITH docs AS (

@@ -9,8 +9,10 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { NgStyle } from '@angular/common';
-import { Router } from '@angular/router';
+import { NgStyle, NgTemplateOutlet } from '@angular/common';
+import { Router, RouterLink } from '@angular/router';
+import { NzBreadCrumbModule } from 'ng-zorro-antd/breadcrumb';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzPopoverModule } from 'ng-zorro-antd/popover';
 import { ThemeService } from '../../services/theme.service';
@@ -20,15 +22,16 @@ import { AuthService } from '../../auth/auth.service';
 import { AccessCatalogService } from '../../auth/access-catalog.service';
 import { avatarTokensFor, initialsFor } from '../../../shared/utils/avatar-color.util';
 import { SEARCHABLE_PAGES, SearchablePage, searchPages } from './header-search.util';
+import { PageHeaderParent, PageHeaderService } from './page-header.service';
 
 /**
- * Header del layout: búsqueda de pantallas, notificaciones y menú del avatar.
+ * Header del layout: título de la pantalla activa, búsqueda de pantallas, notificaciones y menú del avatar.
  *
  * @see docs/codigo/layout-y-tema.md#header
  */
 @Component({
   selector: 'app-header',
-  imports: [NzAvatarModule, NzPopoverModule, NgStyle],
+  imports: [NzAvatarModule, NzPopoverModule, NzPageHeaderModule, NzBreadCrumbModule, NgStyle, NgTemplateOutlet, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './header.html',
   styleUrl: './header.scss',
@@ -40,6 +43,7 @@ export class Header {
   protected readonly access = inject(AccessControlService);
   private readonly accessCatalog = inject(AccessCatalogService);
   private readonly router = inject(Router);
+  protected readonly pageHeader = inject(PageHeaderService);
 
   private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
   private readonly avatarMenuRoot = viewChild<ElementRef<HTMLElement>>('avatarMenuRoot');
@@ -66,6 +70,11 @@ export class Header {
         this.searchInput()?.nativeElement.focus();
       }
     });
+  }
+
+  // Navega a la pantalla padre, no `Location.back()`: no depende del historial.
+  protected goBack(parent: PageHeaderParent): void {
+    void this.router.navigateByUrl(parent.path);
   }
 
   protected openSearch(): void {

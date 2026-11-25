@@ -53,6 +53,87 @@ export interface SalesListPage {
   pageSize: number;
 }
 
+/** Código con su significado según un catálogo DIAN. */
+export interface DianCode {
+  code: string;
+  description: string;
+}
+
+/**
+ * Detalle de `GET /sales/{id}`: la venta completa del panel "Venta F-xxxxx".
+ *
+ * @remarks Los importes llegan como están guardados; `lines` viene vacío si aún no se capturaron.
+ * @see docs/codigo/ventas.md#detalle-de-venta
+ */
+export interface SaleDetail {
+  id: number;
+  folio: string;
+  documentType: SaleDocumentType;
+  date: string; // yyyy-MM-dd
+  time: string | null; // HH:mm:ss
+  store: { id: number; name: string };
+  reconciliationStatus: { id: number; code: string; description: string };
+  reference: { posCheckNumber: string | null; posFolio: number | null } | null;
+  customer: {
+    id: number;
+    documentType: DianCode | null;
+    document: string;
+    checkDigit: string | null;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    mobilePhone: string | null;
+    address: string | null;
+    personType: DianCode | null;
+    taxRegime: DianCode | null;
+    finalConsumer: boolean;
+  } | null;
+  fiscal: {
+    prefix: string | null;
+    number: string | null;
+    cufe: string | null;
+    billedAt: string | null; // fecha y hora de Bogotá, sin zona
+    resolutionNumber: string | null;
+    dianPaymentMethods: DianCode[];
+  } | null;
+  lines: {
+    seq: number;
+    productCode: string | null;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    amount: number;
+    taxAmount: number | null;
+    taxCode: string | null;
+    taxRate: number | null;
+  }[];
+  payments: {
+    seq: number;
+    tenderMedia: { id: number; code: string; description: string } | null;
+    dianPaymentMethod: DianCode | null;
+    amount: number;
+    cardNetwork: string | null;
+    acquirer: string | null;
+    approvalCode: string | null;
+    paidAt: string | null;
+  }[];
+  adjustments: {
+    discountTotal: number;
+    tipTotal: number;
+    otherChargesTotal: number;
+    items: { seq: number; kind: string; reason: string | null; percentage: number | null; amount: number }[];
+  } | null;
+  taxes: { code: string; rate: number; base: number; amount: number }[];
+  breakdown: {
+    linesTotal: number | null;
+    subtotal: number;
+    taxes: number;
+    charges: number;
+    total: number;
+    totalPaid: number;
+  } | null;
+}
+
 /** Máximo `pageSize` que acepta `GET /sales`. */
 export const SALES_MAX_PAGE_SIZE = 100;
 
@@ -134,6 +215,11 @@ export class SalesApiService {
     return this.http.post<CaptureBatchResult>(`${this.apiUrl}/sales/capture`, request, {
       context: new HttpContext().set(SKIP_HTTP_ERROR_ALERT, true),
     });
+  }
+
+  /** Detalle completo de una venta; `id` es el de la fila de `GET /sales`. 404 si no existe. */
+  detail(id: number): Observable<SaleDetail> {
+    return this.http.get<SaleDetail>(`${this.apiUrl}/sales/${id}`);
   }
 
   list(params: SalesListParams): Observable<SalesListPage> {

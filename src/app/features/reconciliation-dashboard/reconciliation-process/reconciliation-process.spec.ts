@@ -1,17 +1,32 @@
 import { formatNumber } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalService } from 'ng-zorro-antd/modal';
-import { Subject } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import type { Mock } from 'vitest';
 import { AccessControlService } from '../../../core/auth/access-control.service';
 import { ACTIVE_COUNTRY, provideCountry } from '../../../core/country/active-country';
 import { MoneyPipe } from '../../../core/country/money.pipe';
-import { BankStatementReader } from '../data/bank-statement-reader.service';
-import { BankStatementResult } from '../data/bank-statement.util';
-import { ReconciliationProcessApi, SubmitBankStatementResponse } from '../data/reconciliation-process-api.service';
-import { ReconciliationLineSide, ReconciliationResult, ReconciliationResultRow } from '../data/reconciliation-result.model';
+import { PageHeaderService } from '../../../core/layout/header/page-header.service';
+import { BankCatalogService, BankOption } from '../data/bank-catalog.service';
+import {
+  BankMatchItem,
+  BankMatchSummary,
+  BankReportApiService,
+  BankReportImport,
+  BankReportRead,
+  BankMatchResults,
+  ReconciliationConfirm,
+  ReconciliationHeader,
+  toResultRow,
+} from '../data/bank-report-api.service';
+import { ReconciliationBankMovement, ReconciliationResult, ReconciliationResultRow } from '../data/reconciliation-result.model';
+import { MOCK_RECONCILIATION_RUNS } from '../data/reconciliation-runs.mock-data';
+import { ReconciliationRunsStore } from '../data/reconciliation-runs.store';
 import { LINE_ACTION_LABEL, LineResolution } from './line-detail/line-detail';
 import { ReconciliationProcess } from './reconciliation-process';
 
@@ -21,166 +36,221 @@ function xlsx(name = 'bancolombia_Reporte_Conciliar_20260702_20260706.xlsx', con
   return new File([content], name, { type: XLSX_TYPE });
 }
 
-const VALID: BankStatementResult = {
-  state: 'valid',
-  summary: { totalRecords: 12345, totalAmount: 1234567.5, dateFrom: '2026-07-02', dateTo: '2026-07-06' },
-  reason: null,
-  missingColumns: [],
-  invalidRows: [],
-};
+const BANCOLOMBIA: BankOption = { id: 1, code: 'BANCOLOMBIA', name: 'Bancolombia' };
+const OTHER_BANK: BankOption = { id: 2, code: 'OTRO', name: 'Otro Banco' };
 
-const INVALID: BankStatementResult = {
-  state: 'invalid',
-  summary: null,
-  reason: 'No coincide con el formato del reporte de Bancolombia: faltan columnas.',
-  missingColumns: ['NIT', 'VALOR TOTAL', 'FECHA DE CANJE'],
-  invalidRows: [],
-};
+// Vista previa del back (`POST /bank-reports/read`): por defecto, un reporte válido.
+function readResponse(overrides: Partial<BankReportRead> = {}): BankReportRead {
+  return {
+    bank: 'BANCOLOMBIA',
+    fileName: 'reporte.xlsx',
+    sheetName: 'Hoja1',
+    transactions: 12345,
+    transactionDateFrom: '2026-07-02',
+    transactionDateTo: '2026-07-06',
+    duplicateTransactions: 0,
+    totals: {
+      purchase: 1200000,
+      tip: 0,
+      vat: 0,
+      consumptionTax: 0,
+      total: 1234567.5,
+      commission: 0,
+      withholdingTax: 0,
+      withholdingVat: 0,
+      withholdingIca: 0,
+      net: 1234567.5,
+    },
+    byDay: [],
+    byEstablishment: [],
+    byNetwork: [],
+    problems: [],
+    ...overrides,
+  };
+}
 
-const MISSING_FIELDS: BankStatementResult = {
-  state: 'missing_fields',
-  summary: null,
-  reason: '2 fila(s) con campos inválidos.',
-  missingColumns: [],
-  invalidRows: [
-    { row: 3, fields: ['VALOR TOTAL'] },
-    { row: 8, fields: ['VALOR TOTAL', 'FECHA DE CANJE'] },
+const READ_VALID = readResponse();
+const READ_MISSING_FIELDS = readResponse({
+  problems: [
+    { row: 3, message: 'VALOR TOTAL' },
+    { row: 8, message: 'VALOR TOTAL, FECHA DE CANJE' },
   ],
+});
+const READ_EMPTY = readResponse({ transactions: 0, transactionDateFrom: null, transactionDateTo: null });
+
+function httpError(status: number, detail?: string): HttpErrorResponse {
+  return new HttpErrorResponse({ status, error: detail === undefined ? null : { detail } });
+}
+
+// 400: el back no reconoce el archivo como reporte del banco.
+const NOT_A_REPORT = httpError(400, 'No coincide con el formato del reporte de Bancolombia.');
+const SERVER_ERROR = httpError(500);
+
+const IMPORTED: BankReportImport = {
+  fileId: 77,
+  bank: 'BANCOLOMBIA',
+  fileName: 'bancolombia_Reporte_Conciliar_20260702_20260706.xlsx',
+  alreadyLoaded: false,
+  transactionsRead: 4,
+  inserted: 4,
+  skipped: 0,
+  transactionDateFrom: '2026-09-05',
+  transactionDateTo: '2026-09-12',
+  problems: [],
 };
 
-const ERROR: BankStatementResult = {
-  state: 'error',
-  summary: null,
-  reason: 'No se pudo leer el archivo.',
-  missingColumns: [],
-  invalidRows: [],
+// Tarjetas del cruce: el total y los porcentajes vienen del back, no de las filas.
+const SUMMARY: BankMatchSummary = {
+  total: 1243,
+  matches: { count: 1120, percent: 90.1 },
+  differences: { count: 62, percent: 5 },
+  unmatched: { count: 61, percent: 4.9 },
+  toManage: { count: 123, percent: 9.9 },
 };
 
-const side = (reference: string, amount: number): ReconciliationLineSide => ({
+function matchItem(
+  id: number,
+  reference: string,
+  date: string,
+  pos: number | null,
+  bank: number | null,
+  status: BankMatchItem['status'],
+  description: string | null,
+): BankMatchItem {
+  return { id, date, reference, description, pos, bank, difference: null, status, rule: null };
+}
+
+// Una coincidencia, una diferencia, una solo POS (sin franquicia: el canal es el banco) y una solo banco.
+const ITEMS: BankMatchItem[] = [
+  matchItem(1, 'BBVA-0001', '2026-09-12', 2000, 2000, 'MATCH', 'VISA'),
+  matchItem(2, 'CORTE-0827-02', '2026-09-10', 1234.5, 1200, 'DIFFERENCE', 'MASTERCARD'),
+  matchItem(3, 'RAP-0001', '2026-09-08', 350, null, 'UNMATCHED', null),
+  matchItem(4, 'DIDI-0001', '2026-09-05', null, 99.9, 'UNMATCHED', 'AMEX'),
+];
+
+// Filas tal como las arma el componente con `toResultRow` (ids '1'…'4').
+const ROWS: ReconciliationResultRow[] = ITEMS.map((item) => toResultRow(item, BANCOLOMBIA.name));
+
+const movement = (reference: string, amount: number, id = `M-${reference}`): ReconciliationBankMovement => ({
+  id,
+  date: '2026-09-10',
   reference,
   amount,
   concept: `Concepto ${reference}`,
   paymentMethod: 'Tarjeta',
 });
 
-// `efectivo`/`CORTE-0827-02` existe como `amount_mismatch` en el mock: el detalle tiene candidatos reales.
-const ROWS: ReconciliationResultRow[] = [
-  {
-    id: 'bbva:BBVA-0001',
-    date: '2026-09-12',
-    reference: 'BBVA-0001',
-    tenderMedia: 'bbva',
-    pos: side('BBVA-0001', 2000),
-    bank: side('BBVA-0001', 2000),
-    difference: 0,
-    comment: 'Coincide sin diferencias.',
-    status: 'coincide',
-  },
-  {
-    id: 'efectivo:CORTE-0827-02',
-    date: '2026-09-10',
-    reference: 'CORTE-0827-02',
-    tenderMedia: 'efectivo',
-    pos: side('CORTE-0827-02', 1234.5),
-    bank: side('CORTE-0827-02', 1200),
-    difference: 34.5,
-    comment: 'El banco liquidó un monto distinto.',
-    status: 'diferencia',
-  },
-  {
-    id: 'rappi:RAP-0001',
-    date: '2026-09-08',
-    reference: 'RAP-0001',
-    tenderMedia: 'rappi',
-    pos: side('RAP-0001', 350),
-    bank: null,
-    difference: 350,
-    comment: 'Venta sin movimiento en el banco.',
-    status: 'sin_coincidencia',
-  },
-  {
-    id: 'didi_food:DIDI-0001',
-    date: '2026-09-05',
-    reference: 'DIDI-0001',
-    tenderMedia: 'didi_food',
-    pos: null,
-    bank: side('DIDI-0001', 99.9),
-    difference: -99.9,
-    comment: 'Movimiento sin venta en el POS.',
-    status: 'sin_coincidencia',
-  },
-];
-
-const RESULT: ReconciliationResult = {
-  total: 1243,
-  totals: { pos: 3584.5, bank: 3299.9 },
-  kpis: {
-    coincidencias: { count: 1120, percentage: 90.1 },
-    diferencias: { count: 62, percentage: 5 },
-    sinCoincidencias: { count: 61, percentage: 4.9 },
-  },
-  rows: ROWS,
+// Ajuste de la línea con diferencia (POS 1234.50): dos movimientos que suman justo el POS.
+const ADJUSTMENT: LineResolution = {
+  rowId: ROWS[1].id,
+  type: 'ajuste',
+  comment: 'Ajuste verificado con el banco',
+  movements: [movement('MOV-X1', 700), movement('MOV-X2', 534.5)],
 };
 
-// `n` líneas coincidentes (para probar la paginación a 10).
-function manyRows(n: number): ReconciliationResultRow[] {
-  return Array.from({ length: n }, (_, i) => {
-    const reference = `R-${String(i + 1).padStart(2, '0')}`;
-    return {
-      id: `bbva:R-${i + 1}`,
-      date: '2026-09-01',
-      reference,
-      tenderMedia: 'bbva' as const,
-      pos: side(reference, 100 + i),
-      bank: side(reference, 100 + i),
-      difference: 0,
-      comment: 'Coincide sin diferencias.',
-      status: 'coincide' as const,
-    };
-  });
+// `n` líneas coincidentes (para probar la paginación a 10), con ids que no chocan con ITEMS.
+function manyItems(n: number): BankMatchItem[] {
+  return Array.from({ length: n }, (_, i) =>
+    matchItem(100 + i, `R-${String(i + 1).padStart(2, '0')}`, '2026-09-01', 100 + i, 100 + i, 'MATCH', 'VISA'),
+  );
 }
 
-// Promesa que el test resuelve cuando quiere (para probar `reading()` y la carrera).
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => (resolve = res));
-  return { promise, resolve };
+const norm = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
+
+// Encabezado de la conciliación 7 (la del store) tal como lo devuelve el back.
+const HEADER_7: ReconciliationHeader = {
+  id: 7,
+  code: 'CON-0007',
+  store: { id: 10, name: 'Cóctel del Mar Chapinero' },
+  periodStart: '2026-09-01',
+  periodEnd: '2026-09-15',
+  status: { code: 'conciliado', description: 'Conciliado' },
+  files: [{ fileId: 77, bank: 'BANCOLOMBIA', fileName: 'reporte.xlsx' }],
+};
+
+// Respuesta de `POST .../{id}/confirm`: cómo quedaron las ventas.
+const CONFIRMATION: ReconciliationConfirm = {
+  reconciliation: HEADER_7,
+  summary: SUMMARY,
+  reconciledSales: 40,
+  differenceSales: 3,
+  unmatchedSales: 2,
+};
+
+// Página mínima de `GET .../{id}/results` (la que pide el proceso para armar el encabezado).
+function headerPage(header: ReconciliationHeader): BankMatchResults {
+  return { reconciliation: header, summary: SUMMARY, data: [], total: 0, page: 1, pageSize: 1 };
 }
+
+const NOT_FOUND = httpError(404, 'La conciliación no existe.');
+
+const PARENT = { label: 'Conciliación bancaria', path: '/conciliacion' };
 
 describe('ReconciliationProcess', () => {
   let fixture: ComponentFixture<ReconciliationProcess>;
   let el: HTMLElement;
-  let message: { error: ReturnType<typeof vi.fn>; success: ReturnType<typeof vi.fn> };
-  let reader: { read: ReturnType<typeof vi.fn> };
+  let message: { error: ReturnType<typeof vi.fn>; success: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn> };
   let navigateByUrl: ReturnType<typeof vi.spyOn>;
-  let api: { submitBankStatement: ReturnType<typeof vi.fn> };
-  // Respuesta (simulada) del back al enviar el extracto: la dispara `answer()`.
-  let submit$: Subject<SubmitBankStatementResponse>;
+  let banks: WritableSignal<readonly BankOption[]>;
+  let banksLoading: WritableSignal<boolean>;
+  let ensureBanks: Mock<() => void>;
+  let bankReports: {
+    read: Mock<(bank: string, file: File) => Observable<BankReportRead>>;
+    uploadFile: Mock<(reconciliationId: string, bank: string, file: File) => Observable<BankReportImport>>;
+    match: Mock<(reconciliationId: string) => Observable<BankMatchSummary>>;
+    allResults: Mock<(reconciliationId: string) => Observable<{ summary: BankMatchSummary; items: BankMatchItem[] }>>;
+    results: Mock<(reconciliationId: string, page?: number, pageSize?: number) => Observable<BankMatchResults>>;
+    confirm: Mock<(reconciliationId: string) => Observable<ReconciliationConfirm>>;
+  };
+  // Carga del reporte en curso (paso 2): la responde `answer()` o la falla el test.
+  let upload$: Subject<BankReportImport>;
 
   beforeEach(async () => {
     // Fake timers: el paso 2 usa `interval` (1 s) y el avance es determinista.
     vi.useFakeTimers();
-    submit$ = new Subject<SubmitBankStatementResponse>();
-    api = { submitBankStatement: vi.fn(() => submit$) };
-    message = { error: vi.fn(), success: vi.fn() };
-    // Por defecto el extracto se lee como válido; cada test puede cambiarlo.
-    reader = { read: vi.fn().mockResolvedValue(VALID) };
+    message = { error: vi.fn(), success: vi.fn(), info: vi.fn() };
+    banks = signal<readonly BankOption[]>([BANCOLOMBIA]);
+    banksLoading = signal(false);
+    ensureBanks = vi.fn();
+    bankReports = {
+      // Por defecto el reporte se lee como válido; cada test puede cambiarlo.
+      read: vi.fn(() => of(READ_VALID)),
+      uploadFile: vi.fn(() => (upload$ = new Subject<BankReportImport>())),
+      match: vi.fn(() => of(SUMMARY)),
+      allResults: vi.fn(() => of({ summary: SUMMARY, items: ITEMS })),
+      // Solo se pide si el store no tiene la corrida; por defecto el back no la encuentra.
+      results: vi.fn(() => throwError(() => NOT_FOUND)),
+      confirm: vi.fn(() => of(CONFIRMATION)),
+    };
 
     await TestBed.configureTestingModule({
       imports: [ReconciliationProcess],
       providers: [
-        provideRouter([]),
+        // Ruta hoja con título y padre, como `app.routes.ts`: el header los lee de `data`.
+        provideRouter([{ path: 'proceso', children: [], data: { title: 'Nueva conciliación', parent: PARENT } }]),
         provideCountry(ACTIVE_COUNTRY),
         { provide: NzMessageService, useValue: message },
-        { provide: BankStatementReader, useValue: reader },
-        { provide: ReconciliationProcessApi, useValue: api },
+        { provide: BankReportApiService, useValue: bankReports },
+        {
+          provide: BankCatalogService,
+          useValue: {
+            banks: banks.asReadonly(),
+            loading: banksLoading.asReadonly(),
+            ensureLoaded: ensureBanks,
+            find: (code: string | null | undefined) => banks().find((bank) => bank.code === code) ?? null,
+          },
+        },
         // El detalle de la línea (real) exige el permiso de gestión.
         { provide: AccessControlService, useValue: { hasPermission: () => true } },
       ],
     }).compileComponents();
+    // El store arranca vacío: se siembra con las corridas de ejemplo (p. ej. CON-0007).
+    TestBed.inject(ReconciliationRunsStore).upsert(MOCK_RECONCILIATION_RUNS);
 
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/proceso');
     // Sin navegación real (onBack / routerLink).
-    navigateByUrl = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
 
     fixture = TestBed.createComponent(ReconciliationProcess);
     el = fixture.nativeElement as HTMLElement;
@@ -206,8 +276,16 @@ describe('ReconciliationProcess', () => {
     await settle();
   }
 
-  async function renderRun(): Promise<void> {
+  // Elige el banco en el select "Banco o canal" (lo mismo que emite `nz-select` al cambiar).
+  async function selectBank(code: string | null): Promise<void> {
+    fixture.debugElement.query(By.css('nz-select#process-bank')).triggerEventHandler('ngModelChange', code);
+    await settle();
+  }
+
+  // Abre la conciliación CON-0007 (pendiente) con el banco ya elegido, salvo `null`.
+  async function renderRun(bankCode: string | null = BANCOLOMBIA.code): Promise<void> {
     await render('CON-0007');
+    if (bankCode !== null) await selectBank(bankCode);
   }
 
   const steps = () => Array.from(el.querySelectorAll<HTMLElement>('nz-step'));
@@ -218,6 +296,7 @@ describe('ReconciliationProcess', () => {
   const dropzoneRow = () => el.querySelector<HTMLElement>('.import-dropzone-row')!;
   const fileInput = () => el.querySelector<HTMLInputElement>('input[type="file"]')!;
   const loadedBox = () => el.querySelector<HTMLElement>('.file-loaded');
+  const sourceCard = () => el.querySelectorAll<HTMLElement>('.process-content nz-card')[0]!;
   const bankCard = () => el.querySelectorAll<HTMLElement>('.process-content nz-card')[1]!;
   const loading = () => el.querySelector<HTMLElement>('.statement-loading');
   const legend = () => el.querySelector<HTMLElement>('.status-legend');
@@ -250,10 +329,23 @@ describe('ReconciliationProcess', () => {
     await settle();
   }
 
-  // El back responde al extracto enviado al entrar al paso 2.
-  async function answer(result: ReconciliationResult = RESULT): Promise<void> {
-    submit$.next({ runId: 'CON-0007', accepted: true, result });
-    submit$.complete();
+  // Lectura que el test resuelve cuando quiere (para probar `reading()` y la carrera).
+  function pendingRead(): Subject<BankReportRead> {
+    const pending = new Subject<BankReportRead>();
+    bankReports.read.mockReturnValueOnce(pending);
+    return pending;
+  }
+
+  function resolveRead(pending: Subject<BankReportRead>, response: BankReportRead = READ_VALID): void {
+    pending.next(response);
+    pending.complete();
+  }
+
+  // El back termina la carga y el cruce del reporte enviado al entrar al paso 2.
+  async function answer(items: BankMatchItem[] = ITEMS, summary: BankMatchSummary = SUMMARY): Promise<void> {
+    bankReports.allResults.mockReturnValue(of({ summary, items }));
+    upload$.next(IMPORTED);
+    upload$.complete();
     await settle();
   }
 
@@ -267,7 +359,7 @@ describe('ReconciliationProcess', () => {
     await settle();
   }
 
-  // Avanza hasta el paso `index` (base 0); responde el envío y marca las líneas si hay que pasar el paso 2.
+  // Avanza hasta el paso `index` (base 0); responde la carga y marca las líneas si hay que pasar el paso 2.
   async function goToStep(index: number): Promise<void> {
     await drop(xlsx());
     for (let i = 0; i < index; i++) {
@@ -305,6 +397,9 @@ describe('ReconciliationProcess', () => {
     openDetail(row: ReconciliationResultRow): void;
   }
   const internals = () => fixture.componentInstance as unknown as Internals;
+  const bankSelect = () => el.querySelector<HTMLElement>('nz-select#process-bank')!;
+  const notice = () => el.querySelector<HTMLElement>('.process-notice');
+  const pageHeader = () => TestBed.inject(PageHeaderService).header();
   const progress = () => internals().validationProgress();
 
   describe('conciliación inexistente', () => {
@@ -314,7 +409,7 @@ describe('ReconciliationProcess', () => {
       expect(el.textContent).toContain('Esta conciliación no existe.');
       expect(el.querySelector('nz-steps')).toBeNull();
       expect(steps()).toHaveLength(0);
-      expect(el.querySelector('nz-page-header')).toBeNull();
+      expect(pageHeader()!.subtitle).toBeNull();
     });
 
     it('sin runId muestra el aviso y no pinta los steps', async () => {
@@ -326,7 +421,7 @@ describe('ReconciliationProcess', () => {
   });
 
   describe('conciliación existente', () => {
-    beforeEach(renderRun);
+    beforeEach(() => renderRun());
 
     it('no muestra el aviso de inexistente', () => {
       expect(el.textContent).not.toContain('Esta conciliación no existe.');
@@ -343,21 +438,298 @@ describe('ReconciliationProcess', () => {
       expect(steps()[1].classList.contains('ant-steps-item-wait')).toBeTruthy();
     });
 
-    it('muestra en la cabecera id, restaurante y periodo', () => {
-      const header = el.querySelector('nz-page-header')!;
-      expect(header.textContent).toContain('Nueva conciliación');
-      const subtitle = header.querySelector('nz-page-header-content')!.textContent!.replace(/\s+/g, ' ').trim();
-      expect(subtitle).toBe('CON-0007 · Cóctel del Mar Chapinero · 01/09/2026 – 15/09/2026');
+    it('le entrega al header "código · restaurante · periodo" como subtítulo, con el título y el padre de la ruta', () => {
+      expect(pageHeader()).toEqual({
+        title: 'Nueva conciliación',
+        subtitle: 'CON-0007 · Cóctel del Mar Chapinero · 01/09/2026 – 15/09/2026',
+        parent: PARENT,
+        actions: null,
+      });
     });
 
-    it('la flecha de volver navega a /conciliacion', () => {
-      el.querySelector<HTMLElement>('.ant-page-header-back-button')!.click();
-      expect(navigateByUrl).toHaveBeenCalledWith('/conciliacion');
+    it('no pide el encabezado al back: la corrida ya está en el store', () => {
+      expect(bankReports.results).not.toHaveBeenCalled();
+    });
+
+    it('no pinta su propio encabezado de página', () => {
+      expect(el.querySelector('nz-page-header')).toBeNull();
+      expect(el.querySelector('.ant-page-header-back-button')).toBeNull();
+    });
+
+    it('al destruirse quita su subtítulo del header y deja el de la ruta', () => {
+      fixture.destroy();
+
+      expect(pageHeader()).toMatchObject({ title: 'Nueva conciliación', subtitle: null, parent: PARENT });
+    });
+  });
+
+  describe('paso 1 · banco o canal', () => {
+    const cardTitle = () => norm(bankCard().querySelector('.process-source__title')?.textContent);
+
+    it('pide el catálogo de bancos al crearse', async () => {
+      await renderRun(null);
+
+      expect(ensureBanks).toHaveBeenCalledTimes(1);
+    });
+
+    it('pinta el select "Banco o canal" habilitado, con su placeholder y sin banco elegido', async () => {
+      await renderRun(null);
+
+      expect(el.querySelector('label[for="process-bank"]')?.textContent?.trim()).toBe('Banco o canal');
+      expect(bankSelect().textContent).toContain('Selecciona el banco del reporte');
+      expect(bankSelect().classList.contains('ant-select-disabled')).toBe(false);
+      expect(norm(sourceCard().querySelector('.process-source__subtitle')?.textContent)).toBe(
+        'Un reporte por conciliación (.xlsx)',
+      );
+    });
+
+    it('las opciones del select salen del catálogo de bancos', async () => {
+      banks.set([BANCOLOMBIA, OTHER_BANK]);
+      await renderRun(null);
+
+      bankSelect().querySelector<HTMLElement>('.ant-select-selector')!.click();
+      await settle();
+
+      const options = Array.from(document.body.querySelectorAll('.ant-select-item-option')).map((o) => norm(o.textContent));
+      expect(options).toEqual(['Bancolombia', 'Otro Banco']);
+    });
+
+    it('mientras carga el catálogo el select muestra que está cargando', async () => {
+      banksLoading.set(true);
+      await renderRun(null);
+
+      expect(bankSelect().querySelector('.anticon-loading')).not.toBeNull();
+    });
+
+    it('sin banco el card pide elegirlo y no lee el archivo', async () => {
+      await renderRun(null);
+
+      expect(cardTitle()).toBe('Banco (reporte del banco)');
+      expect(bankCard().textContent).toContain('Elige el banco y carga su reporte para ver su resumen.');
+
+      await drop(xlsx());
+
+      expect(bankReports.read).not.toHaveBeenCalled();
+      expect(loadedBox()).not.toBeNull();
+      expect(loading()).toBeNull();
+      expect(legend()).toBeNull();
+      expect(nextButton().disabled).toBe(true);
+    });
+
+    it('con banco el card toma su nombre y el texto inicial pide el reporte', async () => {
+      await renderRun();
+
+      expect(cardTitle()).toBe('Bancolombia (reporte del banco)');
+      expect(bankCard().textContent).toContain('Carga el reporte del banco para ver su resumen.');
+    });
+
+    it('elegir el banco después del archivo lo lee con ese banco y habilita "Siguiente"', async () => {
+      await renderRun(null);
+      const file = xlsx();
+      await drop(file);
+
+      await selectBank(BANCOLOMBIA.code);
+
+      expect(bankReports.read).toHaveBeenCalledExactlyOnceWith('BANCOLOMBIA', file);
+      expect(legend()!.textContent!.trim()).toBe('Archivo válido');
+      expect(nextButton().disabled).toBe(false);
+    });
+
+    it('cambiar de banco vuelve a leer el archivo ya elegido con el nuevo banco', async () => {
+      banks.set([BANCOLOMBIA, OTHER_BANK]);
+      await renderRun();
+      const file = xlsx();
+      await drop(file);
+
+      await selectBank(OTHER_BANK.code);
+
+      expect(bankReports.read).toHaveBeenCalledTimes(2);
+      expect(bankReports.read).toHaveBeenLastCalledWith('OTRO', file);
+      expect(cardTitle()).toBe('Otro Banco (reporte del banco)');
+      expect(legend()!.textContent!.trim()).toBe('Archivo válido');
+    });
+
+    it('si la relectura con el nuevo banco falla, "Siguiente" queda deshabilitado', async () => {
+      banks.set([BANCOLOMBIA, OTHER_BANK]);
+      await renderRun();
+      await drop(xlsx());
+      expect(nextButton().disabled).toBe(false);
+
+      bankReports.read.mockReturnValue(throwError(() => NOT_A_REPORT));
+      await selectBank(OTHER_BANK.code);
+
+      expect(legend()!.textContent!.trim()).toBe('Archivo inválido');
+      expect(nextButton().disabled).toBe(true);
+    });
+
+    it('cambiar de banco cancela la lectura en curso con el banco anterior', async () => {
+      banks.set([BANCOLOMBIA, OTHER_BANK]);
+      await renderRun();
+      const first = pendingRead();
+      await drop(xlsx());
+
+      await selectBank(OTHER_BANK.code);
+
+      expect(first.observed).toBe(false);
+      expect(legend()!.textContent!.trim()).toBe('Archivo válido');
+    });
+
+    it('cambiar de banco sin archivo no lee nada', async () => {
+      banks.set([BANCOLOMBIA, OTHER_BANK]);
+      await renderRun();
+
+      await selectBank(OTHER_BANK.code);
+
+      expect(bankReports.read).not.toHaveBeenCalled();
+    });
+
+    it('quitar el banco descarta el resumen y deshabilita "Siguiente"', async () => {
+      await renderRun();
+      await drop(xlsx());
+      expect(nextButton().disabled).toBe(false);
+
+      await selectBank(null);
+
+      expect(bankReports.read).toHaveBeenCalledTimes(1);
+      expect(legend()).toBeNull();
+      expect(statementRows()).toHaveLength(0);
+      expect(bankCard().textContent).toContain('Elige el banco y carga su reporte para ver su resumen.');
+      expect(nextButton().disabled).toBe(true);
+    });
+
+    it('un código que no está en el catálogo cuenta como sin banco', async () => {
+      await renderRun('INEXISTENTE');
+      await drop(xlsx());
+
+      expect(bankReports.read).not.toHaveBeenCalled();
+      expect(nextButton().disabled).toBe(true);
+    });
+
+    it('la carga va a la conciliación con el banco elegido y las filas sin franquicia toman su nombre', async () => {
+      banks.set([BANCOLOMBIA, OTHER_BANK]);
+      await renderRun(OTHER_BANK.code);
+      const file = xlsx();
+      await drop(file);
+
+      nextButton().click();
+      await settle();
+      expect(bankReports.uploadFile).toHaveBeenCalledExactlyOnceWith('CON-0007', 'OTRO', file);
+
+      await answer();
+      expect(internals().result()!.rows[2].channel).toBe('Otro Banco');
+    });
+  });
+
+  describe('conciliación ya confirmada', () => {
+    beforeEach(() => render('CON-0001'));
+
+    it('avisa que no admite más reportes y deshabilita el select de banco', () => {
+      expect(norm(notice()?.textContent)).toBe('Esta conciliación ya está confirmada: no admite más reportes.');
+      expect(bankSelect().classList.contains('ant-select-disabled')).toBe(true);
+    });
+
+    it('"Siguiente" queda deshabilitado aunque haya banco y un reporte válido', async () => {
+      await selectBank(BANCOLOMBIA.code);
+      await drop(xlsx());
+      expect(legend()!.textContent!.trim()).toBe('Archivo válido');
+
+      expect(nextButton().disabled).toBe(true);
+      nextButton().click();
+      await settle();
+
+      expect(steps()[0].classList.contains('ant-steps-item-process')).toBeTruthy();
+      expect(bankReports.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('una conciliación pendiente no muestra el aviso', async () => {
+      fixture.componentRef.setInput('runId', 'CON-0007');
+      await settle();
+
+      expect(notice()).toBeNull();
+      expect(bankSelect().classList.contains('ant-select-disabled')).toBe(false);
+    });
+  });
+
+  describe('conciliación que no está en el store (p. ej. tras recargar)', () => {
+    const HEADER_11: ReconciliationHeader = {
+      id: 11,
+      code: 'CON-0011',
+      store: { id: 20, name: 'Hipermar Fish H23E' },
+      periodStart: '2026-10-01',
+      periodEnd: '2026-10-15',
+      status: { code: 'por_conciliar', description: 'Por conciliar' },
+      files: [],
+    };
+
+    it('pide la página 1 de tamaño 1 de los resultados y arma la corrida con su encabezado', async () => {
+      bankReports.results.mockReturnValue(of(headerPage(HEADER_11)));
+
+      await render('11');
+
+      expect(bankReports.results).toHaveBeenCalledExactlyOnceWith('11', 1, 1);
+      expect(steps()).toHaveLength(3);
+      expect(el.textContent).not.toContain('Esta conciliación no existe.');
+      expect(pageHeader()!.subtitle).toBe('CON-0011 · Hipermar Fish H23E · 01/10/2026 – 15/10/2026');
+      expect(notice()).toBeNull();
+    });
+
+    it('mientras llega el encabezado muestra "Cargando la conciliación…"', async () => {
+      const pending = new Subject<BankMatchResults>();
+      bankReports.results.mockReturnValue(pending);
+
+      // Con la petición en vuelo la app no queda estable: se repinta sin esperar a `whenStable`.
+      fixture.componentRef.setInput('runId', '11');
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+
+      expect(bankReports.results).toHaveBeenCalledWith('11', 1, 1);
+      expect(el.textContent).toContain('Cargando la conciliación…');
+      expect(el.textContent).not.toContain('Esta conciliación no existe.');
+      expect(steps()).toHaveLength(0);
+
+      pending.next(headerPage(HEADER_11));
+      pending.complete();
+      await settle();
+
+      expect(el.textContent).not.toContain('Cargando la conciliación…');
+      expect(steps()).toHaveLength(3);
+    });
+
+    it('si el back no la encuentra muestra el aviso de inexistente', async () => {
+      await render('11');
+
+      expect(bankReports.results).toHaveBeenCalledWith('11', 1, 1);
+      expect(el.textContent).toContain('Esta conciliación no existe.');
+      expect(el.textContent).not.toContain('Cargando la conciliación…');
+      expect(steps()).toHaveLength(0);
+    });
+
+    it('un encabezado conciliado se muestra como conciliación confirmada', async () => {
+      bankReports.results.mockReturnValue(of(headerPage({ ...HEADER_11, status: { code: 'conciliado', description: '' } })));
+
+      await render('11');
+
+      expect(norm(notice()?.textContent)).toBe('Esta conciliación ya está confirmada: no admite más reportes.');
+      expect(bankSelect().classList.contains('ant-select-disabled')).toBe(true);
+    });
+
+    it('con la corrida armada del encabezado el reporte se carga en esa conciliación', async () => {
+      bankReports.results.mockReturnValue(of(headerPage(HEADER_11)));
+      await render('11');
+      await selectBank(BANCOLOMBIA.code);
+      const file = xlsx();
+      await drop(file);
+
+      nextButton().click();
+      await settle();
+
+      expect(bankReports.uploadFile).toHaveBeenCalledExactlyOnceWith('11', 'BANCOLOMBIA', file);
     });
   });
 
   describe('paso 1 · archivo bancario', () => {
-    beforeEach(renderRun);
+    beforeEach(() => renderRun());
 
     it('"Siguiente" está deshabilitado sin archivo y no se muestra el indicador', () => {
       expect(nextButton().textContent).toContain('Siguiente');
@@ -372,23 +744,30 @@ describe('ReconciliationProcess', () => {
     });
 
     describe('formato del archivo', () => {
-      it('soltar un .xlsx lo lee con el lector y muestra nombre, tamaño e indicador', async () => {
+      it('soltar un .xlsx lo manda a leer al back con el banco y muestra nombre, tamaño e indicador', async () => {
         const file = xlsx('banco-julio.xlsx', 'x'.repeat(2048));
         await drop(file);
 
-        expect(reader.read).toHaveBeenCalledTimes(1);
-        expect(reader.read).toHaveBeenCalledWith(file);
+        expect(bankReports.read).toHaveBeenCalledTimes(1);
+        expect(bankReports.read).toHaveBeenCalledWith('BANCOLOMBIA', file);
         expect(loadedBox()!.querySelector('.file-loaded__name')?.textContent?.trim()).toBe('banco-julio.xlsx');
         expect(loadedBox()!.textContent).toContain('Archivo cargado correctamente');
         expect(loadedBox()!.textContent).toContain('2.0 KB');
         expect(message.error).not.toHaveBeenCalled();
       });
 
+      it('leer el archivo no lo carga ni lo cruza todavía', async () => {
+        await drop(xlsx());
+
+        expect(bankReports.uploadFile).not.toHaveBeenCalled();
+        expect(bankReports.match).not.toHaveBeenCalled();
+      });
+
       it('elegir un .xlsx con el selector también lo lee', async () => {
         const file = xlsx('elegido.xlsx');
         await pick(file);
 
-        expect(reader.read).toHaveBeenCalledWith(file);
+        expect(bankReports.read).toHaveBeenCalledWith('BANCOLOMBIA', file);
         expect(loadedBox()!.querySelector('.file-loaded__name')?.textContent?.trim()).toBe('elegido.xlsx');
         expect(nextButton().disabled).toBe(false);
       });
@@ -396,7 +775,7 @@ describe('ReconciliationProcess', () => {
       it('la extensión .XLSX en mayúsculas también se acepta', async () => {
         await drop(xlsx('EXTRACTO.XLSX'));
 
-        expect(reader.read).toHaveBeenCalledTimes(1);
+        expect(bankReports.read).toHaveBeenCalledTimes(1);
         expect(message.error).not.toHaveBeenCalled();
       });
 
@@ -405,7 +784,7 @@ describe('ReconciliationProcess', () => {
 
         expect(message.error).toHaveBeenCalledTimes(1);
         expect(message.error).toHaveBeenCalledWith('El archivo bancario debe ser un .xlsx.');
-        expect(reader.read).not.toHaveBeenCalled();
+        expect(bankReports.read).not.toHaveBeenCalled();
         expect(loadedBox()).toBeNull();
         expect(el.textContent).not.toContain('extracto.csv');
         expect(nextButton().disabled).toBe(true);
@@ -415,7 +794,7 @@ describe('ReconciliationProcess', () => {
         await pick(new File(['a,b'], 'extracto.csv', { type: 'text/csv' }));
 
         expect(message.error).toHaveBeenCalledWith('El archivo bancario debe ser un .xlsx.');
-        expect(reader.read).not.toHaveBeenCalled();
+        expect(bankReports.read).not.toHaveBeenCalled();
         expect(loadedBox()).toBeNull();
         expect(nextButton().disabled).toBe(true);
       });
@@ -427,7 +806,7 @@ describe('ReconciliationProcess', () => {
 
         expect(message.error).toHaveBeenCalledTimes(3);
         expect(message.error).toHaveBeenCalledWith('El archivo bancario debe ser un .xlsx.');
-        expect(reader.read).not.toHaveBeenCalled();
+        expect(bankReports.read).not.toHaveBeenCalled();
         expect(loadedBox()).toBeNull();
       });
 
@@ -445,7 +824,7 @@ describe('ReconciliationProcess', () => {
 
         expect(loadedBox()!.querySelector('.file-loaded__name')?.textContent?.trim()).toBe('bueno.xlsx');
         expect(legend()!.textContent).toContain('Archivo válido');
-        expect(reader.read).toHaveBeenCalledTimes(1);
+        expect(bankReports.read).toHaveBeenCalledTimes(1);
         expect(nextButton().disabled).toBe(false);
       });
 
@@ -456,15 +835,15 @@ describe('ReconciliationProcess', () => {
         fixture.detectChanges();
 
         expect(loadedBox()).toBeNull();
-        expect(reader.read).not.toHaveBeenCalled();
+        expect(bankReports.read).not.toHaveBeenCalled();
         expect(message.error).not.toHaveBeenCalled();
       });
     });
 
-    describe('card "Banco (extracto bancario)"', () => {
+    describe('card del reporte del banco', () => {
       it('antes de cargar solo muestra el encabezado y el texto inicial', () => {
-        expect(bankCard().textContent).toContain('Banco (extracto bancario)');
-        expect(bankCard().textContent).toContain('Carga el extracto bancario para ver su resumen.');
+        expect(bankCard().textContent).toContain('Bancolombia (reporte del banco)');
+        expect(bankCard().textContent).toContain('Carga el reporte del banco para ver su resumen.');
         expect(loading()).toBeNull();
         expect(legend()).toBeNull();
         expect(statementRows()).toHaveLength(0);
@@ -488,53 +867,67 @@ describe('ReconciliationProcess', () => {
         expect(legend()!.classList.contains('status-legend-warning')).toBe(false);
         expect(legend()!.classList.contains('status-legend-error')).toBe(false);
         expect(reason()).toBeNull();
-        expect(el.textContent).not.toContain('Carga el extracto bancario para ver su resumen.');
+        expect(el.textContent).not.toContain('Carga el reporte del banco para ver su resumen.');
         expect(loading()).toBeNull();
         expect(nextButton().disabled).toBe(false);
       });
 
-      it('archivo inválido: leyenda de error con el motivo y TODAS las columnas faltantes, sin filas', async () => {
-        reader.read.mockResolvedValue(INVALID);
+      it('archivo que el back rechaza (400): leyenda de error con el detalle del back, sin filas', async () => {
+        bankReports.read.mockReturnValue(throwError(() => NOT_A_REPORT));
         await drop(xlsx());
 
         expect(legend()!.textContent!.trim()).toBe('Archivo inválido');
         expect(legend()!.classList.contains('status-legend-error')).toBe(true);
         expect(legend()!.classList.contains('status-legend-warning')).toBe(false);
         expect(legend()!.classList.contains('status-legend-success')).toBe(false);
-        expect(reason()!.textContent!.trim()).toBe(INVALID.reason);
-        expect(Array.from(el.querySelectorAll('ul.statement-list--error li')).map((li) => li.textContent!.trim())).toEqual([
-          'NIT',
-          'VALOR TOTAL',
-          'FECHA DE CANJE',
-        ]);
-        expect(el.querySelector('ul.statement-list--warning')).toBeNull();
+        expect(reason()!.textContent!.trim()).toBe('No coincide con el formato del reporte de Bancolombia.');
+        expect(el.querySelector('.statement-list')).toBeNull();
         expect(statementRows()).toHaveLength(0);
-        expect(el.textContent).not.toContain('Carga el extracto bancario para ver su resumen.');
+        expect(el.textContent).not.toContain('Carga el reporte del banco para ver su resumen.');
         expect(nextButton().disabled).toBe(true);
         // El archivo sí se cargó (se ve su nombre); lo que falla es la revisión.
         expect(loadedBox()).not.toBeNull();
       });
 
-      it('campos faltantes: leyenda de advertencia con el motivo y "Fila N: CAMPO, CAMPO" por fila', async () => {
-        reader.read.mockResolvedValue(MISSING_FIELDS);
+      it('un 400 sin detalle usa el motivo por defecto', async () => {
+        bankReports.read.mockReturnValue(throwError(() => httpError(400)));
+        await drop(xlsx());
+
+        expect(legend()!.textContent!.trim()).toBe('Archivo inválido');
+        expect(reason()!.textContent!.trim()).toBe('El archivo no es un reporte del banco legible.');
+      });
+
+      it('un reporte sin transacciones es inválido', async () => {
+        bankReports.read.mockReturnValue(of(READ_EMPTY));
+        await drop(xlsx());
+
+        expect(legend()!.textContent!.trim()).toBe('Archivo inválido');
+        expect(reason()!.textContent!.trim()).toBe('El archivo no trae transacciones.');
+        expect(statementRows()).toHaveLength(0);
+        expect(nextButton().disabled).toBe(true);
+      });
+
+      it('filas con problemas: leyenda de advertencia, resumen y "Fila N: mensaje" por fila', async () => {
+        bankReports.read.mockReturnValue(of(READ_MISSING_FIELDS));
         await drop(xlsx());
 
         expect(legend()!.textContent!.trim()).toBe('Campos faltantes');
         expect(legend()!.classList.contains('status-legend-warning')).toBe(true);
         expect(legend()!.classList.contains('status-legend-error')).toBe(false);
         expect(legend()!.classList.contains('status-legend-success')).toBe(false);
-        expect(reason()!.textContent!.trim()).toBe('2 fila(s) con campos inválidos.');
+        expect(reason()!.textContent!.trim()).toBe('Hay filas ilegibles o que no cuadran.');
         expect(Array.from(el.querySelectorAll('ul.statement-list--warning li')).map((li) => li.textContent!.trim())).toEqual([
           'Fila 3: VALOR TOTAL',
           'Fila 8: VALOR TOTAL, FECHA DE CANJE',
         ]);
         expect(el.querySelector('ul.statement-list--error')).toBeNull();
-        expect(statementRows()).toHaveLength(0);
+        // El back sí resume lo legible del reporte.
+        expect(statementRows()).toHaveLength(3);
         expect(nextButton().disabled).toBe(true);
       });
 
-      it('error al leer: leyenda de error con el motivo y "Siguiente" deshabilitado', async () => {
-        reader.read.mockResolvedValue(ERROR);
+      it('error del servidor al leer: leyenda de error con el motivo y "Siguiente" deshabilitado', async () => {
+        bankReports.read.mockReturnValue(throwError(() => SERVER_ERROR));
         await drop(xlsx());
 
         expect(legend()!.textContent!.trim()).toBe('Error en el archivo');
@@ -546,23 +939,8 @@ describe('ReconciliationProcess', () => {
         expect(nextButton().disabled).toBe(true);
       });
 
-      it('un resultado sin motivo no pinta el texto del motivo', async () => {
-        reader.read.mockResolvedValue({
-          state: 'invalid',
-          summary: null,
-          reason: null,
-          missingColumns: [],
-          invalidRows: [],
-        } satisfies BankStatementResult);
-        await drop(xlsx());
-
-        expect(legend()!.textContent!.trim()).toBe('Archivo inválido');
-        expect(reason()).toBeNull();
-      });
-
       it('mientras se lee muestra el spinner y oculta resumen, leyenda y texto inicial', async () => {
-        const pending = deferred<BankStatementResult>();
-        reader.read.mockReturnValue(pending.promise);
+        const pending = pendingRead();
 
         await drop(xlsx());
 
@@ -571,12 +949,12 @@ describe('ReconciliationProcess', () => {
         expect(loading()!.textContent).toContain('Revisando el archivo');
         expect(legend()).toBeNull();
         expect(statementRows()).toHaveLength(0);
-        expect(el.textContent).not.toContain('Carga el extracto bancario para ver su resumen.');
+        expect(el.textContent).not.toContain('Carga el reporte del banco para ver su resumen.');
         expect(nextButton().disabled).toBe(true);
         // El archivo ya se ve cargado mientras se revisa.
         expect(loadedBox()).not.toBeNull();
 
-        pending.resolve(VALID);
+        resolveRead(pending);
         await settle();
 
         expect(loading()).toBeNull();
@@ -585,13 +963,12 @@ describe('ReconciliationProcess', () => {
         expect(nextButton().disabled).toBe(false);
       });
 
-      it('si la lectura termina en inválido, el spinner desaparece y se ve la leyenda', async () => {
-        const pending = deferred<BankStatementResult>();
-        reader.read.mockReturnValue(pending.promise);
+      it('si la lectura falla, el spinner desaparece y se ve la leyenda', async () => {
+        const pending = pendingRead();
         await pick(xlsx());
         expect(loading()).not.toBeNull();
 
-        pending.resolve(INVALID);
+        pending.error(NOT_A_REPORT);
         await settle();
 
         expect(loading()).toBeNull();
@@ -602,8 +979,7 @@ describe('ReconciliationProcess', () => {
         await drop(xlsx('primero.xlsx'));
         expect(nextButton().disabled).toBe(false);
 
-        const pending = deferred<BankStatementResult>();
-        reader.read.mockReturnValue(pending.promise);
+        const pending = pendingRead();
         await drop(xlsx('segundo.xlsx'));
 
         expect(loading()).not.toBeNull();
@@ -612,58 +988,69 @@ describe('ReconciliationProcess', () => {
         expect(nextButton().disabled).toBe(true);
         expect(loadedBox()!.querySelector('.file-loaded__name')?.textContent?.trim()).toBe('segundo.xlsx');
 
-        pending.resolve(INVALID);
+        pending.error(NOT_A_REPORT);
         await settle();
 
         expect(legend()!.textContent!.trim()).toBe('Archivo inválido');
         expect(nextButton().disabled).toBe(true);
       });
 
-      it('carrera: si la primera lectura termina después, gana la última carga', async () => {
-        const first = deferred<BankStatementResult>();
-        const second = deferred<BankStatementResult>();
-        reader.read.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      it('carrera: una carga nueva cancela la lectura anterior y gana la última', async () => {
+        const first = pendingRead();
+        const second = pendingRead();
 
         await drop(xlsx('primero.xlsx'));
         await drop(xlsx('segundo.xlsx'));
 
-        second.resolve(VALID);
+        // La primera petición se cancela al cargar la segunda.
+        expect(first.observed).toBe(false);
+        expect(second.observed).toBe(true);
+
+        resolveRead(second);
         await settle();
         expect(legend()!.textContent!.trim()).toBe('Archivo válido');
         expect(loading()).toBeNull();
 
-        first.resolve(INVALID); // llega tarde: no debe pisar al resultado vigente
+        first.error(NOT_A_REPORT); // llega tarde: no debe pisar al resultado vigente
         await settle();
 
-        expect(reader.read).toHaveBeenCalledTimes(2);
+        expect(bankReports.read).toHaveBeenCalledTimes(2);
         expect(legend()!.textContent!.trim()).toBe('Archivo válido');
-        expect(legend()!.classList.contains('status-legend-success')).toBe(true);
         expect(statementRows()).toHaveLength(3);
         expect(loadedBox()!.querySelector('.file-loaded__name')?.textContent?.trim()).toBe('segundo.xlsx');
         expect(nextButton().disabled).toBe(false);
       });
 
-      it('carrera: si la primera lectura termina antes, se ignora y sigue el spinner hasta la última', async () => {
-        const first = deferred<BankStatementResult>();
-        const second = deferred<BankStatementResult>();
-        reader.read.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      it('carrera: si la primera lectura responde antes que la segunda, se ignora y sigue el spinner', async () => {
+        const first = pendingRead();
+        const second = pendingRead();
 
         await drop(xlsx('primero.xlsx'));
         await drop(xlsx('segundo.xlsx'));
 
-        first.resolve(VALID); // obsoleta: no debe pintarse ni habilitar "Siguiente"
+        resolveRead(first); // obsoleta: no debe pintarse ni habilitar "Siguiente"
         await settle();
 
         expect(loading()).not.toBeNull();
         expect(legend()).toBeNull();
         expect(nextButton().disabled).toBe(true);
 
-        second.resolve(INVALID);
+        second.error(NOT_A_REPORT);
         await settle();
 
         expect(loading()).toBeNull();
         expect(legend()!.textContent!.trim()).toBe('Archivo inválido');
         expect(nextButton().disabled).toBe(true);
+      });
+
+      it('al destruir el componente se cancela la lectura en curso', async () => {
+        const pending = pendingRead();
+        await drop(xlsx());
+        expect(pending.observed).toBe(true);
+
+        fixture.destroy();
+
+        expect(pending.observed).toBe(false);
       });
     });
 
@@ -692,7 +1079,7 @@ describe('ReconciliationProcess', () => {
   });
 
   describe('navegación entre pasos', () => {
-    beforeEach(renderRun);
+    beforeEach(() => renderRun());
 
     it('"Siguiente" no avanza sin archivo en el paso 1', () => {
       nextButton().click();
@@ -702,9 +1089,14 @@ describe('ReconciliationProcess', () => {
       expect(steps()[0].classList.contains('ant-steps-item-process')).toBeTruthy();
     });
 
-    it('"Siguiente" no avanza con un extracto inválido, con campos faltantes o con error', async () => {
-      for (const result of [INVALID, MISSING_FIELDS, ERROR]) {
-        reader.read.mockResolvedValue(result);
+    it('"Siguiente" no avanza con un reporte inválido, con filas con problemas o con error', async () => {
+      const responses: Observable<BankReportRead>[] = [
+        throwError(() => NOT_A_REPORT),
+        of(READ_MISSING_FIELDS),
+        throwError(() => SERVER_ERROR),
+      ];
+      for (const response of responses) {
+        bankReports.read.mockReturnValue(response);
         await drop(xlsx());
 
         nextButton().click();
@@ -713,10 +1105,11 @@ describe('ReconciliationProcess', () => {
         expect(el.querySelector('.import-dropzone')).not.toBeNull();
         expect(steps()[0].classList.contains('ant-steps-item-process')).toBeTruthy();
       }
+      expect(bankReports.uploadFile).not.toHaveBeenCalled();
     });
 
     it('"Siguiente" no avanza mientras se revisa el archivo', async () => {
-      reader.read.mockReturnValue(deferred<BankStatementResult>().promise);
+      pendingRead();
       await drop(xlsx());
 
       nextButton().click();
@@ -733,7 +1126,7 @@ describe('ReconciliationProcess', () => {
       nextButton().click(); // paso 2 (validación)
       await settle();
       expect(el.querySelector('.import-dropzone')).toBeNull();
-      expect(nextButton().textContent).toContain('Siguiente');
+      expect(nextButton().textContent).toContain('Confirmar conciliación');
 
       await answer();
       await markAllRows();
@@ -838,13 +1231,50 @@ describe('ReconciliationProcess', () => {
 
     const percentText = () => el.querySelector('.validation__progress .ant-progress-text')?.textContent?.trim();
 
-    it('al entrar envía el extracto al back con (runId, nombre del archivo, resumen)', () => {
-      expect(api.submitBankStatement).toHaveBeenCalledTimes(1);
-      expect(api.submitBankStatement).toHaveBeenCalledWith(
-        'CON-0007',
-        'bancolombia_Reporte_Conciliar_20260702_20260706.xlsx',
-        VALID.summary,
+    it('al entrar carga el reporte en la conciliación con el banco y el archivo; aún no cruza ni pide resultados', () => {
+      expect(bankReports.uploadFile).toHaveBeenCalledTimes(1);
+      expect(bankReports.uploadFile).toHaveBeenCalledWith('CON-0007', 'BANCOLOMBIA', expect.any(File));
+      expect(bankReports.uploadFile.mock.calls[0][2].name).toBe('bancolombia_Reporte_Conciliar_20260702_20260706.xlsx');
+      expect(bankReports.match).not.toHaveBeenCalled();
+      expect(bankReports.allResults).not.toHaveBeenCalled();
+    });
+
+    it('tras la carga cruza la conciliación y pide todos sus resultados por su id', async () => {
+      await answer();
+
+      expect(bankReports.match).toHaveBeenCalledTimes(1);
+      expect(bankReports.match).toHaveBeenCalledWith('CON-0007');
+      expect(bankReports.allResults).toHaveBeenCalledTimes(1);
+      expect(bankReports.allResults).toHaveBeenCalledWith('CON-0007');
+    });
+
+    it('arma el resultado con las tarjetas del back y las filas del cruce', async () => {
+      await answer();
+
+      const result = internals().result()!;
+      expect(result.total).toBe(1243);
+      expect(result.kpis.coincidencias).toEqual({ count: 1120, percentage: 90.1 });
+      expect(result.totals).toEqual({ pos: 3584.5, bank: 3299.9 });
+      expect(result.rows).toEqual(ROWS);
+    });
+
+    it('un reporte nuevo no muestra aviso', async () => {
+      await answer();
+
+      expect(message.info).not.toHaveBeenCalled();
+    });
+
+    it('si el reporte ya estaba cargado avisa y de todos modos lo cruza', async () => {
+      upload$.next({ ...IMPORTED, alreadyLoaded: true });
+      upload$.complete();
+      await settle();
+
+      expect(message.info).toHaveBeenCalledTimes(1);
+      expect(message.info).toHaveBeenCalledWith(
+        'Este reporte ya estaba cargado: se liga a la conciliación sin guardarlo otra vez.',
       );
+      expect(bankReports.match).toHaveBeenCalledWith('CON-0007');
+      expect(el.querySelector('.result-kpis')).not.toBeNull();
     });
 
     it('muestra engranes en movimiento, el título de proceso y dos subtítulos', () => {
@@ -865,7 +1295,7 @@ describe('ReconciliationProcess', () => {
       expect(el.querySelector('.status-card')).toBeNull();
       expect(el.querySelector('nz-table')).toBeNull();
       expect(footerButtons()).toHaveLength(1);
-      expect(footerButtons()[0].textContent).toContain('Siguiente');
+      expect(footerButtons()[0].textContent).toContain('Confirmar conciliación');
     });
 
     it('"Siguiente" está deshabilitado y no avanza mientras no responde el back', async () => {
@@ -942,7 +1372,7 @@ describe('ReconciliationProcess', () => {
       expect(progress()).toBe(100);
     });
 
-    it('"Siguiente" con todas las líneas marcadas avanza al paso 3 y no vuelve a enviar', async () => {
+    it('"Siguiente" con todas las líneas marcadas avanza al paso 3 y no vuelve a cargar', async () => {
       await answer();
       await markAllRows();
 
@@ -954,24 +1384,151 @@ describe('ReconciliationProcess', () => {
       expect(el.querySelector('nz-table')).toBeNull();
       expect(el.querySelector('.result-kpis')).toBeNull();
       expect(el.querySelector('.process-footer__hint')).toBeNull();
-      expect(api.submitBankStatement).toHaveBeenCalledTimes(1);
+      expect(bankReports.uploadFile).toHaveBeenCalledTimes(1);
+      expect(bankReports.match).toHaveBeenCalledTimes(1);
     });
 
-    it('al destruir el componente se cancela el envío y el temporizador', async () => {
+    it('al destruir el componente se cancela la carga y el temporizador', async () => {
       await tick(2000);
-      expect(submit$.observed).toBe(true);
+      expect(upload$.observed).toBe(true);
       expect(progress()).toBe(20);
 
       fixture.destroy();
       await vi.advanceTimersByTimeAsync(5000);
 
-      expect(submit$.observed).toBe(false);
+      expect(upload$.observed).toBe(false);
       expect(progress()).toBe(20);
     });
   });
 
+  describe('paso 2 · error del back', () => {
+    const errorBox = () => el.querySelector<HTMLElement>('.validation-error');
+    const errorButton = (label: string) =>
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.validation-error__actions button')).find((b) =>
+        norm(b.textContent).includes(label),
+      );
+
+    beforeEach(async () => {
+      await renderRun();
+      await goToStep(1);
+    });
+
+    async function failUpload(error: unknown): Promise<void> {
+      upload$.error(error);
+      await settle();
+    }
+
+    it('si la carga falla muestra el error en lugar de la animación, con "Siguiente" deshabilitado', async () => {
+      await tick(2000);
+      await failUpload(httpError(403, 'Forbidden'));
+
+      expect(errorBox()).not.toBeNull();
+      expect(norm(errorBox()!.querySelector('.validation-error__title')?.textContent)).toBe(
+        'No se pudo procesar el reporte del banco',
+      );
+      expect(norm(errorBox()!.querySelector('.validation-error__detail')?.textContent)).toBe(
+        'Tu cuenta no tiene el permiso para cargar reportes del banco (import_settlements).',
+      );
+      expect(gears()).toBeNull();
+      expect(el.querySelector('.result-kpis')).toBeNull();
+      expect(bankReports.match).not.toHaveBeenCalled();
+      expect(nextButton().disabled).toBe(true);
+    });
+
+    it('el error corta la barra: no sigue subiendo', async () => {
+      await tick(2000);
+      await failUpload(SERVER_ERROR);
+
+      await tick(5000);
+
+      expect(progress()).toBe(20);
+    });
+
+    it('si falla el cruce muestra el detalle del back y no pide resultados', async () => {
+      bankReports.match.mockReturnValue(throwError(() => httpError(409, 'El archivo ya se está cruzando.')));
+      upload$.next(IMPORTED);
+      upload$.complete();
+      await settle();
+
+      expect(norm(errorBox()!.querySelector('.validation-error__detail')?.textContent)).toBe('El archivo ya se está cruzando.');
+      expect(bankReports.allResults).not.toHaveBeenCalled();
+    });
+
+    it('si fallan los resultados muestra el error de conexión', async () => {
+      bankReports.allResults.mockReturnValue(throwError(() => httpError(0)));
+      upload$.next(IMPORTED);
+      upload$.complete();
+      await settle();
+
+      expect(norm(errorBox()!.querySelector('.validation-error__detail')?.textContent)).toBe(
+        'No se pudo conectar con el servidor. Intenta de nuevo.',
+      );
+      expect(internals().result()).toBeNull();
+    });
+
+    it('trae los botones "Volver a la carga" y "Reintentar", con icono y label', async () => {
+      await failUpload(SERVER_ERROR);
+
+      for (const label of ['Volver a la carga', 'Reintentar']) {
+        const button = errorButton(label)!;
+        expect(button).toBeDefined();
+        expect(button.firstElementChild?.tagName.toLowerCase()).toBe('svg');
+      }
+      expect(errorButton('Reintentar')!.classList.contains('ant-btn-primary')).toBe(true);
+    });
+
+    it('"Volver a la carga" regresa al paso 1 con el mismo archivo y su resumen, sin volver a leerlo', async () => {
+      await failUpload(SERVER_ERROR);
+
+      errorButton('Volver a la carga')!.click();
+      await settle();
+
+      expect(steps()[0].classList.contains('ant-steps-item-process')).toBeTruthy();
+      expect(errorBox()).toBeNull();
+      expect(loadedBox()!.querySelector('.file-loaded__name')?.textContent?.trim()).toBe(
+        'bancolombia_Reporte_Conciliar_20260702_20260706.xlsx',
+      );
+      expect(legend()!.textContent!.trim()).toBe('Archivo válido');
+      expect(bankReports.read).toHaveBeenCalledTimes(1);
+      expect(nextButton().disabled).toBe(false);
+    });
+
+    it('tras volver a la carga, "Siguiente" vuelve a cargar el reporte', async () => {
+      await failUpload(SERVER_ERROR);
+      errorButton('Volver a la carga')!.click();
+      await settle();
+
+      nextButton().click();
+      await settle();
+
+      expect(bankReports.uploadFile).toHaveBeenCalledTimes(2);
+      expect(gears()).not.toBeNull();
+      await answer();
+      expect(el.querySelector('.result-kpis')).not.toBeNull();
+    });
+
+    it('"Reintentar" vuelve a cargar desde 0% y, si el back responde, muestra el resultado', async () => {
+      await tick(3000);
+      await failUpload(SERVER_ERROR);
+
+      errorButton('Reintentar')!.click();
+      await settle();
+
+      expect(bankReports.uploadFile).toHaveBeenCalledTimes(2);
+      expect(errorBox()).toBeNull();
+      expect(gears()).not.toBeNull();
+      expect(progress()).toBe(0);
+
+      await tick(1000);
+      expect(progress()).toBe(10);
+
+      await answer();
+      expect(progress()).toBe(100);
+      expect(el.querySelector('.result-kpis')).not.toBeNull();
+      expect(steps()[1].classList.contains('ant-steps-item-process')).toBeTruthy();
+    });
+  });
   describe('paso 2 · resultado', () => {
-    const norm = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
     const money = (value: number) => TestBed.runInInjectionContext(() => new MoneyPipe().transform(value))!;
 
     const kpiCards = () => Array.from(el.querySelectorAll<HTMLElement>('.result-kpis .status-card'));
@@ -995,12 +1552,12 @@ describe('ReconciliationProcess', () => {
       el.querySelector<HTMLElement>(`nz-pagination .ant-pagination-item[title="${page}"]`)!.click();
     const managing = () => internals().managing();
     // 2 coincidentes y 1 con diferencia: permite estados parciales de la cabecera.
-    const MIXED: ReconciliationResult = { ...RESULT, rows: [...manyRows(2), ROWS[1]] };
+    const MIXED: BankMatchItem[] = [...manyItems(2), ITEMS[1]];
 
-    async function showResult(result: ReconciliationResult = RESULT): Promise<void> {
+    async function showResult(items: BankMatchItem[] = ITEMS, summary: BankMatchSummary = SUMMARY): Promise<void> {
       await renderRun();
       await goToStep(1);
-      await answer(result);
+      await answer(items, summary);
     }
 
     describe('KPIs', () => {
@@ -1108,16 +1665,257 @@ describe('ReconciliationProcess', () => {
       });
     });
 
+    describe('KPI como foco de la tabla', () => {
+      // Orden recibido: RAP (sin), BBVA (coincide), DIDI (sin), CORTE (diferencia).
+      const FOCUS: BankMatchItem[] = [ITEMS[2], ITEMS[0], ITEMS[3], ITEMS[1]];
+      const ORIGINAL = ['RAP-0001', 'BBVA-0001', 'DIDI-0001', 'CORTE-0827-02'];
+      const COINCIDE = 0;
+      const DIFERENCIA = 1;
+      const SIN_COINCIDENCIA = 2;
+      const POR_GESTIONAR = 3;
+
+      const references = () => bodyRows().map((row) => norm(row.querySelector('.cell-title')?.textContent));
+      const activeCards = () => kpiCards().filter((card) => card.classList.contains('status-card--active'));
+      const pressed = () => kpiCards().map((card) => card.getAttribute('aria-pressed'));
+      const key = (card: HTMLElement, name: string) => {
+        const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
+        card.dispatchEvent(event);
+        return event;
+      };
+
+      async function press(index: number): Promise<void> {
+        kpiCards()[index].click();
+        await settle();
+      }
+
+      beforeEach(() => showResult(FOCUS));
+
+      it('los 4 indicadores son botones enfocables, sin ninguno activo al inicio', () => {
+        expect(references()).toEqual(ORIGINAL);
+        for (const card of kpiCards()) {
+          expect(card.getAttribute('role')).toBe('button');
+          expect(card.getAttribute('tabindex')).toBe('0');
+          expect(card.classList.contains('status-card--clickable')).toBe(true);
+        }
+        expect(pressed()).toEqual(['false', 'false', 'false', 'false']);
+        expect(activeCards()).toHaveLength(0);
+      });
+
+      it.each([
+        ['Coincidencias', COINCIDE, ['BBVA-0001', 'RAP-0001', 'DIDI-0001', 'CORTE-0827-02']],
+        ['Diferencias', DIFERENCIA, ['CORTE-0827-02', 'RAP-0001', 'BBVA-0001', 'DIDI-0001']],
+        ['Sin coincidencias', SIN_COINCIDENCIA, ['RAP-0001', 'DIDI-0001', 'BBVA-0001', 'CORTE-0827-02']],
+        ['Por gestionar', POR_GESTIONAR, ['RAP-0001', 'DIDI-0001', 'CORTE-0827-02', 'BBVA-0001']],
+      ])('clic en "%s" pone sus líneas primero y las demás después en su orden original', async (_label, index, expected) => {
+        await press(index);
+
+        expect(references()).toEqual(expected);
+        expect(bodyRows()).toHaveLength(4);
+      });
+
+      it.each([
+        ['Coincidencias', COINCIDE],
+        ['Diferencias', DIFERENCIA],
+        ['Sin coincidencias', SIN_COINCIDENCIA],
+        ['Por gestionar', POR_GESTIONAR],
+      ])('un segundo clic en "%s" restaura el orden original', async (_label, index) => {
+        await press(index);
+        expect(references()).not.toEqual(ORIGINAL);
+
+        await press(index);
+
+        expect(references()).toEqual(ORIGINAL);
+        expect(activeCards()).toHaveLength(0);
+        expect(pressed()).toEqual(['false', 'false', 'false', 'false']);
+      });
+
+      it('marca como activo y `aria-pressed` solo al indicador elegido, de a uno', async () => {
+        await press(DIFERENCIA);
+        expect(activeCards()).toEqual([kpiCards()[DIFERENCIA]]);
+        expect(pressed()).toEqual(['false', 'true', 'false', 'false']);
+
+        await press(POR_GESTIONAR);
+        expect(activeCards()).toEqual([kpiCards()[POR_GESTIONAR]]);
+        expect(pressed()).toEqual(['false', 'false', 'false', 'true']);
+      });
+
+      it('cambiar de indicador reordena según el nuevo, no se acumula con el anterior', async () => {
+        await press(DIFERENCIA);
+        await press(COINCIDE);
+
+        expect(references()).toEqual(['BBVA-0001', 'RAP-0001', 'DIDI-0001', 'CORTE-0827-02']);
+      });
+
+      it('Enter activa el indicador y otro Enter lo quita', async () => {
+        key(kpiCards()[SIN_COINCIDENCIA], 'Enter');
+        await settle();
+
+        expect(references()).toEqual(['RAP-0001', 'DIDI-0001', 'BBVA-0001', 'CORTE-0827-02']);
+        expect(pressed()).toEqual(['false', 'false', 'true', 'false']);
+
+        key(kpiCards()[SIN_COINCIDENCIA], 'Enter');
+        await settle();
+
+        expect(references()).toEqual(ORIGINAL);
+      });
+
+      it('Espacio activa el indicador, lo alterna y evita el desplazamiento de la página', async () => {
+        const first = key(kpiCards()[DIFERENCIA], ' ');
+        await settle();
+
+        expect(first.defaultPrevented).toBe(true);
+        expect(references()).toEqual(['CORTE-0827-02', 'RAP-0001', 'BBVA-0001', 'DIDI-0001']);
+        expect(activeCards()).toEqual([kpiCards()[DIFERENCIA]]);
+
+        key(kpiCards()[DIFERENCIA], ' ');
+        await settle();
+
+        expect(references()).toEqual(ORIGINAL);
+        expect(activeCards()).toHaveLength(0);
+      });
+
+      it('otras teclas no activan el indicador', async () => {
+        key(kpiCards()[DIFERENCIA], 'a');
+        key(kpiCards()[DIFERENCIA], 'Tab');
+        await settle();
+
+        expect(references()).toEqual(ORIGINAL);
+        expect(activeCards()).toHaveLength(0);
+      });
+
+      it('los KPI siguen mostrando sus conteos y porcentajes, con o sin foco', async () => {
+        const locale = ACTIVE_COUNTRY.locale;
+        const values = () => kpiCards().map(kpiValue);
+        const before = values();
+        expect(before).toEqual([
+          `${formatNumber(1120, locale)} (${formatNumber(90.1, locale, '1.1-1')}%)`,
+          `62 (${formatNumber(5, locale, '1.1-1')}%)`,
+          `61 (${formatNumber(4.9, locale, '1.1-1')}%)`,
+          pendingText(3, 4),
+        ]);
+
+        await press(DIFERENCIA);
+        expect(values()).toEqual(before);
+
+        await press(DIFERENCIA);
+        expect(values()).toEqual(before);
+      });
+
+      it('"Por gestionar" se actualiza al registrar una acción: la línea sale del grupo y la tabla se reordena', async () => {
+        await press(POR_GESTIONAR);
+        expect(references()).toEqual(['RAP-0001', 'DIDI-0001', 'CORTE-0827-02', 'BBVA-0001']);
+
+        internals().onLineResolved({ rowId: ROWS[1].id, type: 'ajuste', comment: 'Motivo' });
+        await settle();
+
+        expect(references()).toEqual(['RAP-0001', 'DIDI-0001', 'BBVA-0001', 'CORTE-0827-02']);
+        expect(kpiValue(kpiCards()[POR_GESTIONAR])).toBe(pendingText(2, 4));
+        expect(activeCards()).toEqual([kpiCards()[POR_GESTIONAR]]);
+
+        internals().onLineResolved({ rowId: ROWS[2].id, type: 'pendiente', comment: '' });
+        internals().onLineResolved({ rowId: ROWS[3].id, type: 'pendiente', comment: '' });
+        await settle();
+
+        // Sin líneas por gestionar el foco no mueve nada: queda el orden original.
+        expect(references()).toEqual(ORIGINAL);
+        expect(kpiValue(kpiCards()[POR_GESTIONAR])).toBe(pendingText(0, 4));
+      });
+
+      it('con foco en un estado, registrar una acción no mueve las líneas', async () => {
+        await press(DIFERENCIA);
+
+        internals().onLineResolved({ rowId: ROWS[1].id, type: 'ajuste', comment: 'Motivo' });
+        await settle();
+
+        expect(references()).toEqual(['CORTE-0827-02', 'RAP-0001', 'BBVA-0001', 'DIDI-0001']);
+      });
+
+      it('el foco no cambia la selección ni las marcas de las líneas', async () => {
+        rowCheckbox(1).click(); // BBVA, la única marcable
+        await settle();
+
+        await press(COINCIDE);
+
+        expect([...internals().selectedIds()]).toEqual([ROWS[0].id]);
+        expect(rowCheckbox(0).checked).toBe(true);
+        expect(hint()).toBe('1 de 4 líneas marcadas');
+      });
+    });
+
+    describe('KPI como foco de la tabla con varias páginas', () => {
+      // 12 coincidentes, y al final una con diferencia y una sin coincidencia: 14 líneas, 2 páginas.
+      const MANY: BankMatchItem[] = [...manyItems(12), ITEMS[1], ITEMS[2]];
+      const references = () => bodyRows().map((row) => norm(row.querySelector('.cell-title')?.textContent));
+      const activePage = () => el.querySelector('nz-pagination .ant-pagination-item-active')?.getAttribute('title');
+
+      beforeEach(() => showResult(MANY));
+
+      it('hay 2 páginas y la diferencia queda fuera de la primera', () => {
+        expect(bodyRows()).toHaveLength(10);
+        expect(references()).not.toContain('CORTE-0827-02');
+        expect(el.querySelectorAll('nz-pagination .ant-pagination-item')).toHaveLength(2);
+      });
+
+      it('cambiar el foco regresa a la página 1 y la fila enfocada queda arriba', async () => {
+        goToPage(2);
+        await settle();
+        expect(activePage()).toBe('2');
+
+        kpiCards()[1].click(); // Diferencias
+        await settle();
+
+        expect(activePage()).toBe('1');
+        expect(bodyRows()).toHaveLength(10);
+        expect(references().slice(0, 2)).toEqual(['CORTE-0827-02', 'R-01']);
+      });
+
+      it('quitar el foco también regresa a la página 1', async () => {
+        kpiCards()[1].click();
+        await settle();
+        goToPage(2);
+        await settle();
+        expect(activePage()).toBe('2');
+
+        kpiCards()[1].click();
+        await settle();
+
+        expect(activePage()).toBe('1');
+        expect(references()[0]).toBe('R-01');
+      });
+
+      it('pasar de un indicador a otro desde la página 2 vuelve a la página 1', async () => {
+        kpiCards()[2].click(); // Sin coincidencias
+        await settle();
+        goToPage(2);
+        await settle();
+
+        kpiCards()[3].click(); // Por gestionar
+        await settle();
+
+        expect(activePage()).toBe('1');
+        expect(references().slice(0, 2)).toEqual(['CORTE-0827-02', 'RAP-0001']);
+      });
+
+      it('las líneas no enfocadas siguen en la tabla, en la página 2', async () => {
+        kpiCards()[2].click(); // Sin coincidencias
+        await settle();
+        goToPage(2);
+        await settle();
+
+        expect(references()).toEqual(['R-10', 'R-11', 'R-12', 'CORTE-0827-02']);
+      });
+    });
+
     describe('KPI "Por gestionar" sin líneas por resolver', () => {
       it('es 0 si todas las líneas coinciden', async () => {
-        await showResult({ ...RESULT, rows: manyRows(3) });
+        await showResult(manyItems(3));
 
         expect(kpiValue(kpiCards()[3])).toBe(pendingText(0, 3));
         expect(kpiValue(kpiCards()[3])).toMatch(/^0 \(0[.,]0%\)$/);
       });
 
       it('es `0 (0.0%)` también sin ninguna línea', async () => {
-        await showResult({ ...RESULT, total: 0, rows: [] });
+        await showResult([], { ...SUMMARY, total: 0 });
 
         expect(kpiValue(kpiCards()[3])).toMatch(/^0 \(0[.,]0%\)$/);
       });
@@ -1126,8 +1924,8 @@ describe('ReconciliationProcess', () => {
     describe('tabla', () => {
       beforeEach(() => showResult());
 
-      it('tiene las columnas checkbox, Fecha, Referencias, POS, Banco y Estado', () => {
-        expect(headers()).toEqual(['', 'Fecha', 'Referencias', 'POS', 'Banco', 'Estado']);
+      it('tiene las columnas checkbox, Fecha, Referencias, POS, Banco, Estado y Notas', () => {
+        expect(headers()).toEqual(['', 'Fecha', 'Referencias', 'POS', 'Banco', 'Estado', 'Notas']);
         expect(headerCheckbox()).not.toBeNull();
       });
 
@@ -1150,17 +1948,17 @@ describe('ReconciliationProcess', () => {
         ]);
       });
 
-      it('Referencias: referencia como título y el medio de pago como subtítulo', () => {
+      it('Referencias: referencia como título y el canal (franquicia o, sin ella, el banco) como subtítulo', () => {
         expect(
           bodyRows().map((row) => [
             norm(row.querySelector('.cell-title')?.textContent),
             norm(row.querySelector('.cell-subtitle')?.textContent),
           ]),
         ).toEqual([
-          ['BBVA-0001', 'BBVA'],
-          ['CORTE-0827-02', 'Efectivo'],
-          ['RAP-0001', 'Rappi'],
-          ['DIDI-0001', 'DiDi Food'],
+          ['BBVA-0001', 'VISA'],
+          ['CORTE-0827-02', 'MASTERCARD'],
+          ['RAP-0001', 'Bancolombia'],
+          ['DIDI-0001', 'AMEX'],
         ]);
       });
 
@@ -1175,6 +1973,14 @@ describe('ReconciliationProcess', () => {
         ]);
         // Los montos son números formateados, no el número crudo.
         expect(amounts[1][0]).not.toBe('1234.5');
+      });
+
+      it('Notas: "—" mientras la línea no tiene una acción con comentario', () => {
+        expect(bodyRows().map((row) => norm(cells(row)[6].textContent))).toEqual(['—', '—', '—', '—']);
+      });
+
+      it('Banco: con un solo movimiento no pinta el subtítulo de conteo', () => {
+        for (const row of bodyRows()) expect(norm(cells(row)[4].textContent)).not.toContain('movimiento');
       });
 
       it('Estado: tag con la etiqueta y el color de cada estado', () => {
@@ -1198,7 +2004,7 @@ describe('ReconciliationProcess', () => {
     });
 
     describe('paginación a 10', () => {
-      beforeEach(() => showResult({ ...RESULT, rows: manyRows(25) }));
+      beforeEach(() => showResult(manyItems(25)));
 
       it('muestra 10 filas por página y 3 páginas con 25 líneas', () => {
         expect(bodyRows()).toHaveLength(10);
@@ -1256,7 +2062,7 @@ describe('ReconciliationProcess', () => {
         headerCheckbox().click();
         await settle();
 
-        expect([...internals().selectedIds()]).toEqual(['bbva:BBVA-0001']);
+        expect([...internals().selectedIds()]).toEqual([ROWS[0].id]);
         expect(rowCheckbox(0).checked).toBe(true);
         for (let i = 1; i < 4; i++) expect(rowCheckbox(i).checked).toBe(false);
         // Marcó todas las marcables: la cabecera queda marcada, no indeterminada.
@@ -1302,7 +2108,7 @@ describe('ReconciliationProcess', () => {
         headerCheckbox().click(); // indeterminada: marca todas las marcables
         await settle();
 
-        expect([...internals().selectedIds()].sort()).toEqual(['bbva:BBVA-0001', 'efectivo:CORTE-0827-02']);
+        expect([...internals().selectedIds()].sort()).toEqual([ROWS[0].id, ROWS[1].id].sort());
         expect(headerCheckbox().checked).toBe(true);
       });
 
@@ -1358,7 +2164,7 @@ describe('ReconciliationProcess', () => {
     });
 
     describe('selección con paginación', () => {
-      beforeEach(() => showResult({ ...RESULT, rows: manyRows(25) }));
+      beforeEach(() => showResult(manyItems(25)));
 
       it('seleccionar todas marca también las líneas de otras páginas', async () => {
         headerCheckbox().click();
@@ -1404,7 +2210,7 @@ describe('ReconciliationProcess', () => {
 
       afterEach(() => vi.restoreAllMocks());
 
-      const diffRow = () => bodyRows()[1]; // efectivo / CORTE-0827-02
+      const diffRow = () => bodyRows()[1]; // CORTE-0827-02, con diferencia
       const closeDrawer = async () => {
         document.body.querySelector<HTMLElement>('.ant-drawer-close')!.click();
         await settle();
@@ -1425,11 +2231,11 @@ describe('ReconciliationProcess', () => {
         await settle();
 
         expect(drawerTitle()).toBe('Detalle de la línea — CORTE-0827-02');
-        expect(managing()).toBe(ROWS[1]);
+        expect(managing()).toEqual(ROWS[1]);
         const detail = lineDetail()!;
         expect(detail).not.toBeNull();
         expect(norm(detail.textContent)).toContain('Banco (Movimientos)');
-        expect(norm(detail.textContent)).toContain('El banco liquidó un monto distinto.');
+        expect(detail.querySelector('.line-top__comment')).toBeNull();
         // Ya no se incrusta "Gestión de diferencias".
         expect(document.body.querySelector('app-difference-management')).toBeNull();
       });
@@ -1543,6 +2349,99 @@ describe('ReconciliationProcess', () => {
       });
     });
 
+    describe('ajuste en la tabla del paso Validación', () => {
+      const diffCells = () => cells(bodyRows()[1]);
+
+      beforeEach(() => showResult());
+      afterEach(() => vi.restoreAllMocks());
+
+      it('antes de ajustar la línea muestra el banco del back, sin "ajustado" ni nota', () => {
+        expect(norm(diffCells()[4].textContent)).toBe(norm(money(1200)));
+        expect(norm(diffCells()[6].textContent)).toBe('—');
+      });
+
+      it('tras un ajuste el banco muestra el nuevo total y "N movimientos · ajustado"', async () => {
+        internals().onLineResolved(ADJUSTMENT);
+        await settle();
+
+        expect(norm(diffCells()[4].textContent)).toBe(`${norm(money(1234.5))} 2 movimientos · ajustado`);
+        expect(norm(diffCells()[4].querySelector('.cell-subtitle')?.textContent)).toBe('2 movimientos · ajustado');
+      });
+
+      it('con un solo movimiento ajustado usa el singular y conserva " · ajustado"', async () => {
+        internals().onLineResolved({ ...ADJUSTMENT, movements: [movement('SOLO', 1000)] });
+        await settle();
+
+        expect(norm(diffCells()[4].textContent)).toBe(`${norm(money(1000))} 1 movimiento · ajustado`);
+      });
+
+      it('la nota de la acción aparece en la columna Notas, con el texto completo como title', async () => {
+        internals().onLineResolved(ADJUSTMENT);
+        await settle();
+
+        expect(norm(diffCells()[6].textContent)).toBe(ADJUSTMENT.comment);
+        expect(diffCells()[6].getAttribute('title')).toBe(ADJUSTMENT.comment);
+      });
+
+      it('ajustar una línea no toca el banco ni las notas de las demás', async () => {
+        internals().onLineResolved(ADJUSTMENT);
+        await settle();
+
+        expect(norm(cells(bodyRows()[0])[4].textContent)).toBe(norm(money(2000)));
+        expect(norm(cells(bodyRows()[0])[6].textContent)).toBe('—');
+        expect(norm(cells(bodyRows()[2])[4].textContent)).toBe('—');
+      });
+
+      it('"pendiente" no cambia el banco (sin "ajustado") y no escribe nota', async () => {
+        internals().onLineResolved({ rowId: ROWS[1].id, type: 'pendiente', comment: '' });
+        await settle();
+
+        expect(norm(diffCells()[4].textContent)).toBe(norm(money(1200)));
+        expect(norm(diffCells()[6].textContent)).toBe('—');
+      });
+
+      it('una reconciliación con archivo muestra su nota pero conserva los movimientos del back', async () => {
+        internals().onLineResolved({ rowId: ROWS[1].id, type: 'reconciliacion', comment: 'Conciliada con extracto' });
+        await settle();
+
+        expect(norm(diffCells()[4].textContent)).toBe(norm(money(1200)));
+        expect(norm(diffCells()[6].textContent)).toBe('Conciliada con extracto');
+      });
+
+      it('una línea sin banco ajustada pasa de "—" a su total', async () => {
+        internals().onLineResolved({
+          rowId: ROWS[2].id,
+          type: 'ajuste',
+          comment: 'Liquidación localizada',
+          movements: [movement('RAP', 350)],
+        });
+        await settle();
+
+        expect(norm(cells(bodyRows()[2])[4].textContent)).toBe(`${norm(money(350))} 1 movimiento · ajustado`);
+      });
+
+      it('al reabrir el detalle se ven los movimientos elegidos, la diferencia y la nota guardada', async () => {
+        internals().onLineResolved(ADJUSTMENT);
+        await settle();
+
+        bodyRows()[1].click();
+        await settle();
+
+        const detail = lineDetail()!;
+        const rowsText = Array.from(detail.querySelectorAll<HTMLElement>('.bank-card tbody tr')).map((tr) =>
+          norm(tr.textContent),
+        );
+        expect(rowsText).toHaveLength(2);
+        expect(rowsText[0]).toContain('MOV-X1');
+        expect(rowsText[1]).toContain('MOV-X2');
+        expect(norm(detail.querySelector('.bank-card__count')?.textContent)).toBe('2 movimientos');
+        expect(norm(detail.querySelector('.bank-total__value')?.textContent)).toBe(norm(money(1234.5)));
+        expect(norm(detail.querySelector('.line-difference__value')?.textContent)).toBe(norm(money(0)));
+        expect(norm(detail.querySelector('#line-notes')?.textContent)).toBe(ADJUSTMENT.comment);
+        expect(norm(detail.querySelector('.line-resolution')?.textContent)).toBe('Monto ajustado.');
+      });
+    });
+
     describe('descargar', () => {
       let createObjectURL: Mock<(obj: Blob | MediaSource) => string>;
       let revokeObjectURL: Mock<(url: string) => void>;
@@ -1571,14 +2470,14 @@ describe('ReconciliationProcess', () => {
 
         nextButton().click();
         await settle();
-        expect(footerButtons().map((b) => norm(b.textContent))).toEqual(['Siguiente']);
+        expect(footerButtons().map((b) => norm(b.textContent))).toEqual(['Confirmar conciliación']);
       });
 
-      it('con resultado aparece "Descargar" antes de "Siguiente", con icono y label', async () => {
+      it('con resultado aparece "Descargar" antes de "Confirmar conciliación", con icono y label', async () => {
         await showResult();
 
         const buttons = footerButtons();
-        expect(buttons.map((b) => norm(b.textContent))).toEqual(['Descargar', 'Siguiente']);
+        expect(buttons.map((b) => norm(b.textContent))).toEqual(['Descargar', 'Confirmar conciliación']);
         expect(buttons[0].firstElementChild?.tagName.toLowerCase()).toBe('svg');
         expect(buttons[0].classList.contains('ant-btn-primary')).toBe(false);
         expect(buttons[1].classList.contains('ant-btn-primary')).toBe(true);
@@ -1613,17 +2512,48 @@ describe('ReconciliationProcess', () => {
         const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes);
         expect(text).toBe(
           [
-            '﻿Fecha,Referencia,Medio de pago,POS,Banco,Estado',
-            '2026-09-12,BBVA-0001,BBVA,2000.00,2000.00,Coincide',
-            '2026-09-10,CORTE-0827-02,Efectivo,1234.50,1200.00,Diferencia',
-            '2026-09-08,RAP-0001,Rappi,350.00,,Sin coincidencia',
-            '2026-09-05,DIDI-0001,DiDi Food,,99.90,Sin coincidencia',
+            '﻿Fecha,Referencia,Medio de pago,POS,Banco,Movimientos banco,Estado,Notas',
+            '2026-09-12,BBVA-0001,VISA,2000.00,2000.00,1,Coincide,',
+            '2026-09-10,CORTE-0827-02,MASTERCARD,1234.50,1200.00,1,Diferencia,',
+            '2026-09-08,RAP-0001,Bancolombia,350.00,,0,Sin coincidencia,',
+            '2026-09-05,DIDI-0001,AMEX,,99.90,1,Sin coincidencia,',
           ].join('\n'),
         );
       });
 
+      it('el CSV refleja el ajuste (suma y conteo de movimientos) y las notas, con escape de comas y comillas', async () => {
+        await showResult();
+        internals().onLineResolved({ ...ADJUSTMENT, comment: 'Ajuste "parcial", revisado con tesorería' });
+        internals().onLineResolved({ rowId: ROWS[2].id, type: 'pendiente', comment: '' });
+        await settle();
+
+        footerButtons()[0].click();
+
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        const lines = new TextDecoder().decode(await blob.arrayBuffer()).split('\n');
+        expect(lines).toHaveLength(5);
+        expect(lines[1]).toBe('2026-09-12,BBVA-0001,VISA,2000.00,2000.00,1,Coincide,');
+        expect(lines[2]).toBe(
+          '2026-09-10,CORTE-0827-02,MASTERCARD,1234.50,1234.50,2,Diferencia,"Ajuste ""parcial"", revisado con tesorería"',
+        );
+        expect(lines[3]).toBe('2026-09-08,RAP-0001,Bancolombia,350.00,,0,Sin coincidencia,');
+        expect(lines[4]).toBe('2026-09-05,DIDI-0001,AMEX,,99.90,1,Sin coincidencia,');
+      });
+
+      it('una nota de otra acción (reconciliación) va al CSV sin cambiar los movimientos del back', async () => {
+        await showResult();
+        internals().onLineResolved({ rowId: ROWS[1].id, type: 'reconciliacion', comment: 'Conciliada con extracto' });
+        await settle();
+
+        footerButtons()[0].click();
+
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        const lines = new TextDecoder().decode(await blob.arrayBuffer()).split('\n');
+        expect(lines[2]).toBe('2026-09-10,CORTE-0827-02,MASTERCARD,1234.50,1200.00,1,Diferencia,Conciliada con extracto');
+      });
+
       it('descarga todas las líneas aunque haya una selección parcial o más de una página', async () => {
-        await showResult({ ...RESULT, rows: manyRows(25) });
+        await showResult(manyItems(25));
         rowCheckbox(0).click();
         await settle();
 
@@ -1756,7 +2686,7 @@ describe('ReconciliationProcess', () => {
       });
 
       it('con todas las líneas coincidentes los conciliados son el 100%', async () => {
-        await showResult({ ...RESULT, rows: manyRows(3) });
+        await showResult(manyItems(3));
         await finishWith([]);
 
         expect(metrics()[2].value).toBe('0');
@@ -1764,14 +2694,14 @@ describe('ReconciliationProcess', () => {
       });
 
       it('el porcentaje se redondea a un decimal (1 de 3 = 33.3%)', async () => {
-        await showResult({ ...RESULT, rows: ROWS.slice(0, 3) });
+        await showResult(ITEMS.slice(0, 3));
         await finishWith(['pendiente', 'pendiente']);
 
         expect(metrics()[3].value).toBe(`1 (${fmt(33.3, '1.1-1')}%)`);
       });
 
       it('sin líneas el porcentaje es 0 y no se divide entre cero', async () => {
-        await showResult({ ...RESULT, rows: [], totals: { pos: 0, bank: 0 } });
+        await showResult([]);
         await finishWith([]);
 
         expect(metrics()[2].value).toBe('0');
@@ -1788,6 +2718,122 @@ describe('ReconciliationProcess', () => {
         expect(el.querySelector('.result-kpis')).toBeNull();
         expect(el.querySelector('nz-table')).toBeNull();
       });
+    });
+  });
+
+  describe('paso 2 → 3 · confirmar conciliación', () => {
+    const completionNote = () => norm(el.querySelector('.completion__note')?.textContent);
+
+    beforeEach(async () => {
+      await renderRun();
+      await goToStep(1);
+      await answer();
+      await markAllRows();
+    });
+
+    it('el botón dice "Confirmar conciliación", con icono antes del label, y se habilita con todas las líneas marcadas', () => {
+      expect(norm(nextButton().textContent)).toBe('Confirmar conciliación');
+      expect(nextButton().firstElementChild?.tagName.toLowerCase()).toBe('svg');
+      expect(nextButton().disabled).toBe(false);
+      expect(bankReports.confirm).not.toHaveBeenCalled();
+    });
+
+    it('al pulsarlo confirma la conciliación por su id y pasa al paso 3', async () => {
+      nextButton().click();
+      await settle();
+
+      expect(bankReports.confirm).toHaveBeenCalledExactlyOnceWith('CON-0007');
+      expect(steps()[2].classList.contains('ant-steps-item-process')).toBeTruthy();
+      expect(el.querySelector('.completion')).not.toBeNull();
+    });
+
+    it('el paso 3 muestra el código y cómo quedaron las ventas según el back', async () => {
+      nextButton().click();
+      await settle();
+
+      expect(completionNote()).toBe(
+        'CON-0007 quedó confirmada. Ventas conciliadas: 40 · con diferencia: 3 · sin coincidencia: 2.',
+      );
+    });
+
+    it('marca la conciliación como conciliada en el store', async () => {
+      const store = TestBed.inject(ReconciliationRunsStore);
+      expect(store.find('CON-0007')?.status).toBe('pendiente');
+
+      nextButton().click();
+      await settle();
+
+      expect(store.find('CON-0007')).toMatchObject({ id: 'CON-0007', code: 'CON-0007', status: 'conciliado' });
+    });
+
+    it('mientras confirma el botón muestra carga, no avanza y no confirma dos veces', async () => {
+      const pending = new Subject<ReconciliationConfirm>();
+      bankReports.confirm.mockReturnValue(pending);
+
+      nextButton().click();
+      await settle();
+
+      expect(nextButton().classList.contains('ant-btn-loading')).toBe(true);
+      expect(nextButton().disabled).toBe(true);
+      expect(steps()[1].classList.contains('ant-steps-item-process')).toBeTruthy();
+      nextButton().click();
+      await settle();
+      expect(bankReports.confirm).toHaveBeenCalledTimes(1);
+
+      pending.next(CONFIRMATION);
+      pending.complete();
+      await settle();
+
+      expect(nextButton().classList.contains('ant-btn-loading')).toBe(false);
+      expect(steps()[2].classList.contains('ant-steps-item-process')).toBeTruthy();
+    });
+
+    it('si falla muestra el error del back y se queda en el paso 2 con el resultado', async () => {
+      bankReports.confirm.mockReturnValue(throwError(() => httpError(409, 'La conciliación ya está confirmada.')));
+
+      nextButton().click();
+      await settle();
+
+      expect(message.error).toHaveBeenCalledExactlyOnceWith('La conciliación ya está confirmada.', { nzDuration: 8000 });
+      expect(steps()[1].classList.contains('ant-steps-item-process')).toBeTruthy();
+      expect(el.querySelector('.result-kpis')).not.toBeNull();
+      expect(el.querySelector('.completion')).toBeNull();
+      expect(nextButton().classList.contains('ant-btn-loading')).toBe(false);
+      expect(nextButton().disabled).toBe(false);
+      expect(TestBed.inject(ReconciliationRunsStore).find('CON-0007')?.status).toBe('pendiente');
+    });
+
+    it('un error de conexión usa el mensaje de conexión', async () => {
+      bankReports.confirm.mockReturnValue(throwError(() => httpError(0)));
+
+      nextButton().click();
+      await settle();
+
+      expect(message.error).toHaveBeenCalledWith('No se pudo conectar con el servidor. Intenta de nuevo.', { nzDuration: 8000 });
+    });
+
+    it('tras un error se puede volver a confirmar', async () => {
+      bankReports.confirm.mockReturnValueOnce(throwError(() => SERVER_ERROR));
+      nextButton().click();
+      await settle();
+
+      nextButton().click();
+      await settle();
+
+      expect(bankReports.confirm).toHaveBeenCalledTimes(2);
+      expect(steps()[2].classList.contains('ant-steps-item-process')).toBeTruthy();
+    });
+
+    it('al destruir el componente se cancela la confirmación en curso', async () => {
+      const pending = new Subject<ReconciliationConfirm>();
+      bankReports.confirm.mockReturnValue(pending);
+      nextButton().click();
+      await settle();
+      expect(pending.observed).toBe(true);
+
+      fixture.destroy();
+
+      expect(pending.observed).toBe(false);
     });
   });
 

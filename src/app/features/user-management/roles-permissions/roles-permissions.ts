@@ -1,11 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { NgStyle } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { NzMessageService } from 'ng-zorro-antd/message';
@@ -16,6 +15,7 @@ import { RolesApiService } from '../data/roles-api.service';
 import { RoleId } from '../../../shared/models/access.model';
 import { AppUser, fullName } from '../data/user-management.model';
 import { UserManagementService } from '../data/user-management.service';
+import { PageHeaderService } from '../../../core/layout/header/page-header.service';
 
 // Una fila de la tabla: el rol, sus permisos (descripción de `GET /permissions`)
 // y las personas que lo tienen asignado.
@@ -34,12 +34,14 @@ interface RoleRow {
  */
 @Component({
   selector: 'app-roles-permissions',
-  imports: [NgStyle, RouterLink, NzPageHeaderModule, NzCardModule, NzTableModule, NzButtonModule, NzAvatarModule, NzTooltipModule, NzModalModule],
+  imports: [NgStyle, RouterLink, NzCardModule, NzTableModule, NzButtonModule, NzAvatarModule, NzTooltipModule, NzModalModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './roles-permissions.html',
   styleUrl: './roles-permissions.scss',
 })
 export class RolesPermissions {
+  private readonly pageHeader = inject(PageHeaderService);
+  private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
   protected readonly catalog = inject(AccessCatalogService);
   private readonly users = inject(UserManagementService);
 
@@ -65,6 +67,7 @@ export class RolesPermissions {
   });
 
   constructor() {
+    this.pageHeader.bind(() => ({ actions: this.headerActions() ?? null }));
     // Mismo criterio que `UserList`: refresca roles/altas hechas fuera de esta sesión.
     this.users.syncFromBackend();
   }

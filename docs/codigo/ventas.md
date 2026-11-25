@@ -51,10 +51,32 @@ Código: `src/app/shared/models/sale.model.ts`, `src/app/features/sales-dashboar
   filtra por subsidiaria y las ubicaciones del login no traen su subsidiaria.
 - Estado de la fila: `ReconciliationStatusTag` pinta los 3 estados del portal; el `code` del
   backend usa los mismos valores y un código desconocido cae a "por conciliar".
-- Drawer: el backend no expone `GET /sales/{id}`, así que el detalle muestra solo lo que trae la
-  fila del listado (sin productos, impuestos por línea, pagos ni datos fiscales).
+- Drawer: el resumen sale de la fila y el resto de `GET /sales/{id}` (ver
+  [#detalle-de-venta](#detalle-de-venta)).
 
 Código: `src/app/features/sales-dashboard/sales-dashboard.*`, `data/sales-dashboard.service.ts`.
+
+<a id="detalle-de-venta"></a>
+## Detalle de una venta (`GET /sales/{id}`)
+
+- Core Service, permiso `view_dashboard`; el id es el de la fila de `GET /sales`. 404 si no existe.
+- Al abrir el Drawer, un `rxResource` sobre `selectedSale()?.id` pide el detalle. El resumen de la
+  fila se ve al instante; el detalle agrega Cliente (documento DIAN, tipo de persona, régimen,
+  contacto), Comprobante fiscal (número, CUFE, fecha de facturación, resolución y medios de pago
+  DIAN), Productos, Pagos (con el voucher: franquicia, adquirente, aprobación y fecha), Descuentos y
+  propinas e Impuestos. "Importes" usa el desglose del detalle si llegó y, si no, los de la fila.
+- `saleDetail` se descarta si la respuesta es de otra venta (se abrió otra mientras llegaba). Si
+  falla, el Drawer lo dice con "Reintentar" y el resumen de la fila sigue visible.
+- `lines` llega vacío en ventas capturadas antes de guardarse los productos; los campos del cliente
+  y del voucher pueden venir `null` (se muestra "—").
+- Formato en `sale-detail.util.ts`: documento con dígito de verificación, códigos DIAN, franquicia y
+  adquirente, y nombre del tributo (catálogo 23; un código nuevo se muestra tal cual). En el
+  tributo 22 (bolsas) la tasa es monto por unidad, por eso no lleva "%".
+- Hallazgo (DEV `ef1b0de`): `ISaleDetailRepository` del core todavía consulta la tabla `ubicacion`
+  (renombrada a `location`) y responde 500 para cualquier venta; el front muestra el error.
+
+Código: `data/sales-api.service.ts` (`SaleDetail`, `detail`), `data/sales-dashboard.service.ts`,
+`data/sale-detail.util.ts`.
 
 <a id="api-de-ventas"></a>
 ## `GET /sales`: paginación y filtros

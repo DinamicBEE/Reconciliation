@@ -1,5 +1,4 @@
 <div class="sales-dashboard">
-  <nz-page-header class="page-header" nzTitle="Resumen de venta" />
 
   <!-- Filtros + tabla: MASTER.md "Patrón: card de tabla" -->
   <nz-card class="table-card" [nzBodyStyle]="{ padding: '24px' }">
@@ -190,7 +189,7 @@
   </nz-card>
 </div>
 
-<!-- Drawer de detalle (con los datos de la fila; ver docs/codigo/ventas.md#resumen-de-venta) -->
+<!-- Drawer de detalle: resumen de la fila + GET /sales/{id} (docs/codigo/ventas.md#detalle-de-venta) -->
 <nz-drawer
   [nzVisible]="service.selectedSale() !== null"
   [nzTitle]="service.selectedSale() ? 'Venta ' + service.selectedSale()!.folio : ''"
@@ -305,26 +304,255 @@
           </div>
         </section>
 
+        <!-- Detalle completo (GET /sales/{id}) -->
+        @if (service.saleDetail(); as detail) {
+          @if (detail.customer; as customer) {
+            <section class="sale-drawer__section">
+              <h3 class="sale-drawer__heading">Cliente</h3>
+              <div class="info-fields">
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Nombre</span></span>
+                  <span class="info-field__value">{{ customer.name }}</span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Documento</span></span>
+                  <span class="info-field__value font-mono">{{ customerDocument(customer) }}</span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Tipo de persona</span></span>
+                  <span class="info-field__value">{{ customer.personType?.description ?? '—' }}</span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Régimen fiscal</span></span>
+                  <span class="info-field__value">{{ customer.taxRegime?.description ?? '—' }}</span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Correo</span></span>
+                  <span class="info-field__value">{{ customer.email ?? '—' }}</span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Teléfono</span></span>
+                  <span class="info-field__value">{{ customer.mobilePhone ?? customer.phone ?? '—' }}</span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Dirección</span></span>
+                  <span class="info-field__value">{{ customer.address ?? '—' }}</span>
+                </div>
+              </div>
+            </section>
+          }
+
+          @if (detail.fiscal; as fiscal) {
+            <section class="sale-drawer__section">
+              <h3 class="sale-drawer__heading">Comprobante fiscal</h3>
+              <div class="info-fields">
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Número</span></span>
+                  <span class="info-field__value font-mono">{{ (fiscal.prefix ?? '') + (fiscal.number ?? '') || '—' }}</span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Facturada</span></span>
+                  <span class="info-field__value font-mono">
+                    {{ fiscal.billedAt ? (fiscal.billedAt | date: 'dd/MM/yyyy HH:mm') : '—' }}
+                  </span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Resolución DIAN</span></span>
+                  <span class="info-field__value font-mono">{{ fiscal.resolutionNumber ?? '—' }}</span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">Medios de pago DIAN</span></span>
+                  <span class="info-field__value">{{ dianCodesLabel(fiscal.dianPaymentMethods) }}</span>
+                </div>
+                <div class="info-field">
+                  <span class="info-field__head"><span class="info-field__label">CUFE</span></span>
+                  <span class="info-field__value font-mono sale-drawer__cufe" [attr.title]="fiscal.cufe">{{ fiscal.cufe ?? '—' }}</span>
+                </div>
+              </div>
+            </section>
+          }
+
+          <section class="sale-drawer__section">
+            <h3 class="sale-drawer__heading">Productos</h3>
+            <nz-table
+              #linesTbl
+              [nzData]="detail.lines"
+              [nzFrontPagination]="false"
+              [nzShowPagination]="false"
+              nzSize="small"
+              [nzScroll]="{ x: 'max-content' }"
+              nzNoResult="Los productos de esta venta aún no se capturaron."
+            >
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th class="text-right">Cantidad</th>
+                  <th class="text-right">Precio unitario</th>
+                  <th class="text-right">Impuesto</th>
+                  <th class="text-right">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (line of linesTbl.data; track line.seq) {
+                  <tr>
+                    <td>
+                      {{ line.description }}
+                      @if (line.productCode) {
+                        <span class="text-muted font-mono">({{ line.productCode }})</span>
+                      }
+                    </td>
+                    <td class="text-right font-mono">{{ line.quantity | number: '1.0-3' }}</td>
+                    <td class="text-right font-mono">{{ line.unitPrice | money }}</td>
+                    <td class="text-right font-mono">{{ line.taxAmount === null ? '—' : (line.taxAmount | money) }}</td>
+                    <td class="text-right font-mono">{{ line.amount | money }}</td>
+                  </tr>
+                }
+              </tbody>
+            </nz-table>
+          </section>
+
+          <section class="sale-drawer__section">
+            <h3 class="sale-drawer__heading">Pagos</h3>
+            <nz-table
+              #paymentsTbl
+              [nzData]="detail.payments"
+              [nzFrontPagination]="false"
+              [nzShowPagination]="false"
+              nzSize="small"
+              [nzScroll]="{ x: 'max-content' }"
+              nzNoResult="La venta no tiene pagos."
+            >
+              <thead>
+                <tr>
+                  <th>Medio de pago</th>
+                  <th>Franquicia / adquirente</th>
+                  <th>Aprobación</th>
+                  <th>Fecha del pago</th>
+                  <th class="text-right">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (payment of paymentsTbl.data; track payment.seq) {
+                  <tr>
+                    <td>
+                      {{ payment.tenderMedia?.description ?? '—' }}
+                      @if (payment.dianPaymentMethod) {
+                        <span class="text-muted">· DIAN {{ payment.dianPaymentMethod.code }}</span>
+                      }
+                    </td>
+                    <td>{{ cardLabel(payment.cardNetwork, payment.acquirer) }}</td>
+                    <td class="font-mono">{{ payment.approvalCode ?? '—' }}</td>
+                    <td class="font-mono">{{ payment.paidAt ? (payment.paidAt | date: 'dd/MM/yyyy HH:mm') : '—' }}</td>
+                    <td class="text-right font-mono">{{ payment.amount | money }}</td>
+                  </tr>
+                }
+              </tbody>
+            </nz-table>
+          </section>
+
+          @if (detail.adjustments?.items?.length) {
+            <section class="sale-drawer__section">
+              <h3 class="sale-drawer__heading">Descuentos y propinas</h3>
+              <nz-table
+                #adjTbl
+                [nzData]="detail.adjustments!.items"
+                [nzFrontPagination]="false"
+                [nzShowPagination]="false"
+                nzSize="small"
+              >
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Motivo</th>
+                    <th class="text-right">Porcentaje</th>
+                    <th class="text-right">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of adjTbl.data; track item.seq) {
+                    <tr>
+                      <td>{{ item.kind === 'DISCOUNT' ? 'Descuento' : 'Propina / recargo' }}</td>
+                      <td>{{ item.reason ?? '—' }}</td>
+                      <td class="text-right font-mono">
+                        {{ item.percentage === null ? '—' : (item.percentage | number: '1.0-2') + ' %' }}
+                      </td>
+                      <td class="text-right font-mono">{{ item.amount | money }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </nz-table>
+            </section>
+          }
+
+          @if (detail.taxes.length) {
+            <section class="sale-drawer__section">
+              <h3 class="sale-drawer__heading">Impuestos</h3>
+              <nz-table #taxTbl [nzData]="detail.taxes" [nzFrontPagination]="false" [nzShowPagination]="false" nzSize="small">
+                <thead>
+                  <tr>
+                    <th>Tributo</th>
+                    <th class="text-right">Tasa</th>
+                    <th class="text-right">Base</th>
+                    <th class="text-right">Impuesto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (tax of taxTbl.data; track $index) {
+                    <tr>
+                      <td>{{ taxLabel(tax.code) }}</td>
+                      <td class="text-right font-mono">{{ tax.rate | number: '1.0-2' }}{{ tax.code === '22' ? '' : ' %' }}</td>
+                      <td class="text-right font-mono">{{ tax.base | money }}</td>
+                      <td class="text-right font-mono">{{ tax.amount | money }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </nz-table>
+            </section>
+          }
+        }
+
         <section class="sale-drawer__section">
           <h3 class="sale-drawer__heading">Importes</h3>
+          @let breakdown = service.saleDetail()?.breakdown;
           <div class="info-fields">
             <div class="info-field">
               <span class="info-field__head"><span class="info-field__label">Subtotal</span></span>
-              <span class="info-field__value font-mono">{{ sale.subtotal | money }}</span>
+              <span class="info-field__value font-mono">{{ (breakdown?.subtotal ?? sale.subtotal) | money }}</span>
             </div>
             <div class="info-field">
               <span class="info-field__head"><span class="info-field__label">Impuestos</span></span>
-              <span class="info-field__value font-mono">{{ sale.taxes | money }}</span>
+              <span class="info-field__value font-mono">{{ (breakdown?.taxes ?? sale.taxes) | money }}</span>
             </div>
+            @if (breakdown) {
+              <div class="info-field">
+                <span class="info-field__head"><span class="info-field__label">Propinas y recargos</span></span>
+                <span class="info-field__value font-mono">{{ breakdown.charges | money }}</span>
+              </div>
+            }
             <div class="info-field">
               <span class="info-field__head"><span class="info-field__label">Total</span></span>
-              <span class="info-field__value font-mono">{{ sale.total | money }}</span>
+              <span class="info-field__value font-mono">{{ (breakdown?.total ?? sale.total) | money }}</span>
             </div>
+            @if (breakdown) {
+              <div class="info-field">
+                <span class="info-field__head"><span class="info-field__label">Total pagado</span></span>
+                <span class="info-field__value font-mono">{{ breakdown.totalPaid | money }}</span>
+              </div>
+            }
           </div>
-          <p class="text-muted sale-drawer__note">
-            El detalle completo (productos, impuestos por línea, pagos y datos fiscales) estará disponible cuando el backend
-            publique el detalle de la venta.
-          </p>
+          @if (service.saleDetailLoading()) {
+            <p class="text-muted sale-drawer__note">Cargando el detalle de la venta…</p>
+          } @else if (service.saleDetailFailed()) {
+            <p class="text-muted sale-drawer__note">
+              No se pudo cargar el detalle de la venta.
+              <button nz-button nzType="link" type="button" (click)="service.reloadSaleDetail()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v6h6M20 20v-6h-6M5.5 15a7 7 0 0 0 12.4 2M18.5 9A7 7 0 0 0 6.1 7" />
+                </svg>
+                Reintentar
+              </button>
+            </p>
+          }
         </section>
       </div>
     }

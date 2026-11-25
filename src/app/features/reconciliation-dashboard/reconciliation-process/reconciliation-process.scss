@@ -45,69 +45,6 @@
   color: var(--color-muted-foreground);
 }
 
-// Paso 2 · Validación: engranes girando, textos y barra, en columna centrada.
-.validation {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  text-align: center;
-}
-
-.gears {
-  margin-bottom: 8px;
-}
-
-// Engranes acoplados: sentidos opuestos; el chico, más rápido (menos dientes).
-.gear {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: gear-spin 6s linear infinite;
-}
-
-.gear--a {
-  color: var(--color-primary);
-}
-
-.gear--b {
-  color: var(--color-secondary);
-  animation-direction: reverse;
-  animation-duration: 4.5s;
-}
-
-.gear__hole {
-  fill: var(--color-card);
-}
-
-@keyframes gear-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .gear {
-    animation: none;
-  }
-}
-
-.validation__title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-foreground);
-}
-
-.validation__subtitle {
-  font-size: 13px;
-  color: var(--color-muted-foreground);
-}
-
-.validation__progress {
-  width: 100%;
-  max-width: 420px;
-  margin-top: 16px;
-}
-
 // Resultado: 3 KPI de semáforo y el indicador de líneas por gestionar.
 .result-kpis {
   display: grid;
@@ -148,6 +85,57 @@
 // Los iconos son SVG de este template: heredan `currentColor` de aquí, no del tema de los steps.
 .process-steps svg {
   color: var(--color-primary);
+}
+
+// Paso 1: banco o canal del reporte, sobre la zona de carga.
+.process-bank {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.process-bank__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.process-bank__control {
+  width: 100%;
+  max-width: 320px;
+}
+
+.process-notice,
+.completion__note {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  margin: 0 0 16px;
+}
+
+// Paso 2 con error: mensaje del back y acciones centradas.
+.validation-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.validation-error__title {
+  font-size: 16px;
+  color: var(--color-foreground);
+}
+
+.validation-error__detail {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+.validation-error__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 // Paso 3: banner de éxito, divisor tenue y métricas en columna (nombre arriba, valor abajo).
