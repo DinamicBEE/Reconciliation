@@ -1,138 +1,233 @@
-<nav class="app-menu" [class.app-menu--expanded]="menu.expanded()">
+<div class="app-menu" [class.app-menu--expanded]="menu.expanded()">
   <button
     type="button"
     class="app-menu__toggle"
+    aria-label="Menú lateral"
+    aria-controls="app-menu-nav"
+    [attr.aria-expanded]="menu.expanded()"
+    nz-tooltip
+    nzTooltipPlacement="right"
+    [nzTooltipTitle]="menu.expanded() ? 'Contraer menú' : 'Expandir menú'"
     (click)="menu.toggle()"
-    [attr.aria-label]="menu.expanded() ? 'Contraer menú' : 'Expandir menú'"
   >
     @if (menu.expanded()) {
       <!-- flecha izquierda: contraer -->
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6" />
       </svg>
     } @else {
       <!-- flecha derecha: expandir -->
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 18l6-6-6-6" />
       </svg>
     }
   </button>
 
-  <div class="app-menu__items">
-    @if (access.hasPermission('view_dashboard')) {
-      <a
-        class="app-menu__link"
-        routerLink="/dashboard"
-        routerLinkActive="app-menu__link--active"
-        nz-tooltip
-        nzTooltipPlacement="right"
-        [nzTooltipTitle]="menu.expanded() ? null : 'Dashboard'"
-        aria-label="Dashboard"
-      >
-        <span class="app-menu__icon">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="9" rx="1" />
-            <rect x="14" y="3" width="7" height="5" rx="1" />
-            <rect x="14" y="12" width="7" height="9" rx="1" />
-            <rect x="3" y="16" width="7" height="5" rx="1" />
-          </svg>
-        </span>
-        <span class="app-menu__label">Dashboard</span>
-      </a>
-    }
+  <nav id="app-menu-nav" class="app-menu__items" aria-label="Principal">
+    <ul class="app-menu__list">
+      @if (access.hasPermission('view_dashboard')) {
+        <li>
+          <a
+            class="app-menu__link"
+            routerLink="/dashboard"
+            routerLinkActive="app-menu__link--active"
+            ariaCurrentWhenActive="page"
+            nz-tooltip
+            nzTooltipPlacement="right"
+            [nzTooltipTitle]="menu.expanded() ? null : 'Dashboard'"
+            aria-label="Dashboard"
+          >
+            <span class="app-menu__icon">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="3" width="7" height="9" rx="1" />
+                <rect x="14" y="3" width="7" height="5" rx="1" />
+                <rect x="14" y="12" width="7" height="9" rx="1" />
+                <rect x="3" y="16" width="7" height="5" rx="1" />
+              </svg>
+            </span>
+            <span class="app-menu__label">Dashboard</span>
+          </a>
+        </li>
+      }
 
-    @if (access.hasPermission('view_reconciliation')) {
-      <a
-        class="app-menu__link"
-        routerLink="/conciliacion"
-        routerLinkActive="app-menu__link--active"
-        nz-tooltip
-        nzTooltipPlacement="right"
-        [nzTooltipTitle]="menu.expanded() ? null : 'Conciliación'"
-        aria-label="Conciliación"
-      >
-        <span class="app-menu__icon">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M17 2l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"
-            />
-          </svg>
-        </span>
-        <span class="app-menu__label">Conciliación</span>
-      </a>
-    }
+      @if (access.hasPermission('view_reconciliation')) {
+        <li>
+          <a
+            class="app-menu__link"
+            routerLink="/conciliacion"
+            routerLinkActive="app-menu__link--active"
+            ariaCurrentWhenActive="page"
+            nz-tooltip
+            nzTooltipPlacement="right"
+            [nzTooltipTitle]="menu.expanded() ? null : 'Conciliación'"
+            aria-label="Conciliación"
+          >
+            <span class="app-menu__icon">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M17 2l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"
+                />
+              </svg>
+            </span>
+            <span class="app-menu__label">Conciliación</span>
+          </a>
+        </li>
+      }
 
-    <!-- Catálogos: cualquier usuario autenticado -->
-    <a
-      class="app-menu__link"
-      routerLink="/catalogos"
-      routerLinkActive="app-menu__link--active"
-      nz-tooltip
-      nzTooltipPlacement="right"
-      [nzTooltipTitle]="menu.expanded() ? null : 'Catálogos'"
-      aria-label="Catálogos"
-    >
-      <span class="app-menu__icon">
-        <!-- libro abierto: listas de consulta -->
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z" />
-          <path stroke-linecap="round" stroke-linejoin="round" d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z" />
-        </svg>
-      </span>
-      <span class="app-menu__label">Catálogos</span>
-    </a>
+      <!-- Catálogos: cualquier usuario autenticado -->
+      <li>
+        <a
+          class="app-menu__link"
+          routerLink="/catalogos"
+          routerLinkActive="app-menu__link--active"
+          ariaCurrentWhenActive="page"
+          nz-tooltip
+          nzTooltipPlacement="right"
+          [nzTooltipTitle]="menu.expanded() ? null : 'Catálogos'"
+          aria-label="Catálogos"
+        >
+          <span class="app-menu__icon">
+            <!-- libro abierto: listas de consulta -->
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"
+              />
+            </svg>
+          </span>
+          <span class="app-menu__label">Catálogos</span>
+        </a>
+      </li>
 
-    @if (access.hasPermission('manage_users')) {
-      <a
-        class="app-menu__link"
-        routerLink="/usuarios"
-        routerLinkActive="app-menu__link--active"
-        nz-tooltip
-        nzTooltipPlacement="right"
-        [nzTooltipTitle]="menu.expanded() ? null : 'Usuarios'"
-        aria-label="Usuarios"
-      >
-        <span class="app-menu__icon">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
-            />
-          </svg>
-        </span>
-        <span class="app-menu__label">Usuarios</span>
-      </a>
-    }
+      @if (access.hasPermission('manage_users')) {
+        <li>
+          <a
+            class="app-menu__link"
+            routerLink="/usuarios"
+            routerLinkActive="app-menu__link--active"
+            ariaCurrentWhenActive="page"
+            nz-tooltip
+            nzTooltipPlacement="right"
+            [nzTooltipTitle]="menu.expanded() ? null : 'Usuarios'"
+            aria-label="Usuarios"
+          >
+            <span class="app-menu__icon">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                />
+                <circle cx="9" cy="7" r="4" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
+                />
+              </svg>
+            </span>
+            <span class="app-menu__label">Usuarios</span>
+          </a>
+        </li>
+      }
 
-    @if (access.hasPermission('manage_roles')) {
-      <a
-        class="app-menu__link"
-        routerLink="/gestion-de-roles"
-        routerLinkActive="app-menu__link--active"
-        nz-tooltip
-        nzTooltipPlacement="right"
-        [nzTooltipTitle]="menu.expanded() ? null : 'Roles y permisos'"
-        aria-label="Roles y permisos"
-      >
-        <span class="app-menu__icon">
-          <!-- escudo con check: roles y permisos -->
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4" />
-          </svg>
-        </span>
-        <span class="app-menu__label">Roles y permisos</span>
-      </a>
-    }
-  </div>
+      @if (access.hasPermission('manage_roles')) {
+        <li>
+          <a
+            class="app-menu__link"
+            routerLink="/gestion-de-roles"
+            routerLinkActive="app-menu__link--active"
+            ariaCurrentWhenActive="page"
+            nz-tooltip
+            nzTooltipPlacement="right"
+            [nzTooltipTitle]="menu.expanded() ? null : 'Roles y permisos'"
+            aria-label="Roles y permisos"
+          >
+            <span class="app-menu__icon">
+              <!-- escudo con check: roles y permisos -->
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"
+                />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4" />
+              </svg>
+            </span>
+            <span class="app-menu__label">Roles y permisos</span>
+          </a>
+        </li>
+      }
+    </ul>
+  </nav>
 
   <div class="app-menu__separator"></div>
 
+  <!-- Acción de sesión, no navegación: fuera del <nav> -->
   <div class="app-menu__footer">
     <button
       type="button"
@@ -145,8 +240,20 @@
     >
       <span class="app-menu__icon">
         <!-- salir -->
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
+          />
           <path stroke-linecap="round" stroke-linejoin="round" d="M10 17l5-5-5-5" />
           <path stroke-linecap="round" d="M15 12H3" />
         </svg>
@@ -154,4 +261,4 @@
       <span class="app-menu__label">Cerrar sesión</span>
     </button>
   </div>
-</nav>
+</div>

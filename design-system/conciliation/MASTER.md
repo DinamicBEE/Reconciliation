@@ -635,6 +635,20 @@ mismo patrón que `ThemeService`).
   defecto) pasa a `color: var(--color-primary)` específicamente cuando el
   link está activo, para que se note cuál pantalla está seleccionada
   incluso contraído (sin la etiqueta de texto visible).
+- **Pantalla actual no solo por color**: cada link lleva
+  `ariaCurrentWhenActive="page"` y, activo, una barra de 3px al borde inicial
+  (`::before`, `--color-primary`); en `forced-colors: active` la barra pasa a
+  `Highlight` porque el fondo se anula.
+- **Accesibilidad de la estructura**: los links van en `<nav aria-label="Principal">`
+  → `ul > li > a`. "Cerrar sesión" es una acción y vive fuera del `<nav>`. El botón
+  `.app-menu__toggle` tiene nombre fijo ("Menú lateral") + `aria-expanded` +
+  `aria-controls`, con `nz-tooltip` ("Expandir/Contraer menú"). Los SVG llevan
+  `aria-hidden="true"`; el nombre accesible es el `aria-label` del link.
+- **Movimiento**: la transición de `width` solo corre con
+  `prefers-reduced-motion: no-preference`; las de color no se tocan.
+- **Anillo de foco**: `.app-menu__items` lleva `padding: 4px 8px` y
+  `overflow-y: auto` (no `hidden`): con `hidden` se recortaba el anillo
+  (`outline` 2px + `outline-offset` 2px) del primer link.
 
 ### Historial: "Detalle por tender media" (retirado)
 

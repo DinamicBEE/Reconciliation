@@ -18,8 +18,12 @@
   border-radius: 8px;
   background: var(--color-on-primary);
   overflow: hidden;
-  transition: width 200ms ease;
   box-sizing: border-box;
+
+  // Solo el ancho es movimiento espacial; los colores siguen con transición.
+  @media (prefers-reduced-motion: no-preference) {
+    transition: width 200ms ease;
+  }
 }
 
 .app-menu--expanded {
@@ -55,14 +59,22 @@
   }
 }
 
-// `flex: 1 1 auto` empuja el separador y el pie al fondo del menú.
+// `flex: 1 1 auto` empuja el separador y el pie al fondo del menú. El padding vertical (4px) deja
+// espacio al anillo de foco (2px + offset 2px), que el overflow recortaría; si no caben, hace scroll.
 .app-menu__items {
+  flex: 1 1 auto;
+  padding: 4px 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.app-menu__list {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
   gap: 4px;
-  padding: 0 8px;
-  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 // Mismo inset horizontal que los links, para alinearse con los iconos.
@@ -84,6 +96,7 @@
 // Hover y activo en --color-muted; el icono activo en --color-primary (visible también contraído).
 // Reset de `<button>` porque el pie usa la misma clase.
 .app-menu__link {
+  position: relative;
   display: flex;
   align-items: center;
   width: 100%;
@@ -119,12 +132,31 @@
   padding: 0;
 }
 
+// Además del color, una barra al borde inicial marca la pantalla actual (no depende solo del color).
 .app-menu__link--active {
   background: var(--color-muted);
   color: var(--color-foreground);
 
   .app-menu__icon {
     color: var(--color-primary);
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset-block: 8px;
+    inset-inline-start: 0;
+    inline-size: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--color-primary);
+  }
+
+  // En colores forzados el fondo se anula: la barra usa el color de selección del sistema.
+  @media (forced-colors: active) {
+    &::before {
+      forced-color-adjust: none;
+      background: Highlight;
+    }
   }
 }
 

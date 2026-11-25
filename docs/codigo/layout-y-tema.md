@@ -69,9 +69,13 @@ MASTER.md: "Patrón: navegación entre módulos (Menu lateral)" y "Menu lateral:
 expandido/contraído y tokens".
 
 - **Estado.** `MenuService.expanded` es un signal persistido en `localStorage`
-  (`conciliation-menu-expanded`); contraído por defecto. Contraído solo se ven los iconos (cada link
-  lleva `nz-tooltip` a la derecha y `aria-label`; expandido el tooltip se desactiva con título `null`) y el icono activo va en `--color-primary` para que se note la pantalla actual
-  sin etiqueta.
+  (`conciliation-menu-expanded`); contraído por defecto. Contraído solo se ven los iconos: cada link
+  lleva `nz-tooltip` a la derecha y `aria-label` (expandido el tooltip se desactiva con título
+  `null`). La pantalla actual va con `aria-current="page"`, icono en `--color-primary` y una barra
+  al borde inicial, para que se note sin etiqueta y sin depender solo del color.
+- **Estructura accesible.** `<nav aria-label="Principal">` con `ul > li > a`; "Cerrar sesión" es una
+  acción y queda fuera del `<nav>`. El toggle tiene nombre fijo + `aria-expanded`/`aria-controls`.
+  La transición de ancho solo corre con `prefers-reduced-motion: no-preference`.
 - **Superficie flotante.** `.app-menu` comparte fondo (`--color-on-primary`) y borde con `.user-card`
   del Header. Se despega 8px de los bordes con `margin` y su alto descuenta esos márgenes
   (`calc(100% - 16px)`): con `100%`, la caja excede el alto de `.shell` y su `overflow: hidden`
@@ -79,6 +83,8 @@ expandido/contraído y tokens".
 - **Pie.** `.app-menu__items` con `flex: 1 1 auto` empuja el separador y "Cerrar sesión" al fondo sin
   `position: absolute`. El botón del pie reutiliza `.app-menu__link`, por eso esa clase resetea los
   estilos nativos de `<button>`.
+- **Anillo de foco.** `.app-menu__items` usa `padding: 4px 8px` y `overflow-y: auto`; con
+  `overflow: hidden` y sin padding se recortaba el anillo del primer link.
 
 Código: `src/app/core/layout/menu/**`, `src/app/core/services/menu.service.ts`.
 
